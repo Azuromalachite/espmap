@@ -1743,3 +1743,17 @@ def test_atoms_can_be_checked_without_computing(monkeypatch):
     with pytest.raises(SystemExit) as e:          # rejected: a message, never 0
         _cli(monkeypatch, "--atoms", _TWO_WATERS, "--check")
     assert e.value.code not in (0, None)
+
+
+# ------------------------------------------ no heavy atom (review 4 N7)
+def test_site_parents_without_a_heavy_atom_is_all_none():
+    """H2 passed the gate, then crashed after the SCF: argmin of an empty list."""
+    assert em.site_parents([[0, 0, 0], [0, 0, 1.4]], ["H", "H"]) == [None, None]
+
+
+def test_sites_block_names_why_a_hydrogen_only_molecule_has_no_sites():
+    valid = {"input": True, "surface": True, "sites": False}
+    P = np.array([[0.0, 0, 2], [1.0, 0, 2], [0, 1.0, 2]])
+    sites, why = em.sites_block(valid, P, np.array([[0, 1, 2]]), np.zeros(3),
+                                np.array([[0, 0, 0], [0, 0, 0.74]]), ["H", "H"])
+    assert sites is None and "no heavy atom" in why
