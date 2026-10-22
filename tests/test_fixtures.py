@@ -144,6 +144,37 @@ def test_fixtures_come_from_one_clean_named_revision():
         assert len({p[k] for p in prov}) == 1, k
 
 
+def version_agrees_with_code(version, code):
+    """Review 5 R18: the version a record names must fit the code that made
+    it. An exact release tag vX.Y.Z means version == X.Y.Z. A build after a
+    tag, vX.Y.Z-N-g<sha>, names the release being built, so version > X.Y.Z:
+    the fixtures are made before the v0.2.0 tag exists, because the tag
+    needs them merged. Unknown or dirty code is refused elsewhere."""
+    import re
+    from packaging.version import Version
+    m = re.fullmatch(r"v(\d+\.\d+\.\d+)(-\d+-g[0-9a-f]+)?", code)
+    if m is None:
+        return False
+    return (Version(version) == Version(m[1]) if m[2] is None
+            else Version(version) > Version(m[1]))
+
+
+@pytest.mark.parametrize("version, code, ok", [
+    ("0.2.0", "v0.2.0", True), ("0.2.0", "v0.1.2-90-g1a2b3c4d5e6f", True),
+    ("0.1.0", "v0.1.2-82-g878332291704", False),       # the stale-metadata records
+    ("0.1.2", "v0.1.2-82-g878332291704", False), ("0.1.2", "v0.2.0", False),
+    ("0.2.0", "unknown", False),
+])
+def test_version_rule(version, code, ok):
+    assert version_agrees_with_code(version, code) is ok
+
+
+@pytest.mark.skipif(DRY, reason="a dry run is not a committed set")
+def test_fixture_version_agrees_with_its_code():
+    prov = _rec(NAMES[0])["provenance"]
+    assert version_agrees_with_code(prov["espmap_version"], prov["code"]), prov
+
+
 # V_min, V_max and the mean of the site holding atom 0 (nearest-nucleus), as
 # computed. The records reproduced to <= 1e-10 kcal/mol across checkouts and
 # thread counts (#44, review 5), so 1e-6 catches a changed result, not noise.
