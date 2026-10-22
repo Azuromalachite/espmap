@@ -276,6 +276,109 @@ def test_real_3d_coordinates_are_used_as_is(tmp_path):
     assert "as-is" in info["source"]
 
 
+_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
+
+def _flat_nitrite_mol(tmp_path, header="3D"):
+    """A DFT-like nitrite in the xy plane (N-O 1.258 A, 115 deg), Kekule:
+    N=O and N-O(-). One element pair, so lengths cannot decide."""
+    import math
+    from rdkit import Chem
+    m = Chem.RWMol(Chem.MolFromSmiles("N(=O)[O-]"))
+    c = Chem.Conformer(3)
+    h = math.radians(115 / 2)
+    c.SetAtomPosition(0, (0.0, 0.0, 0.0))
+    c.SetAtomPosition(1, (1.258 * math.sin(h), 1.258 * math.cos(h), 0.0))
+    c.SetAtomPosition(2, (-1.258 * math.sin(h), 1.258 * math.cos(h), 0.0))
+    c.Set3D(header == "3D")
+    m.AddConformer(c)
+    p = tmp_path / "nitrite.mol"
+    p.write_text(Chem.MolToMolBlock(m))
+    return p
+
+
+@pytest.mark.parametrize("path, expect", [
+    # review 3 H5: real planar geometries were thrown away as "drawings"
+    ("docs/review-3/fx/chlorobenzene_3d_planar.mol", "as-is"),
+    ("docs/review-3/fx/water_xy.xyz", "as-is"),
+    ("docs/review-3/fx/chlorobenzene_dft_like.xyz", "as-is"),
+    # drawings must still be caught, whatever the header claims
+    ("docs/review-3/fx/rd2d.mol", "DISCARDED"),
+    ("docs/review-3/fx/rd2d_flagged3d.mol", "DISCARDED"),
+    ("examples/drawn_2d.mol", "DISCARDED"),
+    ("examples/drawn.cdxml", "DISCARDED"),
+    # unchanged behaviour on ordinary 3D input
+    ("examples/real_3d.mol", "as-is"),
+    ("examples/real_3d_noH.mol", "as-is"),
+    ("examples/water.xyz", "as-is"),
+])
+def test_planar_geometry_is_kept_and_drawings_are_discarded(path, expect):
+    _, info = em.from_file(str(_ROOT / path))
+    assert expect in info["source"], (path, info["source"])
+
+
+def test_symmetric_flat_ion_with_a_3d_header_is_refused_not_guessed(tmp_path):
+    """Kekule nitrite has two bond ORDERS but one element pair, and a DFT
+    geometry gives both bonds 1.258 A. Counting orders called it a drawing and
+    MMFF replaced it with N-O 1.42 A; lengths cannot tell the two apart."""
+    p = _flat_nitrite_mol(tmp_path)
+    mol, probs = em.parse_for_check(path=str(p), charge=-1)
+    assert mol is None and probs[0][1] == "DIMENSION_AMBIGUOUS"
+    with pytest.raises(ValueError):
+        em.from_file(str(p))
+
+
+def test_symmetric_flat_ion_with_a_2d_header_is_a_drawing(tmp_path):
+    _, info = em.from_file(str(_flat_nitrite_mol(tmp_path, header="2D")))
+    assert "DISCARDED" in info["source"]
+
+
+def _multi_sdf(tmp_path, smiles=("CCO", "CCCl", "c1ccccc1")):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    p = tmp_path / "poses.sdf"
+    w = Chem.SDWriter(str(p))
+    for s in smiles:
+        m = Chem.AddHs(Chem.MolFromSmiles(s))
+        AllChem.EmbedMolecule(m, randomSeed=1)
+        w.write(m)
+    w.close()
+    return p
+
+
+def test_multi_record_file_is_refused_without_record(tmp_path):
+    """One geometry in, one record out: 20 docking poses used to become an
+    analysis of pose 1 with a warning nobody reads in a pipeline."""
+    mol, probs = em.parse_for_check(path=str(_multi_sdf(tmp_path)))
+    assert mol is None and probs[0][1] == "MULTIPLE_RECORDS"
+
+
+def test_record_picks_one_record(tmp_path):
+    from rdkit import Chem
+    p = _multi_sdf(tmp_path)
+    mol, probs = em.parse_for_check(path=str(p), record=2)
+    assert not probs and Chem.MolToSmiles(Chem.RemoveHs(mol)) == "CCCl"
+    _, info = em.from_file(str(p), record=2)
+    assert info["record"] == {"index": 2, "of": 3}
+
+
+@pytest.mark.parametrize("record", [0, 4])
+def test_record_out_of_range_is_refused(tmp_path, record):
+    mol, probs = em.parse_for_check(path=str(_multi_sdf(tmp_path)), record=record)
+    assert mol is None and probs[0][1] == "RECORD_OUT_OF_RANGE"
+
+
+def test_cli_refuses_multi_record_before_compute_and_accepts_record(tmp_path, monkeypatch):
+    p = str(_multi_sdf(tmp_path))
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--file", p])
+    with pytest.raises(SystemExit):
+        em.main()
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--file", p, "--record", "3"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
 def _spec_xyz(spec):
     return np.array([[float(x) for x in t.split()[1:]] for t in spec.split(";")])
 
@@ -374,9 +477,10 @@ def test_h_count_guard_catches_a_reader_that_guesses_wrong(tmp_path, monkeypatch
     p = tmp_path / "clph.pdb"
     p.write_text(_CLPH_PDB)
 
-    def old_reader(path, charge=0):
+    def old_reader(path, charge=0, record=None):
         m = Chem.MolFromPDBFile(str(path), removeHs=False)
         m.SetProp("_bonds", "perceived")
+        m.SetProp("_coords", "geometry")
         return m, [], 1
     monkeypatch.setattr(em, "read_structure", old_reader)
     with pytest.raises(ValueError, match="H_COUNT_MISMATCH"):

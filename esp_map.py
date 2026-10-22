@@ -242,39 +242,71 @@ def _embed_and_minimise(mol, n_confs, seed, max_iters=2000):
             len(cids), int((ok == 0).sum()))
 
 
-def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
-    """Read .mol/.sdf/.cdxml/.xyz/.pdb from a drawing program and return
-    (PySCF atom string, info).
+def coordinate_kind(mol, fmt, tol=0.03):
+    """What the coordinates in a file are: "none", "geometry", "drawing", or
+    "ambiguous" (which the reader turns into a BLOCK).
 
-    The load-bearing distinction is 2D vs 3D. A structure drawn in ChemDraft,
-    ChemDraw, Ketcher or MarvinSketch and exported as MOL/SDF/CDXML carries a
-    FLAT depiction: every z is zero and it is a picture, not a geometry.
-    Feeding that to an SCF would produce a planar molecule and a confidently
-    wrong map. RDKit records the dimensionality on line 2 of a molblock and
-    exposes it as Conformer.Is3D(); we check that AND the coordinates, because
-    a file can claim 3D and be flat.
+    Review 3 H5: the old rule ("every z is zero" = drawing) also discarded
+    real planar geometries -- a DFT-optimised chlorobenzene in the xy plane,
+    water from an .xyz -- and so depended on how many decimals a file printed.
+      - .xyz and .pdb are never drawings;
+      - MOL/SDF/CDXML whose header says 2D are drawings;
+      - a 3D header with every z = 0 is a drawing only if every bond has the
+        same length (within tol) across at least two element pairs. Drawing
+        programs draw every bond at one length; a geometry has C-H ~1.09,
+        C-Cl ~1.74 A. Pairs ignore bond ORDER: Kekule nitrite has N=O and
+        N-O(-), both 1.258 A in a DFT geometry, and counting orders called it
+        a drawing. With one element pair (nitrite, nitrate, CO2, a diatomic)
+        lengths cannot tell a drawing from a symmetric molecule -> ambiguous.
+    """
+    if mol.GetNumConformers() == 0:
+        return "none"
+    if fmt in ("xyz", "pdb"):
+        return "geometry"
+    c = mol.GetConformer()
+    if not c.Is3D():
+        return "drawing"
+    if max(abs(c.GetAtomPosition(i).z) for i in range(mol.GetNumAtoms())) >= 1e-6:
+        return "geometry"
+    if mol.GetNumBonds() == 0:
+        return "geometry"
+    pairs, lengths = set(), []
+    for b in mol.GetBonds():
+        i, j = b.GetBeginAtomIdx(), b.GetEndAtomIdx()
+        pairs.add(tuple(sorted((b.GetBeginAtom().GetSymbol(),
+                                b.GetEndAtom().GetSymbol()))))
+        lengths.append((c.GetAtomPosition(i) - c.GetAtomPosition(j)).Length())
+    mean = sum(lengths) / len(lengths)
+    if max(abs(x - mean) for x in lengths) > tol * mean:
+        return "geometry"
+    return "drawing" if len(pairs) > 1 else "ambiguous"
+
+
+def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0, record=None):
+    """Read .mol/.sdf/.cdxml/.xyz/.pdb and return (PySCF atom string, info).
+
+    The load-bearing distinction is a DRAWING vs a GEOMETRY. A structure drawn
+    in ChemDraft, ChemDraw, Ketcher or MarvinSketch and exported as
+    MOL/SDF/CDXML is a picture: feeding it to an SCF would produce a confidently
+    wrong map, so its coordinates are discarded and a conformer generated.
+    read_structure decides which (coordinate_kind) and blocks when it cannot.
     """
     from rdkit import Chem
     from rdkit.Chem import AllChem
     # ONE reader, shared with the gate. v3 had a second copy here, so a fix
     # applied to parse_for_check (XYZ bond perception) silently did not reach
     # the path that actually builds the geometry.
-    mol, problems, n_found = read_structure(path, charge=charge)
+    mol, problems, n_found = read_structure(path, charge=charge, record=record)
     if mol is None:
         raise ValueError(problems[0][2] if problems else
                          f"RDKit could not read any molecule from {path}")
 
     has_conf = mol.GetNumConformers() > 0
-    is3d = bool(has_conf and mol.GetConformer().Is3D())
-    flat = True
-    if has_conf:
-        c = mol.GetConformer()
-        flat = max(abs(c.GetAtomPosition(i).z)
-                   for i in range(mol.GetNumAtoms())) < 1e-6
+    drawing = mol.GetProp("_coords") == "drawing"
     n_h_before = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H")
     perceived = mol.HasProp("_bonds") and mol.GetProp("_bonds") == "perceived"
 
-    if is3d and not flat:
+    if has_conf and not drawing:
         n_supplied = mol.GetNumAtoms()
         mol = Chem.AddHs(mol, addCoords=True)
         n_h_added = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H") - n_h_before
@@ -310,7 +342,7 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
         mol = Chem.AddHs(mol)
         best, ff, spread, n_emb, n_conv = _embed_and_minimise(mol, n_confs, seed)
         source = ("2D depiction: drawn coordinates DISCARDED, 3D generated "
-                  "by ETKDGv3" if (has_conf and (flat or not is3d))
+                  "by ETKDGv3" if drawing
                   else "no coordinates in file, 3D generated by ETKDGv3")
 
     info = dict(forcefield=ff, n_embedded=n_emb, n_converged=n_conv,
@@ -319,6 +351,7 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
                 formula=Chem.rdMolDescriptors.CalcMolFormula(mol),
                 n_rot=int(AllChem.CalcNumRotatableBonds(mol)), seed=seed,
                 source=source, n_found=n_found,
+                record=dict(index=record or 1, of=n_found),
                 smiles=Chem.MolToSmiles(Chem.RemoveHs(mol)), mol=mol)
     return _mol_to_spec(mol, best), info
 
@@ -506,7 +539,7 @@ def _quiet_rdkit():
     RDLogger.DisableLog("rdApp.*")
 
 
-def parse_for_check(smiles=None, path=None, charge=0):
+def parse_for_check(smiles=None, path=None, charge=0, record=None):
     """Parse to an RDKit mol WITHOUT generating 3D coordinates.
 
     The admissibility gate must run before embedding: a radical or an R-group
@@ -528,7 +561,7 @@ def parse_for_check(smiles=None, path=None, charge=0):
                           for p in probs]
         return None, [(BLOCK, "UNPARSEABLE", f"RDKit cannot read {smiles!r}",
                        "check the SMILES syntax")]
-    mol, problems, _ = read_structure(path, charge=charge)
+    mol, problems, _ = read_structure(path, charge=charge, record=record)
     return mol, problems
 
 
@@ -566,8 +599,11 @@ def _perceive_bonds(m, charge, fmt):
     return mol
 
 
-def read_structure(path, charge=0):
+def read_structure(path, charge=0, record=None):
     """The single structure reader. Returns (mol or None, problems, n_found).
+
+    record (1-based) picks one record from a multi-record file; without it a
+    file holding more than one record is a BLOCK.
 
     charge is needed only for XYZ, which carries coordinates and no bonds:
     bond perception has to be told the net charge or it fails. v4.0 hard-coded
@@ -614,7 +650,30 @@ def read_structure(path, charge=0):
                        f"RDKit read no valid molecule from {path}",
                        "re-export from the drawing program; check for R-groups "
                        "or query atoms the exporter could not represent")], 0
-    return mols[0], [], len(mols)
+    # One geometry in, one record out. A multi-record file (a docking run's
+    # poses, a CDXML page of fragments) used to warn and silently take the
+    # first; in a pipeline 20 poses became an analysis of pose 1.
+    n = len(mols)
+    if record is None and n > 1:
+        return None, [(BLOCK, "MULTIPLE_RECORDS",
+                       f"{path} holds {n} records; one run computes one",
+                       f"pass --record N (1..{n}) to choose one, or split the file")], n
+    if record is not None and not 1 <= record <= n:
+        return None, [(BLOCK, "RECORD_OUT_OF_RANGE",
+                       f"--record {record}, but {path} holds {n} record(s)",
+                       f"pass --record between 1 and {n}")], n
+    m = mols[(record or 1) - 1]
+    m.SetProp("_format", ext)
+    kind = coordinate_kind(m, ext)
+    if kind == "ambiguous":
+        return None, [(BLOCK, "DIMENSION_AMBIGUOUS",
+                       f"{path} is flagged 3D with every z = 0 and every bond "
+                       f"the same length: a drawing and a symmetric planar "
+                       f"molecule look identical",
+                       "write a 2D header if this is a drawing, or give any "
+                       "atom a non-zero z (or save as .xyz) if it is a geometry")], n
+    m.SetProp("_coords", kind)
+    return m, [], n
 
 
 def _skeleton(m):
@@ -1378,6 +1437,9 @@ def main():
     ap.add_argument("--smiles", help="build 3D coordinates from SMILES (RDKit)")
     ap.add_argument("--file", help="read a structure file: .mol .sdf .cdxml .xyz "
                                    ".pdb — i.e. what a drawing program exports")
+    ap.add_argument("--record", type=int, default=None,
+                    help="1-based record to compute from a multi-record SDF/CDXML; "
+                         "without it such a file is refused")
     ap.add_argument("--seed", type=lambda s: int(s, 0), default=0xC0FFEE,
                     help="ETKDG random seed; fixed so runs are reproducible")
     ap.add_argument("--nconfs", type=int, default=20,
@@ -1469,7 +1531,7 @@ def main():
 
     if a.smiles or a.file:
         probe, probs = parse_for_check(smiles=a.smiles, path=a.file,
-                                       charge=a.charge or 0)
+                                       charge=a.charge or 0, record=a.record)
         if probe is None:
             print_check(BLOCK, probs, a.smiles or str(a.file))
             raise SystemExit(1)
@@ -1494,15 +1556,14 @@ def main():
     if a.file:
         try:
             spec, gi = from_file(a.file, n_confs=a.nconfs, seed=a.seed,
-                                 charge=a.charge or 0)
+                                 charge=a.charge or 0, record=a.record)
         except ValueError as e:              # e.g. H_COUNT_MISMATCH: refuse, no traceback
             raise SystemExit(f"structure rejected: {e}") from None
-        print(f"{a.file}  ->  {gi['formula']}, charge {gi['charge']:+d}")
+        print(f"{a.file}  ->  {gi['formula']}, charge {gi['charge']:+d}"
+              + (f"  (record {gi['record']['index']} of {gi['record']['of']})"
+                 if gi["record"]["of"] > 1 else ""))
         print(f"  SMILES as read: {gi['smiles']}")
         print(f"  geometry: {gi['source']}")
-        if gi["n_found"] > 1:
-            print(f"WARNING: file contains {gi['n_found']} molecules; using the "
-                  f"first. Split the file to map the others.", file=sys.stderr)
         if "DISCARDED" in gi["source"]:
             print("WARNING: this file is a FLAT 2D depiction, not a geometry. The "
                   "drawn layout has been replaced by a generated 3D conformer, so "
@@ -1654,6 +1715,7 @@ def main():
                                     __file__))).stdout.strip() or None
         rec = dict(
             input=dict(smiles=a.smiles, file=a.file,
+                       record=(gi or {}).get("record"),
                        # the structure the gate saw; "approved" only if it passed
                        gate_smiles=approved,
                        approved_smiles=approved if not (gate and gate["forced"]) else None,
