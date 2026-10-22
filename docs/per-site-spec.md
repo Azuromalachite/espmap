@@ -64,9 +64,13 @@ terms:
 
 - **Established.** Quantitative analysis of a property on a polygonal
   molecular surface (areas, extrema, area-weighted statistics) is Bulat et al.
-  `bulat2010` and Lu & Chen `lu2012mt`. Global surface-ESP statistics
-  (positive and negative areas, mean, variance) go back to the GIPF approach
-  of Murray et al. `murray1994gipf`. The ρ = 0.002 e·bohr⁻³ surface is Bader's
+  `bulat2010` and Lu & Chen `lu2012mt`. Global surface-ESP statistics go
+  back to the GIPF approach of Murray et al. `murray1994gipf`:
+  `results.gipf` reports its σ₊², σ₋² (each about its own sign's mean),
+  σ²_tot and balance ν, area-weighted over triangles rather than averaged
+  over points. `V_area_sd` in `surface_stats` and in every site is a plain
+  area-weighted SD about the overall mean, **not** GIPF's σ²_tot (review 4
+  N11). The ρ = 0.002 e·bohr⁻³ surface is Bader's
   `bader1987`, `bader1990`. The σ-hole is `clark2007`, `murray2009`,
   `politzer2013`.
 - **Adapted.** Local, per-atom molecular surfaces and their ESP statistics are

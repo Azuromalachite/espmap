@@ -1137,6 +1137,52 @@ def _field(P):
     return -30.0 * P[:, 0] + 5.0 * P[:, 1] ** 2
 
 
+def _three_triangles():
+    """Areas 1, 3, 1 with V = -4, 8, 4 on every vertex."""
+    P = np.array([[0, 0, 0], [1, 0, 0], [0, 2, 0],
+                  [5, 0, 0], [8, 0, 0], [5, 2, 0],
+                  [20, 0, 0], [21, 0, 0], [20, 2, 0]], float)
+    faces = np.array([[0, 1, 2], [3, 4, 5], [6, 7, 8]])
+    V = np.repeat([-4.0, 8.0, 4.0], 3)
+    return P, faces, V
+
+
+def test_gipf_variances_are_taken_about_each_signs_own_mean():
+    """Review 4 N11: V_area_sd is one SD about the overall mean, cited as
+    GIPF. GIPF's sigma^2_tot is sigma_+^2 + sigma_-^2, each about its own
+    sign's mean, with nu = sigma_+^2 sigma_-^2 / (sigma^2_tot)^2."""
+    P, faces, V = _three_triangles()
+    g = em.gipf_stats(P, faces, V)
+    assert g["V_pos_mean_kcal_mol"] == pytest.approx((3 * 8 + 1 * 4) / 4)     # 7
+    assert g["V_neg_mean_kcal_mol"] == pytest.approx(-4.0)
+    assert g["sigma2_pos_kcal2_mol2"] == pytest.approx((3 * 1 + 1 * 9) / 4)  # 3
+    assert g["sigma2_neg_kcal2_mol2"] == pytest.approx(0.0)
+    assert g["sigma2_tot_kcal2_mol2"] == pytest.approx(3.0)
+    assert g["nu"] == pytest.approx(0.0)
+    sd = em.area_stats(P, faces, V)["V_area_sd_kcal_mol"]
+    assert sd ** 2 != pytest.approx(g["sigma2_tot_kcal2_mol2"])  # not the same quantity
+
+
+def test_gipf_balance_is_a_quarter_when_both_signs_vary_equally():
+    P, faces, _ = _three_triangles()
+    P = np.vstack([P, P[3:6] + [0, 10, 0]])
+    faces = np.vstack([faces, [[9, 10, 11]]])        # areas 1, 3, 1, 3
+    V = np.repeat([-4.0, 8.0, 4.0, -8.0], 3)        # mirror images in sign
+    g = em.gipf_stats(P, faces, V)
+    assert g["sigma2_pos_kcal2_mol2"] == pytest.approx(g["sigma2_neg_kcal2_mol2"])
+    assert g["nu"] == pytest.approx(0.25)
+
+
+def test_gipf_on_a_one_signed_surface_leaves_the_missing_sign_null():
+    """An anion's surface has no positive part: its mean and variance are
+    undefined, not zero, and nu with them."""
+    P, faces, V = _three_triangles()
+    g = em.gipf_stats(P, faces, V - 20.0)
+    assert g["V_pos_mean_kcal_mol"] is None and g["sigma2_pos_kcal2_mol2"] is None
+    assert g["nu"] is None
+    assert g["sigma2_tot_kcal2_mol2"] == pytest.approx(g["sigma2_neg_kcal2_mol2"])
+
+
 def test_area_stats_are_area_weighted_not_vertex_averaged():
     """Two triangles of areas 1 and 3: a vertex average would weight them by
     vertex count. The spec forbids it (marching-cubes vertex density is a

@@ -242,6 +242,8 @@ def test_sites_end_to_end_on_a_symmetric_nitrite(tmp_path, monkeypatch):
     rec = _run_json(tmp_path, monkeypatch, ["--atoms", atoms, "--charge", "-1"])
     assert rec["validity"]["sites"] is True and rec["sites"]["schema"] == em.SITES_SCHEMA
     total = rec["results"]["surface_stats"]["area_A2"]
+    g = rec["results"]["gipf"]                      # an anion: no positive part
+    assert g["sigma2_pos_kcal2_mol2"] is None and g["sigma2_neg_kcal2_mol2"] > 0
     for rule in em.PARTITION_RULES:
         s = {x["label"]: x[rule] for x in rec["sites"]["reaction_sites"]}
         assert sum(v["area_A2"] for v in s.values()) == pytest.approx(total, rel=1e-9)

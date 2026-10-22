@@ -79,7 +79,12 @@
         "components": "int", "genus": "int", "chi": "int", "face_max_rho": "num",
         "margin_bohr": "num", "strict": "bool", "problems": ["str"], "valid": "bool"
       },
-      "surface_stats": "#stats"
+      "surface_stats": "#stats",
+      "gipf": {
+        "V_pos_mean_kcal_mol": "num?", "V_neg_mean_kcal_mol": "num?",
+        "sigma2_pos_kcal2_mol2": "num?", "sigma2_neg_kcal2_mol2": "num?",
+        "sigma2_tot_kcal2_mol2": "num?", "nu": "num?", "weighting": "str"
+      }
     },
     "sites": {
       "$nullable": true,

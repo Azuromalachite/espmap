@@ -1880,6 +1880,8 @@ def area_stats(P, faces, V):
     not chemistry. Extrema are over the triangles' vertices, where V is
     computed exactly, and are NOT robust on a small set: lead with the mean
     and percentiles. One helper for the whole surface and for every site.
+    V_area_sd is about the overall mean; GIPF's variances, each about its
+    own sign's mean, are gipf_stats.
     """
     keys = ("V_area_mean_kcal_mol", "V_area_sd_kcal_mol", "V_p05_kcal_mol",
             "V_p50_kcal_mol", "V_p95_kcal_mol", "V_min_kcal_mol", "V_min_at_A",
@@ -1900,6 +1902,37 @@ def area_stats(P, faces, V):
                 V_p95_kcal_mol=_area_quantile(vf, a, 0.95),
                 V_min_kcal_mol=float(V[i_min]), V_min_at_A=[float(x) for x in P[i_min]],
                 V_max_kcal_mol=float(V[i_max]), V_max_at_A=[float(x) for x in P[i_max]])
+
+
+def gipf_stats(P, faces, V):
+    """GIPF's global surface statistics (Murray et al. 1994, murray1994gipf):
+    the mean of each sign, sigma_+^2 and sigma_-^2 each about its own sign's
+    mean, sigma^2_tot = sigma_+^2 + sigma_-^2, and the balance
+    nu = sigma_+^2 sigma_-^2 / (sigma^2_tot)^2, at most 0.25.
+
+    Review 4 N11: area_stats' V_area_sd is one SD about the overall mean and
+    was cited as GIPF's variance; it is not, and stays as what it is. GIPF
+    averaged over surface points; here, as everywhere in espmap, over
+    triangles weighted by area (V averaged per triangle), so compare with
+    Multiwfn only when its weighting is the same. A sign with no area has a
+    null mean and variance (undefined, not zero), and nu is then null.
+    """
+    a = triangle_areas(P, faces)
+    vf = V[faces].mean(axis=1)
+
+    def part(m):
+        if a[m].sum() == 0:
+            return None, None
+        mu = float((a[m] * vf[m]).sum() / a[m].sum())
+        return mu, float((a[m] * (vf[m] - mu) ** 2).sum() / a[m].sum())
+    mp, sp = part(vf > 0)
+    mn, sn = part(vf < 0)
+    tot = None if sp is None and sn is None else (sp or 0.0) + (sn or 0.0)
+    nu = (sp * sn / tot ** 2 if sp is not None and sn is not None and tot > 0 else None)
+    return dict(V_pos_mean_kcal_mol=mp, V_neg_mean_kcal_mol=mn,
+                sigma2_pos_kcal2_mol2=sp, sigma2_neg_kcal2_mol2=sn,
+                sigma2_tot_kcal2_mol2=tot, nu=nu,
+                weighting="triangle area, V averaged per triangle")
 
 
 def partition_surface(P, faces, coords, symbols, rule):
@@ -2704,7 +2737,8 @@ def main():
                          V_min_kcal_mol=float(V.min()), V_max_kcal_mol=float(V.max()),
                          sigma_hole=sh_rec, sigma_hole_reason=sh_reason,
                          n_verts=int(diag["n_verts"]), surface=surface,
-                         surface_stats=area_stats(P_A, faces, V)),
+                         surface_stats=area_stats(P_A, faces, V),
+                         gipf=gipf_stats(P_A, faces, V)),
             sites=sites, sites_reason=sites_reason,
             scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
                        sign_change_ratio=sign_change_ratio(V),
