@@ -139,12 +139,35 @@ def test_surface_report_tells_clipped_from_folded():
     surface run with --no-strict (V_min 23 % wrong) and a valid genus-2 fold."""
     clipped = em.surface_report(_diag(closed=False, open_edges=266, genus=None, chi=-2,
                                       face_max_rho=4e-3, margin=2.0, strict=False,
-                                      problems=["... CLIPPED ...", "... OPEN ..."]))
-    folded = em.surface_report(_diag(genus=2, chi=-2))
+                                      problems=["... CLIPPED ...", "... OPEN ..."]), 0.002)
+    folded = em.surface_report(_diag(genus=2, chi=-2), 0.002)
     assert clipped["chi"] == folded["chi"] == -2          # the old JSON's only field
     assert clipped["valid"] is False and clipped["problems"] and clipped["strict"] is False
     assert folded["valid"] is True and folded["problems"] == [] and folded["genus"] == 2
-    assert em.surface_report(_diag())["valid"] is True
+    assert em.surface_report(_diag(), 0.002)["valid"] is True
+
+
+def test_surface_report_states_the_surface_it_is_on():
+    """Spec section 6: the record itself says every area is on the density
+    isosurface, not a solvent-accessible surface."""
+    d = em.surface_report(_diag(), 0.001)["definition"]
+    assert d == {"property": "electron_density", "isovalue_e_bohr3": 0.001}
+
+
+@pytest.mark.parametrize("gate, verified, problems, expect", [
+    (None, None, [], True),                                        # --atoms
+    ({"verdict": "ACCEPT", "forced": False}, True, [], True),
+    ({"verdict": "BLOCK", "forced": True}, True, [], False),       # --force
+    ({"verdict": "ACCEPT", "forced": False}, False, [], False),    # H2 mismatch
+])
+def test_validity_input(gate, verified, problems, expect):
+    v = em.validity(gate, verified, {"problems": problems})
+    assert v["input"] is expect and v["surface"] is True and v["sites"] is False
+
+
+def test_validity_surface_is_false_when_the_surface_has_problems():
+    v = em.validity(None, None, em.surface_report(_diag(problems=["CLIPPED"]), 0.002))
+    assert v["surface"] is False
 
 
 def test_gate_report_marks_a_forced_rejection():
@@ -641,7 +664,108 @@ def test_scale_is_comparable_only_when_the_user_fixed_it(kind, lim, vmin, vmax,
     to that scale kind."""
     p = em.scale_provenance(kind, lim, vmin, vmax)
     assert p == {"source": "user" if comparable else "auto",
-                 "comparable": comparable}
+                 "colour_scale_fixed": comparable}
+
+
+_A = dict(xc="b3lyp", basis="def2-svp", solvent="vacuum", iso=0.002,
+          spacing=0.2, density_fit=False)
+_R = dict(cmap="vik", kind="diverging", vlim=(-25.0, 25.0), elev=20.0, azim=-60.0,
+          size=900, ambient=0.35)
+
+
+def _keys(a=None, r=None):
+    return (em.record_key(em.analysis_fields(**{**_A, **(a or {})})),
+            em.record_key(em.render_fields(**{**_R, **(r or {})})))
+
+
+def test_cmap_changes_only_the_render_key_and_basis_only_the_analysis_key():
+    """Spec 8b. Review 3 proposed one compare_key over method AND colour, which
+    would call two identical calculations incomparable over a colormap; and
+    'comparable' used to depend on the colour flags alone, across bases."""
+    a0, r0 = _keys()
+    a1, r1 = _keys(r={"cmap": "RdBu"})
+    a2, r2 = _keys(a={"basis": "def2-tzvp"})
+    assert a1 == a0 and r1 != r0
+    assert a2 != a0 and r2 == r0
+
+
+@pytest.mark.parametrize("change", [
+    {"xc": "B3LYP"}, {"basis": "def2-SVP"}, {"solvent": None}, {"solvent": "Vacuum"},
+])
+def test_one_calculation_gets_one_analysis_key(change):
+    """PySCF is case-insensitive: def2-SVP and def2-svp are the same run."""
+    assert _keys(a=change)[0] == _keys()[0]
+
+
+@pytest.mark.parametrize("change", [
+    {"solvent": "water"}, {"iso": 0.001}, {"spacing": 0.16}, {"density_fit": True},
+    {"xc": "pbe0"},
+])
+def test_every_method_axis_changes_the_analysis_key(change):
+    assert _keys(a=change)[0] != _keys()[0]
+
+
+def test_auto_scaled_panels_get_different_render_keys():
+    assert _keys(r={"vlim": (-30.0, 30.0)})[1] != _keys()[1]
+
+
+def test_solvent_esp_is_recorded_with_solvent_only():
+    assert em.analysis_fields(**{**_A, "solvent": "water"})["solvent_esp"] == em.SOLVENT_ESP
+    assert em.analysis_fields(**_A)["solvent_esp"] is None
+
+
+def _fake_dm(mol, seed=0):
+    rng = np.random.default_rng(seed)
+    x = rng.normal(size=(mol.nao, mol.nao))
+    return x @ x.T / mol.nao
+
+
+def test_ion_dipole_does_not_depend_on_where_the_molecule_sits():
+    """Review 3 H6: acetate gave 6.42 D as embedded and 30.35 D translated by
+    5 A. About the centre of nuclear charge it must not move. Any fixed AO
+    density matrix will do: translation carries the basis with the atoms."""
+    from pyscf import gto
+    spec, _ = em.from_smiles("CC(=O)[O-]")
+    shifted = "; ".join(f"{t.split()[0]} " + " ".join(
+        f"{float(x) + 5.0:.10f}" for x in t.split()[1:]) for t in spec.split(";"))
+    m0 = gto.M(atom=spec, basis="sto-3g", charge=-1, verbose=0)
+    m1 = gto.M(atom=shifted, basis="sto-3g", charge=-1, verbose=0)
+    dm = _fake_dm(m0)
+    d0, d1 = em.dipole_about_nuclear_centre(m0, dm), em.dipole_about_nuclear_centre(m1, dm)
+    assert np.allclose(d0["vector_D"], d1["vector_D"], atol=1e-6)
+    assert np.allclose(np.array(d1["origin"]["xyz_angstrom"]) -
+                       np.array(d0["origin"]["xyz_angstrom"]), 5.0, atol=1e-8)
+
+
+def test_neutral_dipole_matches_pyscf():
+    """For a neutral molecule the origin does not matter, so the value must
+    equal PySCF's own dip_moment on the same density."""
+    from pyscf import gto, scf
+    m = gto.M(atom="O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692",
+              basis="sto-3g", verbose=0)
+    mf = scf.RHF(m)
+    dm = _fake_dm(m)
+    dm *= m.nelectron / np.trace(dm @ m.intor("int1e_ovlp"))      # neutral
+    ref = mf.dip_moment(mol=m, dm=dm, unit="Debye", verbose=0)
+    got = em.dipole_about_nuclear_centre(m, dm)
+    assert np.allclose(got["vector_D"], ref, atol=1e-5)
+
+
+def test_sigma_hole_record_names_the_axis_atom():
+    """The JSON's i_bond is the atom sigma_hole actually used, and a missing
+    sigma-hole is null with a reason, never silently absent."""
+    from pyscf import gto
+    spec = em.monosubstituted_benzene(*em.MOLECULES["chlorobenzene"])
+    mol = gto.M(atom=spec, basis="sto-3g", verbose=0)
+    co = mol.atom_coords()
+    axis = co[6] - co[0]
+    verts = co[6] + 3.0 * axis / np.linalg.norm(axis) + np.zeros((1, 3))
+    rec, why = em.sigma_hole_record(verts, np.array([7.5]), mol, 6)
+    assert why is None and rec == {"V_max_kcal_mol": 7.5, "n_cap_vertices": 1,
+                                   "i_sub": 6, "i_bond": 0}
+    assert em.sigma_hole_record(verts, np.array([7.5]), mol, None,
+                                "fluorine does not form one") == (
+        None, "fluorine does not form one")
 
 
 def test_scale_provenance_agrees_with_choose_scale():

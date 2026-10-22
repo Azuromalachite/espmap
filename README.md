@@ -84,9 +84,15 @@ python esp_map.py --smiles "CCO" --out esp.png \
 - `--html`: an interactive 3D view (rotate, hover to read V, see-through
   toggle). Same colour map and scale rules as the image; works offline.
 - `--npz`: the surface (vertices, faces, V, atoms) so it can be re-rendered
-  without another SCF.
-- `--json`: settings, energy, dipole, V range, package versions, git commit
-  and the error-budget caveat, for anything you will compare later.
+  without another SCF, with its units, method and both keys.
+- `--json`: settings, energy, V range (`V_min_kcal_mol`, `V_max_kcal_mol`),
+  the σ-hole (or `null` with the reason), the dipole as a vector about the
+  centre of nuclear charge (an ion's dipole depends on the origin, so it is
+  stated), package versions, git commit and the error-budget caveat. Read
+  `validity` before anything else. Compare **numbers** only between records
+  whose `analysis_key` matches (method, solvent convention, surface), and
+  **pictures** only when `render_key` matches as well (colormap, limits,
+  camera). `key_fields` lists what each key hashes.
 
 ## Input
 
