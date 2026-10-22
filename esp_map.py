@@ -270,10 +270,23 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
         flat = max(abs(c.GetAtomPosition(i).z)
                    for i in range(mol.GetNumAtoms())) < 1e-6
     n_h_before = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H")
+    perceived = mol.HasProp("_bonds") and mol.GetProp("_bonds") == "perceived"
 
     if is3d and not flat:
         mol = Chem.AddHs(mol, addCoords=True)
         n_h_added = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H") - n_h_before
+        # Independent of the reader: if bond orders were INFERRED from the
+        # coordinates and the file already had hydrogens, adding more means
+        # the inferred bonds disagree with the file (review 3 H1: 5 H in the
+        # file, 11 after AddHs). Files that carry their own bond orders
+        # (MOL/SDF/CDXML) may legitimately omit some H, e.g. a docking pose
+        # that kept only its polar hydrogens, so they are not refused here.
+        if perceived and n_h_before and n_h_added:
+            raise ValueError(
+                f"H_COUNT_MISMATCH: the file has {n_h_before} hydrogen(s) but the "
+                f"bonds perceived from its coordinates need {n_h_added} more. The "
+                f"perceived structure is not the file's molecule; supply MOL/SDF "
+                f"with explicit bond orders.")
         source = "file 3D coordinates used as-is"
         ff, spread, n_emb, n_conv = "none", 0.0, 1, 1
         if n_h_added:
@@ -513,6 +526,40 @@ def parse_for_check(smiles=None, path=None, charge=0):
     return mol, problems
 
 
+def _perceive_bonds(m, charge, fmt):
+    """Coordinates only -> mol with perceived connectivity and bond orders.
+
+    Rebuilds the molecule from elements and positions, so no bond the reader
+    guessed survives, then runs RDKit's xyz2mol. Marks the result
+    _bonds=perceived so from_file can tell orders read from a file apart from
+    orders inferred here. Returns the mol, or a list holding one BLOCK.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import rdDetermineBonds
+    rw = Chem.RWMol()
+    for a in m.GetAtoms():
+        rw.AddAtom(Chem.Atom(a.GetAtomicNum()))
+    conf = Chem.Conformer(m.GetNumAtoms())
+    src = m.GetConformer()
+    for i in range(m.GetNumAtoms()):
+        conf.SetAtomPosition(i, src.GetAtomPosition(i))
+    conf.Set3D(True)
+    rw.AddConformer(conf, assignId=True)
+    mol = rw.GetMol()
+    try:
+        rdDetermineBonds.DetermineBonds(mol, charge=charge)
+        Chem.SanitizeMol(mol)              # AddHs needs implicit valences
+    except Exception as e:
+        return [(BLOCK, f"{fmt}_CONNECTIVITY",
+                 f"could not perceive bonds from {fmt} coordinates at charge "
+                 f"{charge:+d}: {e}",
+                 "include every hydrogen in the file and pass --charge if the "
+                 "species is not neutral, or supply a format that carries bond "
+                 "orders (MOL/SDF/CDXML)")]
+    mol.SetProp("_bonds", "perceived")
+    return mol
+
+
 def read_structure(path, charge=0):
     """The single structure reader. Returns (mol or None, problems, n_found).
 
@@ -531,27 +578,24 @@ def read_structure(path, charge=0):
                     if m is not None]
         elif ext == "mol":
             mols = [Chem.MolFromMolFile(str(path), removeHs=False)]
-        elif ext == "xyz":
-            # An XYZ file has coordinates and NO connectivity. RDKit's reader
-            # returns a bondless mol, which every downstream check reads as
-            # one fragment per atom: v3 rejected EVERY xyz file as
-            # "MULTIPLE_FRAGMENTS", with a message about salts.
-            m = Chem.MolFromXYZFile(str(path))
+        elif ext in ("xyz", "pdb"):
+            # Neither format carries trustworthy bond ORDERS. XYZ has no bonds
+            # at all (v3 rejected every xyz as "MULTIPLE_FRAGMENTS"). PDB has
+            # proximity bonds, all single unless CONECT says otherwise: review 3
+            # H1 read chlorobenzene.pdb as chlorocyclohexane, AddHs filled the
+            # "missing" valences, and every check passed. Both now go through
+            # one route: keep the coordinates, discard any bonds, perceive
+            # connectivity and orders from geometry.
+            if ext == "xyz":
+                m = Chem.MolFromXYZFile(str(path))
+            else:
+                m = Chem.MolFromPDBFile(str(path), removeHs=False, sanitize=False,
+                                        proximityBonding=False)
             if m is not None:
-                from rdkit.Chem import rdDetermineBonds
-                try:
-                    rdDetermineBonds.DetermineBonds(m, charge=charge)
-                    Chem.SanitizeMol(m)      # AddHs needs implicit valences
-                except Exception as e:
-                    return None, [(BLOCK, "XYZ_CONNECTIVITY",
-                                   f"could not perceive bonds from coordinates "
-                                   f"at charge {charge:+d}: {e}",
-                                   f"pass --charge if the species is not neutral, "
-                                   f"or supply a format that carries connectivity "
-                                   f"(MOL/SDF/CDXML)")], 0
+                m = _perceive_bonds(m, charge, ext.upper())
+                if isinstance(m, list):              # a BLOCK finding
+                    return None, m, 0
             mols = [m]
-        elif ext == "pdb":
-            mols = [Chem.MolFromPDBFile(str(path), removeHs=False)]
         else:
             return None, [(BLOCK, "UNSUPPORTED_FORMAT",
                            f"'.{ext}' is not a format this reads",
@@ -1270,8 +1314,11 @@ def main():
         approved = _C.MolToSmiles(_C.RemoveHs(probe))
 
     if a.file:
-        spec, gi = from_file(a.file, n_confs=a.nconfs, seed=a.seed,
-                             charge=a.charge or 0)
+        try:
+            spec, gi = from_file(a.file, n_confs=a.nconfs, seed=a.seed,
+                                 charge=a.charge or 0)
+        except ValueError as e:              # e.g. H_COUNT_MISMATCH: refuse, no traceback
+            raise SystemExit(f"structure rejected: {e}") from None
         print(f"{a.file}  ->  {gi['formula']}, charge {gi['charge']:+d}")
         print(f"  SMILES as read: {gi['smiles']}")
         print(f"  geometry: {gi['source']}")

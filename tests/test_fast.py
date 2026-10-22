@@ -191,6 +191,83 @@ def test_xyz_connectivity_is_perceived(tmp_path):
     assert mol.GetNumBonds() == 2
 
 
+# chlorobenzene, all 12 atoms, docking-style HETATM records, no CONECT
+_CLPH_PDB = """\
+HETATM    1 Cl1  LIG A   1      -3.060  -0.000  -0.000  1.00  0.00          Cl
+HETATM    2 C2   LIG A   1      -1.339  -0.000  -0.000  1.00  0.00           C
+HETATM    3 C3   LIG A   1      -0.647   1.192   0.210  1.00  0.00           C
+HETATM    4 C4   LIG A   1       0.749   1.191   0.210  1.00  0.00           C
+HETATM    5 C5   LIG A   1       1.446   0.000  -0.000  1.00  0.00           C
+HETATM    6 C6   LIG A   1       0.749  -1.191  -0.210  1.00  0.00           C
+HETATM    7 C7   LIG A   1      -0.647  -1.192  -0.210  1.00  0.00           C
+HETATM    8 H8   LIG A   1      -1.186   2.121   0.374  1.00  0.00           H
+HETATM    9 H9   LIG A   1       1.293   2.118   0.373  1.00  0.00           H
+HETATM   10 H10  LIG A   1       2.533   0.000  -0.000  1.00  0.00           H
+HETATM   11 H11  LIG A   1       1.293  -2.118  -0.373  1.00  0.00           H
+HETATM   12 H12  LIG A   1      -1.186  -2.121  -0.374  1.00  0.00           H
+END
+"""
+
+
+def test_pdb_without_bond_records_is_read_as_the_right_molecule(tmp_path):
+    """Review 3, H1 (BLOCKER): proximity bonding made every bond single, so
+    chlorobenzene was read as chlorocyclohexane (ClC1CCCCC1), AddHs added six
+    hydrogens to a flat ring, and the gate reported nothing to flag."""
+    from rdkit import Chem
+    p = tmp_path / "clph.pdb"
+    p.write_text(_CLPH_PDB)
+    mol, problems, _ = em.read_structure(str(p))
+    assert not problems
+    assert Chem.MolToSmiles(Chem.RemoveHs(mol)) == "Clc1ccccc1"
+    _, info = em.from_file(str(p))
+    assert info["formula"] == "C6H5Cl"
+    assert "hydrogen(s) added" not in info["source"]
+
+
+def test_heavy_atom_only_pdb_is_refused_not_misread(tmp_path):
+    """Bond orders cannot be perceived without the hydrogens. Refusing is
+    correct; guessing reproduces H1."""
+    p = tmp_path / "heavy.pdb"
+    p.write_text("".join(l + "\n" for l in _CLPH_PDB.splitlines()
+                         if l.startswith("HETATM") and not l.endswith("H")) + "END\n")
+    mol, problems, _ = em.read_structure(str(p))
+    assert mol is None and problems[0][1] == "PDB_CONNECTIVITY"
+
+
+def test_h_count_guard_catches_a_reader_that_guesses_wrong(tmp_path, monkeypatch):
+    """Independent of the reader: replay the OLD PDB reader (proximity bonds,
+    all single) and check from_file refuses its output by hydrogen count."""
+    from rdkit import Chem
+    p = tmp_path / "clph.pdb"
+    p.write_text(_CLPH_PDB)
+
+    def old_reader(path, charge=0):
+        m = Chem.MolFromPDBFile(str(path), removeHs=False)
+        m.SetProp("_bonds", "perceived")
+        return m, [], 1
+    monkeypatch.setattr(em, "read_structure", old_reader)
+    with pytest.raises(ValueError, match="H_COUNT_MISMATCH"):
+        em.from_file(str(p))
+
+
+def test_file_bond_orders_with_only_polar_h_are_accepted(tmp_path):
+    """A docking pose may keep only its polar hydrogens. MOL/SDF carry their
+    own bond orders, so adding the rest is correct and must not be refused."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    full = Chem.AddHs(Chem.MolFromSmiles("OCc1ccccc1"))
+    AllChem.EmbedMolecule(full, randomSeed=1)
+    Chem.Kekulize(full, clearAromaticFlags=True)
+    rw = Chem.RWMol(full)
+    for a in sorted((a.GetIdx() for a in full.GetAtoms() if a.GetSymbol() == "H"
+                     and a.GetNeighbors()[0].GetSymbol() != "O"), reverse=True):
+        rw.RemoveAtom(a)
+    p = tmp_path / "polarH.mol"
+    Chem.MolToMolFile(rw.GetMol(), str(p))
+    _, info = em.from_file(str(p))
+    assert info["formula"] == "C7H8O" and "7 hydrogen(s) added" in info["source"]
+
+
 def test_charged_xyz_needs_and_accepts_the_charge(tmp_path):
     """Review 2, G10: DetermineBonds hard-coded charge=0 while the error
     message told the user to set the charge explicitly."""
