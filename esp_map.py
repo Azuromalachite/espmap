@@ -160,7 +160,9 @@ SMALL_BASIS = {"sto-3g", "3-21g", "6-31g", "6-31g*", "def2-svp", "def2-sv(p)"}
 # dielectric constants for --solvent. Measured effect on the chlorobenzene
 # sigma-hole: gas +9.83 -> chloroform +7.14 -> water +6.22 kcal/mol, i.e. the
 # solvent axis is CO-DOMINANT with the basis-set axis (+3.55). Do not quote a
-# condensed-phase number from a gas-phase run.
+# condensed-phase number from a gas-phase run. That is the polarised-solute
+# convention; with the reaction field added the shifts are +0.05 (water) and
+# -0.34 (chloroform), bench/solvent_convention.jsonl (review 3 H7).
 SOLVENTS = {"vacuum": None, "water": 78.3553, "dmso": 46.826, "methanol": 32.613,
             "acetonitrile": 35.688, "chloroform": 4.7113, "toluene": 2.3741,
             "hexane": 1.8819}

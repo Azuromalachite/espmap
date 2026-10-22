@@ -100,8 +100,9 @@ Do not re-derive these; do not quote a number against a smaller margin.
 | axis | effect (kcal/mol) |
 | --- | --- |
 | basis set, def2-SVP → def2-TZVPP | **+3.55** |
-| solvent, gas → PCM water | **−3.61** |
-| solvent, gas → chloroform | −2.69 |
+| solvent, gas → PCM water (polarised solute, the default) | **−3.61** |
+| solvent, gas → chloroform (polarised solute) | −2.69 |
+| solvent, gas → water / chloroform, + reaction field (`--include-reaction-field`) | +0.05 / −0.34 |
 | functional, B3LYP / PBE0 / M06-2X / HF | 0.69 spread |
 | conformer, lowest vs highest MMFF | ~1 (extended; 5.2 on V_min with folded C18 conformers, see below) |
 | stereochemistry, diastereomers | ~0.9 (0.4 noise floor) |
@@ -110,6 +111,13 @@ Do not re-derive these; do not quote a number against a smaller margin.
 | density fitting (`--density-fit`), 7 pairs up to 898 nao | ≤ 0.02, always upward on V_max |
 | GPU4PySCF (`--gpu`) vs CPU, decanoic acid, both RI | < 0.001 |
 | σ-hole region definition | 0.00 |
+
+**The solvent row is a convention, not a fact about the molecule.** The
+default map is the PCM-polarised solute alone; adding the PCM surface
+charges' potential cancels almost all of the shift (+0.05 in water, def2-TZVP,
+`bench/solvent_convention.jsonl`). Never quote −3.61 without naming the
+convention, and never compare records whose `solvent_esp` differs (it is in
+`analysis_key`).
 
 **The basis error is molecule-specific.** The same change moves bromobenzene
 by **−0.76** — opposite sign, a fifth the size. Validating on one molecule
