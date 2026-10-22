@@ -263,9 +263,9 @@ def test_radical_is_allowed_once_spin_is_given():
 
 
 def test_mismatched_spin_is_flagged():
+    """Was an INFO note; review 5 R2 made it a WARN that reaches the record."""
     _, findings = _verdict("C[CH2]", spin=3)
-    msg = " ".join(m for _, _, m, _ in findings)
-    assert "does not match" in msg
+    assert [s for s, c, _, _ in findings if c == "SPIN_OVERRIDE"] == [em.WARN]
 
 
 @pytest.mark.parametrize("smiles,n_centres", [("CC(N)C(=O)O", 1),
@@ -2229,3 +2229,54 @@ def test_a_declared_etkdg_file_shares_the_smiles_label():
     info = em.from_smiles("CCO")[1]
     assert (em.geometry_method("file 3D coordinates used as-is", declared="etkdg_mmff94s")
             == em.geometry_method(info["source"], info["forcefield"]))
+
+
+# ------------------------------------- the gate sees --charge/--spin (review 5 R2)
+def _codes(findings):
+    return {c for _, c, _, _ in findings}
+
+
+@pytest.mark.parametrize("smiles, charge, blocked", [
+    ("c1ccccc1", 2, True),              # the review's case: a dication called benzene
+    ("CC(=O)[O-]", 0, True),            # acetate computed as neutral
+    ("CC(=O)[O-]", -1, False),          # agrees with the drawing
+    ("c1ccccc1", None, False),          # no override given
+    ("c1ccccc1", 0, False),
+])
+def test_a_charge_that_is_not_the_drawn_one_is_blocked(smiles, charge, blocked):
+    verdict, findings = _verdict(smiles, charge=charge)
+    assert ("CHARGE_OVERRIDE" in _codes(findings)) is blocked
+    if blocked:
+        assert verdict == em.BLOCK
+
+
+@pytest.mark.parametrize("smiles, spin, code, sev", [
+    ("O=O", 2, "SPIN_OVERRIDE", "WARN"),                 # a deliberate triplet: runs, recorded
+    ("c1ccccc1", 2, "SPIN_OVERRIDE", "WARN"),            # the review's case
+    ("[CH3]", 1, "OPEN_SHELL_UNRESTRICTED", "INFO"),     # agrees with the drawing
+    ("[CH3]", 3, "SPIN_OVERRIDE", "WARN"),               # disagrees: was an INFO note
+])
+def test_a_spin_that_is_not_the_drawn_one_is_recorded(smiles, spin, code, sev):
+    verdict, findings = _verdict(smiles, spin=spin)
+    hit = [s for s, c, _, _ in findings if c == code]
+    assert hit and hit[0] == getattr(em, sev)
+    assert verdict != em.BLOCK
+
+
+def test_cli_refuses_a_charge_override_before_compute(monkeypatch):
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "c1ccccc1", "--charge", "2"])
+    with pytest.raises(SystemExit, match="rejected"):
+        em.main()
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "c1ccccc1", "--charge", "2",
+                                      "--force"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
+def test_atoms_charge_is_not_an_override(monkeypatch):
+    """--atoms perceives its bonds with --charge, so the two always agree."""
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--atoms", _NITRITE, "--charge", "-1"])
+    with pytest.raises(_ReachedCompute):
+        em.main()

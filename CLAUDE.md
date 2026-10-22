@@ -68,7 +68,11 @@ when a feature builds on published methods.
    **Every input is gated**, `--atoms` and `--molecule` included (bonds
    perceived from the coordinates, as for XYZ), and `validity.input` is true
    only when a gate ran: an ungated `--atoms` pair of waters once came out
-   fully valid with a site table (review 4, N3).
+   fully valid with a site table (review 4, N3). The gate checks what the
+   SCF is **given**, not only what was drawn: a `--charge` other than the
+   formal charge is a BLOCK (`CHARGE_OVERRIDE`), a `--spin` other than the
+   radical count a recorded WARN (`SPIN_OVERRIDE`); benzene `--charge 2` was
+   once recorded as verified benzene (review 5, R2).
 3. **The approved structure is the computed structure.** `verify_computed`
    reads `spec`, the coordinates PySCF receives, and nothing else:
    connectivity (hydrogens included) perceived from distances must match the

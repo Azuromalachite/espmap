@@ -407,3 +407,33 @@ def test_double_zeta_warning_fires_for_an_unhyphenated_name(capsys):
     """Review 4 N9 validation: --basis def2svp ran without the warning."""
     em.run_scf("H 0 0 0; H 0 0 0.74", basis="def2svp")
     assert "double-zeta" in capsys.readouterr().err
+
+
+def test_forced_charge_override_is_recorded_as_invalid_input(tmp_path, monkeypatch):
+    """Review 5 R2 validation: benzene --charge 2 was recorded as verified
+    benzene with validity all true; forced, it is now validity.input false
+    with the CHARGE_OVERRIDE finding."""
+    import json
+    import sys
+    js = tmp_path / "bz2.json"
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "c1ccccc1", "--charge", "2",
+                                      "--force", "--basis", "sto-3g", "--size", "80",
+                                      "--out", str(tmp_path / "bz2.png"), "--json", str(js)])
+    em.main()
+    rec = json.loads(js.read_text())
+    assert ["BLOCK", "CHARGE_OVERRIDE"] in rec["input"]["gate"]["findings"]
+    assert rec["input"]["gate"]["forced"] is True
+    assert rec["validity"]["input"] is False and rec["sites"] is None
+
+
+def test_deliberate_triplet_runs_with_the_spin_finding_recorded(tmp_path, monkeypatch):
+    import json
+    import sys
+    js = tmp_path / "o2.json"
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "O=O", "--spin", "2",
+                                      "--basis", "sto-3g", "--size", "80",
+                                      "--out", str(tmp_path / "o2.png"), "--json", str(js)])
+    em.main()
+    rec = json.loads(js.read_text())
+    assert ["WARN", "SPIN_OVERRIDE"] in rec["input"]["gate"]["findings"]
+    assert rec["validity"]["input"] is True
