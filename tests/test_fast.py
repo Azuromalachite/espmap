@@ -1137,3 +1137,115 @@ def test_h_source_records_which_hydrogens_the_file_supplied(tmp_path):
     assert hs.count("supplied") == 1 and hs.count("generated_relaxed") == 5
     _, info = em.from_smiles("CCO")
     assert {s for s in info["h_source"] if s is not None} == {"generated_relaxed"}
+
+
+# ---------------------------------------------------------- atom identity
+# per-site-spec P1. Maps are metadata: they never change what is computed,
+# but a site table keyed by them must point at the right atoms.
+def _map_codes(smiles=None, path=None):
+    from rdkit import Chem
+    mol, _ = em.parse_for_check(smiles=smiles, path=path)
+    _, findings = em.check_structure(Chem.RemoveHs(mol), maps_from=mol, smiles=smiles)
+    return {code for _, code, *_ in findings}
+
+
+@pytest.mark.parametrize("smiles, code", [
+    ("[CH3:1]CO", "PARTIAL_ATOM_MAP"),               # a table with holes
+    ("[CH3:1][CH2:1][OH:2]", "DUPLICATE_ATOM_MAP"),
+    ("[CH3:1][CH2:2][O:3][H:4]", "MAPPED_HYDROGEN"),  # RDKit's parser drops this map silently
+])
+def test_ambiguous_atom_maps_are_blocked(smiles, code):
+    assert code in _map_codes(smiles)
+    from rdkit import Chem
+    mol, _ = em.parse_for_check(smiles=smiles)
+    verdict, _ = em.check_structure(Chem.RemoveHs(mol), maps_from=mol, smiles=smiles)
+    assert verdict == em.BLOCK
+
+
+@pytest.mark.parametrize("smiles", ["[CH3:1][CH2:2][OH:3]", "CCO"])
+def test_full_or_absent_maps_pass(smiles):
+    assert not _map_codes(smiles) & {"PARTIAL_ATOM_MAP", "DUPLICATE_ATOM_MAP",
+                                     "MAPPED_HYDROGEN"}
+
+
+def test_a_mapped_hydrogen_in_a_file_is_blocked(tmp_path):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    m = Chem.AddHs(Chem.MolFromSmiles("[CH3:1][CH2:2][OH:3]"))
+    AllChem.EmbedMolecule(m, randomSeed=1)
+    m.GetAtomWithIdx(m.GetNumAtoms() - 1).SetAtomMapNum(9)
+    p = tmp_path / "h.sdf"
+    w = Chem.SDWriter(str(p)); w.write(m); w.close()
+    assert "MAPPED_HYDROGEN" in _map_codes(path=str(p))
+
+
+@pytest.mark.parametrize("smiles", ["[CH3:1][CH:2]([CH3:3])[OH:4]",
+                                    "[CH3:1][C:2]([CH3:3])([CH3:4])[OH:5]"])
+def test_a_mapped_molecule_with_equivalent_groups_is_not_refused(smiles):
+    """Maps make isopropyl's two methyls distinct labels, and RDKit then sees
+    a stereocentre the chemistry does not have: verify_computed refused a
+    correctly mapped isopropanol as 'stereochemistry differs'. Chemical
+    identity is compared with maps stripped; verify_mapping owns the maps."""
+    from rdkit import Chem
+    spec, _ = em.from_smiles(smiles)
+    ok, computed, reason = em.verify_computed(spec, Chem.MolFromSmiles(smiles))
+    assert ok, reason
+    assert ":" not in computed                        # chemical identity, no maps
+
+
+def test_atom_order_must_match_the_approval_by_index():
+    """verify_computed searches for SOME match, so it accepts a geometry whose
+    atoms were reordered. A site table keyed by index cannot: spec atom i
+    must be approval atom i."""
+    from rdkit import Chem
+    probe = Chem.MolFromSmiles("[CH3:1][CH:2]([CH3:3])[OH:4]")
+    spec, _ = em.from_smiles(Chem.MolToSmiles(probe))
+    assert em.verify_mapping(spec, probe)[0]
+    rows = spec.split(";")
+    rows[0], rows[2] = rows[2], rows[0]               # swap the two methyl carbons
+    swapped = ";".join(rows)
+    assert em.verify_computed(swapped, Chem.RemoveHs(probe))[0]   # same molecule
+    ok, reason = em.verify_mapping(swapped, probe)
+    assert not ok and reason
+
+
+def test_supplied_coordinates_must_stay_where_the_file_put_them(tmp_path):
+    """A pose: map 1 must sit where the adapter wrote atom 1. Swap the two
+    methyl GROUPS consistently: chemistry and connectivity are unchanged, so
+    only the comparison with the file catches it."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    m = Chem.AddHs(Chem.MolFromSmiles("[CH3:1][CH:2]([CH3:3])[OH:4]"))
+    AllChem.EmbedMolecule(m, randomSeed=2)
+    p = tmp_path / "pose.sdf"
+    w = Chem.SDWriter(str(p)); w.write(m); w.close()
+    probe, _ = em.parse_for_check(path=str(p))
+    spec, info = em.from_file(str(p))
+    assert em.verify_mapping(spec, probe, reference=True)[0]
+    sym, X = zip(*[(t.split()[0], [float(v) for v in t.split()[1:]]) for t in spec.split(";")])
+    X = np.array(X)
+    nb = lambda i: [n.GetIdx() for n in m.GetAtomWithIdx(i).GetNeighbors() if n.GetAtomicNum() == 1]
+    perm = list(range(len(sym)))
+    for a, b in [(0, 2)] + list(zip(nb(0), nb(2))):
+        perm[a], perm[b] = b, a
+    swapped = "; ".join(f"{sym[i]} {X[perm[i]][0]:.6f} {X[perm[i]][1]:.6f} {X[perm[i]][2]:.6f}"
+                        for i in range(len(sym)))
+    assert em.verify_mapping(swapped, probe)[0]       # internally consistent
+    ok, reason = em.verify_mapping(swapped, probe, reference=True)
+    assert not ok and "file" in reason
+
+
+def test_main_refuses_coordinates_whose_atom_order_moved(monkeypatch):
+    from rdkit import Chem
+    real = em.from_smiles
+
+    def reordered(s, **k):
+        spec, info = real(s, **k)
+        rows = spec.split(";")
+        rows[0], rows[2] = rows[2], rows[0]
+        return ";".join(rows), info
+    monkeypatch.setattr(em, "from_smiles", reordered)
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][CH:2]([CH3:3])[OH:4]"])
+    with pytest.raises(SystemExit, match="atom order"):
+        em.main()
