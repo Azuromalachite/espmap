@@ -124,7 +124,11 @@ the group. Atoms that carry no hydrogens (SCN⁻, NO₂⁻, Cl, the carbonyl-lik
 move ≤ 0.85. Quote site values; read atom values only to see where inside a
 site the surface sits. Review 4 (N4) measured the same on ethanol at
 STO-3G: both sp³ carbons have zero area under the primary rule and 8–11 Å²
-under the other.
+under the other. On the C18 acetate (`c18atoms` rows, def2-SVP + RI, gas,
+10 conformers) the primary rule leaves 14–15 of the 22 heavy atoms with no
+surface in every conformer; where both rules give an atom area, its mean
+moves by up to 8.7 kcal/mol. A site table built from atoms would be mostly
+blank under one rule and mostly filled under the other.
 
 **Why groups are needed.** Over an sp³ carbon almost all of the ρ = 0.002
 surface lies outside the hydrogens `[M]`, as above, so a chain carbon such as

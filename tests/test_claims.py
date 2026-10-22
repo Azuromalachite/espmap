@@ -336,7 +336,18 @@ def _site_rows():
                           min(ar[k]["area_A2"], an[k]["area_A2"]))
             if s != "H" and i not in with_h:
                 bare_d.append(d)
+    # the same on the 10 C18 conformers (def2-SVP + RI, gas): a mean shift
+    # where both rules give the atom area, and how many heavy atoms the
+    # nearest-nucleus rule leaves with no surface at all
+    c18_d, c18_buried = [], []
+    for r in (r for r in rows if r["part"] == "c18atoms"):
+        an, ar = r["atom_sites"]["nearest_nucleus"], r["atom_sites"]["radius_scaled"]
+        c18_d += [abs(ar[k]["V_area_mean"] - an[k]["V_area_mean"]) for k in an
+                  if "V_area_mean" in an[k] and "V_area_mean" in ar[k]]
+        c18_buried.append(sum(1 for k in an if k[0] != "H" and an[k]["area_A2"] == 0))
     return {
+        "partition atoms C18": f"{max(c18_d):.1f}",
+        "atoms buried C18": f"{min(c18_buried)}–{max(c18_buried)}",
         "partition atoms": f"{max(atom_d):.1f}",
         "partition atoms area factor": f"{max(atom_f):.1f}",
         "partition atoms without H": f"{max(bare_d):.2f}",
@@ -359,6 +370,7 @@ def _site_rows():
     ("conformer C18 extended", "2.69"), ("conformer C18 extended max", "5.16"),
     ("partition atoms", "11.9"), ("partition atoms area factor", "5.2"),
     ("partition atoms without H", "0.85"),
+    ("partition atoms C18", "8.7"), ("atoms buried C18", "14–15"),
     ("grid mean", "0.15"), ("grid p05", "0.72"), ("grid V_min", "0.54"),
 ])
 def test_every_per_site_row_is_recomputed_from_bench(row, expect):
@@ -393,10 +405,12 @@ def test_symmetry_rows_are_the_quoted_validation(row, expect):
 def test_atom_rows_share_the_grid_rows_surface():
     """The atom level is budgeted on the same surface as the group level."""
     rows = {r["key"]: r for r in _jsonl("site_partition.jsonl")}
-    atoms = [r for r in rows.values() if r["part"] == "atoms"]
-    assert len(atoms) == 4
+    atoms = [r for r in rows.values() if r["part"] in ("atoms", "c18atoms")]
+    assert len(atoms) == 4 + 10
     for r in atoms:
-        g = rows[f"grid|{r['molecule']}|0.26"]["sites"]
+        twin = (f"grid|{r['molecule']}|0.26" if r["part"] == "atoms"
+                else f"c18|Z3Z13-18OAc|{r['conf_id']}")
+        g = rows[twin]["sites"]
         for rule in ("nearest_nucleus", "radius_scaled"):
             for s, st in g[rule].items():
                 for q, v in st.items():
@@ -423,7 +437,8 @@ def test_record_budget_rows_are_the_recomputed_ones():
 def test_claude_md_quotes_the_per_site_budget():
     rows = _site_rows()
     for key in ("partition small anions", "partition C18", "conformer C18", "grid mean",
-                "conformer C18 extended", "conformer C18 extended max", "partition atoms"):
+                "conformer C18 extended", "conformer C18 extended max", "partition atoms",
+                "partition atoms C18", "atoms buried C18"):
         assert rows[key] in TEXT["CLAUDE.md"], f"CLAUDE.md lacks {key} = {rows[key]}"
     # review 4 N13: each number with its protocol, read first by a new session
     t = TEXT["CLAUDE.md"]

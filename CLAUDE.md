@@ -173,8 +173,11 @@ under its protocol:
 
 - **single atoms** (`sites.atoms`, hydrogens not folded; small anions and
   chlorobenzene): the rule moves an atom by up to 11.9, because the two
-  rules trade area between a heavy atom and its hydrogens. Atom values are
-  diagnostic; `reaction_sites` is the quotable level.
+  rules trade area between a heavy atom and its hydrogens. On the C18
+  acetate (def2-SVP + RI, gas, 10 conformers) the nearest-nucleus rule
+  leaves 14–15 of 22 heavy atoms with no surface, and an atom with area
+  under both rules moves by up to 8.7. Atom values are diagnostic;
+  `reaction_sites` is the quotable level.
 
 The 5th percentile moves up to 8.9 with the rule alone, so lead with means.
 Both rules are always reported (`delta`); never quote a site value from one
