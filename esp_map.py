@@ -273,6 +273,7 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
     perceived = mol.HasProp("_bonds") and mol.GetProp("_bonds") == "perceived"
 
     if is3d and not flat:
+        n_supplied = mol.GetNumAtoms()
         mol = Chem.AddHs(mol, addCoords=True)
         n_h_added = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H") - n_h_before
         # Independent of the reader: if bond orders were INFERRED from the
@@ -293,11 +294,14 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
             props = AllChem.MMFFGetMoleculeProperties(mol, mmffVariant="MMFF94s")
             if props is not None:
                 field = AllChem.MMFFGetMoleculeForceField(mol, props)
-                for a in mol.GetAtoms():
-                    if a.GetSymbol() != "H":
-                        field.AddFixedPoint(a.GetIdx())
+                # AddHs appends, so indices below n_supplied are the file's
+                # atoms. Freeze all of them, supplied H included: a pose's
+                # O-H orientation was set by its environment, and relaxing it
+                # here would replace that with the isolated-molecule optimum.
+                for i in range(n_supplied):
+                    field.AddFixedPoint(i)
                 field.Minimize(maxIts=500)
-                ff = "MMFF94s, hydrogens only (heavy atoms frozen)"
+                ff = "MMFF94s, added hydrogens only (supplied atoms frozen)"
             source += f"; {n_h_added} hydrogen(s) added"
         best = -1
     else:

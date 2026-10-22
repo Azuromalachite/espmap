@@ -180,6 +180,43 @@ def test_real_3d_coordinates_are_used_as_is(tmp_path):
     assert "as-is" in info["source"]
 
 
+def _spec_xyz(spec):
+    return np.array([[float(x) for x in t.split()[1:]] for t in spec.split(";")])
+
+
+def test_supplied_hydrogens_are_frozen_when_others_are_added(tmp_path):
+    """A docking pose often keeps its polar hydrogens and drops the rest. Only
+    the added hydrogens may move: relaxing the supplied O-H in isolation
+    replaces an orientation set by the pocket with the gas-phase optimum."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem, rdMolTransforms
+    m = Chem.AddHs(Chem.MolFromSmiles("CCCO"))
+    ps = AllChem.ETKDGv3(); ps.randomSeed = 42
+    AllChem.EmbedMolecule(m, ps); AllChem.MMFFOptimizeMolecule(m)
+    o = next(a for a in m.GetAtoms() if a.GetSymbol() == "O")
+    h_o = next(n.GetIdx() for n in o.GetNeighbors() if n.GetSymbol() == "H")
+    c1 = next(n.GetIdx() for n in o.GetNeighbors() if n.GetSymbol() == "C")
+    c2 = next(n.GetIdx() for n in m.GetAtomWithIdx(c1).GetNeighbors()
+              if n.GetSymbol() == "C")
+    # an O-H rotamer the isolated molecule would not choose
+    rdMolTransforms.SetDihedralDeg(m.GetConformer(), c2, c1, o.GetIdx(), h_o, 120.0)
+    rw = Chem.RWMol(m)
+    for i in sorted((a.GetIdx() for a in m.GetAtoms() if a.GetSymbol() == "H"
+                     and a.GetNeighbors()[0].GetSymbol() == "C"), reverse=True):
+        rw.RemoveAtom(i)
+    pose = rw.GetMol()
+    p = tmp_path / "pose.mol"
+    p.write_text(Chem.MolToMolBlock(pose))
+
+    spec, info = em.from_file(str(p))
+    xyz = _spec_xyz(spec)
+    supplied = Chem.MolFromMolFile(str(p), removeHs=False).GetConformer().GetPositions()
+    assert len(xyz) == m.GetNumAtoms()
+    # every supplied atom, the O-H hydrogen included, is where the file put it
+    assert np.abs(xyz[:len(supplied)] - supplied).max() < 1e-5
+    assert "7 hydrogen(s) added" in info["source"]
+
+
 def test_xyz_connectivity_is_perceived(tmp_path):
     """Review 2, G3: xyz carries no bonds, so every xyz file was rejected as a
     salt with a remedy about counter-ions."""
