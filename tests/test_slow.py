@@ -177,3 +177,27 @@ def test_an_anion_is_drawn_sequential_end_to_end(tmp_path, monkeypatch, extra,
     assert scale["cmap_requested"] == requested
     assert scale["cmap_substituted"] is substituted
     assert out.exists()
+
+
+def test_json_record_carries_sigma_hole_keys_and_validity(tmp_path, monkeypatch):
+    """Review 3 H6 through main(): chlorobenzene's sigma-hole V_max was printed
+    and never written; V_min/V_max had no unit; the record had no keys."""
+    import json
+    import sys
+    js, npz = tmp_path / "cb.json", tmp_path / "cb.npz"
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "Clc1ccccc1",
+                                      "--basis", "sto-3g", "--size", "120",
+                                      "--out", str(tmp_path / "cb.png"),
+                                      "--json", str(js), "--npz", str(npz)])
+    em.main()
+    rec = json.loads(js.read_text())
+    sh = rec["results"]["sigma_hole"]
+    assert sh["V_max_kcal_mol"] is not None and sh["n_cap_vertices"] > 0
+    assert rec["results"]["sigma_hole_reason"] is None
+    assert "V_min_kcal_mol" in rec["results"] and "V_min" not in rec["results"]
+    assert rec["validity"] == {"input": True, "surface": True, "sites": False}
+    assert rec["analysis_key"] == em.record_key(rec["key_fields"]["analysis"])
+    assert rec["render_key"] == em.record_key(rec["key_fields"]["render"])
+    assert rec["results"]["dipole"]["origin"]["kind"] == "centre_of_nuclear_charge"
+    z = np.load(npz)
+    assert str(z["analysis_key"]) == rec["analysis_key"] and "bohr" in str(z["units"])

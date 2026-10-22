@@ -147,6 +147,10 @@ import numpy as np
 
 BOHR = 0.52917721092
 HA2KCAL = 627.5095
+AU2DEBYE = 2.541746473
+# esp_at_points sums the solute's nuclei and (PCM-polarised) electrons only;
+# the potential of the PCM surface charges is not added (review 3 H7).
+SOLVENT_ESP = "polarised solute only (reaction field excluded)"
 ISO_BADER = 0.002
 
 # basis sets at or below double zeta; penalty measured in the review
@@ -1208,14 +1212,21 @@ MOLECULES = {"bromobenzene": ("Br", 1.890), "chlorobenzene": ("Cl", 1.740),
              "benzene": ("H", 1.080)}
 
 
-def surface_report(diag):
+def surface_definition(iso):
+    """Every area and value in a record is on this surface. It is the
+    electron-density isosurface, NOT a solvent-accessible surface."""
+    return dict(property="electron_density", isovalue_e_bohr3=float(iso))
+
+
+def surface_report(diag, iso):
     """The surface-integrity block of --json.
 
     Review 3 H4: the JSON kept only chi, and chi = -2 is what a clipped surface
     run with --no-strict gives AND what a valid folded genus-2 surface gives.
     A downstream reader could not tell a 23 %-wrong V_min from a good one.
     """
-    return dict(closed=bool(diag["closed"]), open_edges=int(diag["open_edges"]),
+    return dict(definition=surface_definition(iso),
+                closed=bool(diag["closed"]), open_edges=int(diag["open_edges"]),
                 nonmanifold_edges=int(diag["nonmanifold_edges"]),
                 components=int(diag["components"]), genus=diag["genus"],
                 chi=int(diag["chi"]), face_max_rho=float(diag["face_max_rho"]),
@@ -1232,10 +1243,12 @@ def gate_report(verdict, findings, forced):
 
 
 def scale_provenance(kind, lim=None, vmin=None, vmax=None):
-    """Where the colour limits came from, and whether panels can be compared.
+    """Where the colour limits came from, and whether the user fixed them.
 
-    Comparable means the limits were fixed by the user, so another molecule
-    run with the same flags maps a colour to the same kcal/mol. The first
+    Fixed means another molecule run with the same flags maps a colour to the
+    same kcal/mol. It says nothing about the numbers: review 3 H6 found it
+    named "comparable" across def2-SVP vs TZVP and gas vs PCM; whether numbers
+    compare is analysis_key, whether pictures do is render_key. The first
     --json marked every sequential scale comparable; an auto-scaled one (acetate
     -170..-80 next to another anion at -130..-30) is not. --lim only fixes a
     DIVERGING scale; --vmin/--vmax only fix a SEQUENTIAL one, and only as a
@@ -1245,7 +1258,7 @@ def scale_provenance(kind, lim=None, vmin=None, vmax=None):
         fixed = lim is not None
     else:
         fixed = vmin is not None and vmax is not None
-    return dict(source="user" if fixed else "auto", comparable=fixed)
+    return dict(source="user" if fixed else "auto", colour_scale_fixed=fixed)
 
 
 def plotly_colorscale(cmap, n=33):
@@ -1338,6 +1351,84 @@ def monosubstituted_benzene(sub,c_sub, rcc=1.390, rch=1.080):
     return "; ".join(f"{s} {a:.4f} {b:.4f} {c:.4f}" for s, (a, b, c) in out)
 
 
+def sigma_axis_partner(coords, i_sub):
+    """The atom the sigma-hole axis runs from: the substituent's nearest atom.
+    One function so the JSON's i_bond is the atom sigma_hole actually used."""
+    d = np.linalg.norm(coords - coords[i_sub], axis=1)
+    d[i_sub] = np.inf
+    return int(d.argmin())
+
+
+def sigma_hole_record(verts, V, mol, i_sub, reason=None):
+    """results.sigma_hole for the JSON (review 3 H6: the number every
+    error-budget row is about was printed and never written). Returns
+    (record or None, reason or None)."""
+    if i_sub is None:
+        return None, reason or "no Cl/Br/I"
+    i_bond = sigma_axis_partner(mol.atom_coords(), i_sub)
+    sh, ns = sigma_hole(verts, V, mol, i_sub=i_sub, i_bond=i_bond)
+    return dict(V_max_kcal_mol=None if np.isnan(sh) else sh, n_cap_vertices=ns,
+                i_sub=int(i_sub), i_bond=i_bond), None
+
+
+def dipole_about_nuclear_centre(mol, dm):
+    """Dipole (Debye) about the centre of nuclear charge, and that centre (A).
+
+    Review 3 H6: PySCF's dip_moment takes the origin at (0,0,0), and for a
+    charged species the dipole depends on the origin -- acetate gave 6.42 D as
+    embedded and 30.35 D translated by 5 A, same energy. About the centre of
+    nuclear charge the nuclear term vanishes and the value moves with the
+    molecule. For a neutral molecule it equals the origin-free dipole.
+    """
+    Z = mol.atom_charges().astype(float)
+    centre = Z @ mol.atom_coords() / Z.sum()
+    with mol.with_common_orig(centre):
+        r = mol.intor_symmetric("int1e_r", comp=3)
+    mu_au = -np.einsum("xij,ji->x", r, np.asarray(dm))
+    mu = mu_au * AU2DEBYE
+    return dict(vector_D=[float(x) for x in mu], magnitude_D=float(np.linalg.norm(mu)),
+                origin=dict(kind="centre_of_nuclear_charge",
+                            xyz_angstrom=[float(x) for x in centre * BOHR]))
+
+
+def record_key(fields):
+    """sha1 of the canonical JSON of fields: equal keys, equal fields."""
+    import hashlib
+    import json
+    return hashlib.sha1(json.dumps(fields, sort_keys=True).encode()).hexdigest()
+
+
+def analysis_fields(xc, basis, solvent, iso, spacing, density_fit):
+    """What makes two records' NUMBERS comparable (spec section 5). Colour
+    settings are deliberately absent: review 3's single compare_key would
+    have called two identical calculations incomparable over a colormap.
+
+    Normalised first, since PySCF is case-insensitive: def2-TZVP and
+    def2-tzvp are one calculation and must get one key. Site and partition
+    schema versions are NOT here: they cannot change a global V_min, and the
+    site block carries its own schema."""
+    solv = None if solvent is None or solvent.lower() == "vacuum" else solvent.lower()
+    return dict(xc=xc.lower(), basis=basis.lower(), solvent=solv,
+                solvent_esp=SOLVENT_ESP if solv else None,
+                spacing_bohr=float(spacing), density_fit=bool(density_fit),
+                surface_definition=surface_definition(iso))
+
+
+def validity(gate, verified, surface):
+    """One place a consumer reads validity from (spec section 6), never from
+    stderr, chi or a filename. sites is False until a site block exists."""
+    return dict(input=not (gate and gate["forced"]) and verified is not False,
+                surface=not surface["problems"], sites=False)
+
+
+def render_fields(cmap, kind, vlim, elev, azim, size, ambient):
+    """What makes two PICTURES share one visual scale. vlim is the resolved
+    range, so two auto-scaled panels match only if their ranges do."""
+    return dict(cmap=cmap, kind=kind, vmin=round(float(vlim[0]), 6),
+                vmax=round(float(vlim[1]), 6), elev=float(elev), azim=float(azim),
+                size=int(size), ambient=float(ambient))
+
+
 def sigma_hole(verts, V, mol, i_sub=6, pr_min=0.3, pe_max=1.6, i_bond=None):
     """V_max on the outer cap of the substituent, along the X-to-neighbour axis.
 
@@ -1360,9 +1451,7 @@ def sigma_hole(verts, V, mol, i_sub=6, pr_min=0.3, pe_max=1.6, i_bond=None):
     co = mol.atom_coords()
     X = co[i_sub]
     if i_bond is None:
-        d = np.linalg.norm(co - X, axis=1)
-        d[i_sub] = np.inf
-        i_bond = int(d.argmin())
+        i_bond = sigma_axis_partner(co, i_sub)
     axis = X - co[i_bond]
     axis /= np.linalg.norm(axis)
     rel = verts - X
@@ -1525,6 +1614,7 @@ def main():
         raise SystemExit(err)
 
     charge, spin, i_sub = a.charge or 0, a.spin, 6
+    sh_reason = None
     gi = None
     if a.smiles and a.file:
         raise SystemExit("--smiles and --file are mutually exclusive")
@@ -1608,11 +1698,15 @@ def main():
         # to read noise as a halogen-bond donor.
         hal = [i for i, s in enumerate(sym) if s in ("Cl", "Br", "I")]
         i_sub = hal[0] if len(hal) == 1 else None
-        if i_sub is None and sum(1 for s in sym if s == "F"):
+        if len(hal) > 1:
+            sh_reason = "more than one Cl/Br/I"
+        elif i_sub is None and "F" in sym:
+            sh_reason = "fluorine does not form one"
             print("note: fluorine present; no sigma-hole is reported because F "
                   "does not form one.", file=sys.stderr)
     elif a.atoms:
         spec, i_sub = a.atoms, None
+        sh_reason = "input has no halogen index (--atoms)"
     else:
         spec = monosubstituted_benzene(*MOLECULES[a.molecule])
         i_sub = None if a.molecule == "benzene" else 6
@@ -1661,9 +1755,11 @@ def main():
 
     V = esp_at_points(mol, dm, verts) * HA2KCAL
     print(f"V = {V.min():+.2f} .. {V.max():+.2f} kcal/mol")
-    if i_sub is not None:
-        sh, ns = sigma_hole(verts, V, mol, i_sub=i_sub)
-        print(f"sigma-hole V_max = {sh:+.2f} kcal/mol  ({ns} vertices in the cap)")
+    sh_rec, sh_reason = sigma_hole_record(verts, V, mol, i_sub, sh_reason)
+    if sh_rec is not None:
+        sh = sh_rec["V_max_kcal_mol"]
+        print(f"sigma-hole V_max = {float('nan') if sh is None else sh:+.2f} "
+              f"kcal/mol  ({sh_rec['n_cap_vertices']} vertices in the cap)")
 
     vlim, kind, notes = choose_scale(V, lim=a.lim, kind=a.scale,
                                      vmin=a.vmin, vmax=a.vmax)
@@ -1693,6 +1789,9 @@ def main():
     print(f"wrote {a.out}  ({kind} scale {vlim[0]:+.1f} to {vlim[1]:+.1f} "
           f"kcal/mol, cmap {cmap_name})")
 
+    a_fields = analysis_fields(a.xc, a.basis, a.solvent, a.iso, a.spacing,
+                               a.density_fit)
+    r_fields = render_fields(cmap_name, kind, vlim, a.elev, a.azim, a.size, a.ambient)
     symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
     label = (gi or {}).get("formula") or a.smiles or a.file or a.molecule
     if a.html:
@@ -1703,7 +1802,12 @@ def main():
     if a.npz:
         np.savez_compressed(a.npz, verts=verts, faces=faces, V=V,
                             symbols=np.array(symbols), coords=mol.atom_coords(),
-                            vlim=np.array(vlim), kind=kind, cmap=cmap_name)
+                            vlim=np.array(vlim), kind=kind, cmap=cmap_name,
+                            units="coords, verts: bohr; V, vlim: kcal/mol",
+                            xc=a.xc, basis=a.basis, solvent=a.solvent,
+                            solvent_esp=str(a_fields["solvent_esp"]), iso=a.iso,
+                            analysis_key=record_key(a_fields),
+                            render_key=record_key(r_fields))
         print(f"wrote {a.npz}  (surface, bohr; V in kcal/mol)")
     if a.json:
         import json
@@ -1713,7 +1817,11 @@ def main():
         commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
                                 text=True, cwd=os.path.dirname(os.path.abspath(
                                     __file__))).stdout.strip() or None
+        surface = surface_report(diag, a.iso)
         rec = dict(
+            validity=validity(gate, verified, surface),
+            analysis_key=record_key(a_fields), render_key=record_key(r_fields),
+            key_fields=dict(analysis=a_fields, render=r_fields),
             input=dict(smiles=a.smiles, file=a.file,
                        record=(gi or {}).get("record"),
                        # the structure the gate saw; "approved" only if it passed
@@ -1723,14 +1831,15 @@ def main():
                        computed_smiles=computed, structure_verified=verified,
                        formula=(gi or {}).get("formula"), charge=charge, spin=spin),
             settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
+                          solvent_esp=a_fields["solvent_esp"],
                           density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
                           spacing_bohr=a.spacing, seed=a.seed, nconfs=a.nconfs,
                           optimize=a.optimize, geometry=(gi or {}).get("source")),
             results=dict(e_tot_Ha=float(mf.e_tot), nao=int(mol.nao),
-                         dipole_D=float(np.linalg.norm(mf.dip_moment(
-                             unit="Debye", verbose=0))),
-                         V_min=float(V.min()), V_max=float(V.max()),
-                         n_verts=int(diag["n_verts"]), surface=surface_report(diag)),
+                         dipole=dipole_about_nuclear_centre(mol, dm),
+                         V_min_kcal_mol=float(V.min()), V_max_kcal_mol=float(V.max()),
+                         sigma_hole=sh_rec, sigma_hole_reason=sh_reason,
+                         n_verts=int(diag["n_verts"]), surface=surface),
             scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
                        cmap=cmap_name, cmap_requested=a.cmap,
                        cmap_substituted=bool(cmap_warning),
