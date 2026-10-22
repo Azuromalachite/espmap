@@ -8,8 +8,9 @@ Schema notation: an object lists its keys exactly ("$"-prefixed keys are
 notation, "$nullable": true lets the whole object be null); a one-element
 list is a list whose items all match that element, and {"$list": item,
 "$nullable": true} is the same list or null; a string is a leaf type,
-"str" | "num" | "int" | "bool" | "xyz" (three numbers) | "any", with a
-trailing "?" for nullable.
+"str" | "num" | "int" | "bool" | "xyz" (three numbers) | "any", or a closed
+vocabulary "enum:A|B|C" (review 5 R10: the spec used a verdict the code never
+writes), with a trailing "?" for nullable.
 """
 import json
 from pathlib import Path
@@ -49,6 +50,10 @@ def tree_problems(schema, value, path="record"):
             return [] if nullable or kind == "any" else [f"{path}: null, expected {kind}"]
         if kind == "any":
             return []
+        if kind.startswith("enum:"):
+            allowed = kind[5:].split("|")
+            return [] if value in allowed else [
+                f"{path}: {value!r}, expected one of {kind[5:]}"]
         if kind == "xyz":
             ok = (isinstance(value, list) and len(value) == 3
                   and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in value))

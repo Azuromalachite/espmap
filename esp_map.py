@@ -1970,6 +1970,11 @@ def area_stats(P, faces, V):
                 V_max_kcal_mol=float(V[i_max]), V_max_at_A=[float(x) for x in P[i_max]])
 
 
+# A fraction of the surface AREA (review 5 R14 suggested 5 %); not the same
+# quantity as SIGN_CHANGE_MIN, which is a ratio of potential values.
+GIPF_MIN_AREA_FRACTION = 0.05
+
+
 def gipf_stats(P, faces, V):
     """GIPF's global surface statistics (Murray et al. 1994, murray1994gipf):
     the mean of each sign, sigma_+^2 and sigma_-^2 each about its own sign's
@@ -1980,25 +1985,51 @@ def gipf_stats(P, faces, V):
     was cited as GIPF's variance; it is not, and stays as what it is. GIPF
     averaged over surface points; here, as everywhere in espmap, over
     triangles weighted by area (V averaged per triangle), so compare with
-    Multiwfn only when its weighting is the same. A sign with no area has a
-    null mean and variance (undefined, not zero), and nu is then null.
+    Multiwfn only when its weighting is the same. A sign covering less than
+    GIPF_MIN_AREA_FRACTION of the surface has a null mean and variance
+    (undefined, not zero), and nu is then null, with the reason: review 5
+    R14 found one triangle at +0.01 kcal/mol turning nu from null into 0.0,
+    the knife-edge review 3 H11 removed from the scale. surface_stats holds
+    the signed areas that decide it.
     """
     a = triangle_areas(P, faces)
     vf = V[faces].mean(axis=1)
+    total = a.sum()
+    small = []
 
-    def part(m):
-        if a[m].sum() == 0:
+    def part(m, name):
+        if total == 0 or a[m].sum() / total < GIPF_MIN_AREA_FRACTION:
+            small.append(name)
             return None, None
         mu = float((a[m] * vf[m]).sum() / a[m].sum())
         return mu, float((a[m] * (vf[m] - mu) ** 2).sum() / a[m].sum())
-    mp, sp = part(vf > 0)
-    mn, sn = part(vf < 0)
+    mp, sp = part(vf > 0, "positive")
+    mn, sn = part(vf < 0, "negative")
     tot = None if sp is None and sn is None else (sp or 0.0) + (sn or 0.0)
     nu = (sp * sn / tot ** 2 if sp is not None and sn is not None and tot > 0 else None)
+    reason = (None if not small else
+              f"{' and '.join(small)} area below {GIPF_MIN_AREA_FRACTION:.0%} of the surface: "
+              f"that sign's statistics and nu are undefined")
     return dict(V_pos_mean_kcal_mol=mp, V_neg_mean_kcal_mol=mn,
                 sigma2_pos_kcal2_mol2=sp, sigma2_neg_kcal2_mol2=sn,
-                sigma2_tot_kcal2_mol2=tot, nu=nu,
+                sigma2_tot_kcal2_mol2=tot, nu=nu, reason=reason,
+                min_area_fraction=GIPF_MIN_AREA_FRACTION,
                 weighting="triangle area, V averaged per triangle")
+
+
+def record_bonds(probe):
+    """The approved structure's bonds, hydrogens included, in record atom
+    order: [[i, j, order], ...] with i < j and one Kekule structure (orders
+    1-3). Review 5 A1: a consumer could rebuild bonds only from a mapped
+    SMILES. Valid only when verify_mapping confirmed the order (main writes
+    null otherwise). The SCF never sees bond orders (invariant 3), so they
+    are the drawing's, not a computed property."""
+    from rdkit import Chem
+    m = Chem.AddHs(probe)
+    Chem.Kekulize(m, clearAromaticFlags=True)
+    return sorted([min(b.GetBeginAtomIdx(), b.GetEndAtomIdx()),
+                   max(b.GetBeginAtomIdx(), b.GetEndAtomIdx()),
+                   int(b.GetBondTypeAsDouble())] for b in m.GetBonds())
 
 
 def partition_surface(P, faces, coords, symbols, rule):
@@ -2131,8 +2162,14 @@ def site_report(P, faces, V, coords, symbols, atom_maps=None, h_source=None, gro
                           h_source=(h_source[i] if h_source and s == "H" else None),
                           **per_rule([i])))
     if groups is None:
-        source = "default"
-        groups = [(f"{symbols[h]}{h}", [h] + [i for i, p in enumerate(parent) if p == h])
+        # review 5 R5: labelled by atom map on a mapped input, as caller sites
+        # are, so nitrite's O sites read O2/O3 (its maps), not O1/O2 (indices)
+        # (a partial map, BLOCKed by the gate unless forced, falls back to indices)
+        by_map = bool(atom_maps) and all(h in atom_maps for h, s in enumerate(symbols)
+                                         if s != "H")
+        source = "default:map" if by_map else "default:index"
+        groups = [(f"{symbols[h]}{atom_maps[h] if by_map else h}",
+                   [h] + [i for i, p in enumerate(parent) if p == h])
                   for h, s in enumerate(symbols) if s != "H"]
     sites = []
     for label, members in groups:
@@ -2142,13 +2179,20 @@ def site_report(P, faces, V, coords, symbols, atom_maps=None, h_source=None, gro
             and parent[i] in members and symbols[parent[i]] in _POLAR for i in members)
         sites.append(dict(label=label, source=source, atoms=list(members),
                           h_generated_polar=bool(polar_gen), **per_rule(list(members))))
+    # Caller groups may overlap or leave atoms out; then site areas do not
+    # sum to the surface (the C18 fixtures summed to 1.041). Say so.
+    for s in sites:
+        s["overlaps"] = [t["label"] for t in sites
+                         if t is not s and set(t["atoms"]) & set(s["atoms"])]
+    counts = np.bincount([i for s in sites for i in s["atoms"]], minlength=len(symbols))
     compared = owner["radius_scaled"] is not None
     return dict(schema=SITES_SCHEMA,
                 partition=dict(primary="nearest_nucleus",
                                compared="radius_scaled" if compared else None,
                                unit="triangle",
                                radii="Bondi; Mantina 2009 for B" if compared else None),
-                atoms=atoms, reaction_sites=sites)
+                atoms=atoms, reaction_sites=sites,
+                sites_tile_surface=bool((counts == 1).all()))
 
 
 def site_checks(rep, P, faces, V):
@@ -2818,7 +2862,10 @@ def main():
             analysis_key=record_key(a_fields), render_key=record_key(r_fields),
             key_fields=dict(analysis=a_fields, render=r_fields),
             geometry=dict(geometry_record(mol, charge, spin),
-                          optimised_from_sha1=pre_opt_sha1),
+                          optimised_from_sha1=pre_opt_sha1,
+                          # the approved structure's bonds in this atom order,
+                          # only when verify_mapping confirmed that order (A1)
+                          bonds=record_bonds(probe) if mapped_ok else None),
             input=dict(smiles=a.smiles, file=a.file,
                        record=(gi or {}).get("record"),
                        # the structure the gate saw; "approved" only if it passed

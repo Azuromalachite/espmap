@@ -5,7 +5,8 @@
     "real record against it in BOTH directions: a key declared here and never written fails, and so does",
     "a key written and not declared. Notation: an object lists its keys exactly; [x] is a list of x;",
     "{\"$list\": x, \"$nullable\": true} is a list of x or null; leaves are str | num | int | bool | xyz",
-    "(three numbers) | any, a trailing ? meaning nullable; \"#name\" is $defs.name, \"#name?\" the same or null.",
+    "(three numbers) | any | enum:A|B|C (a closed vocabulary, review 5 R10), a trailing ? meaning nullable;",
+    "\"#name\" is $defs.name, \"#name?\" the same or null.",
     "Change this file in the same commit as the code that changes the record.",
     "npz lists the arrays of a valid run; tri_atom_* are present only when validity.input and",
     "validity.surface are both true (review 4 N8), the conditions under which sites_block runs."
@@ -23,7 +24,7 @@
       "area_A2": "num?", "V_area_mean_kcal_mol": "num?", "V_p05_kcal_mol": "num?",
       "V_p95_kcal_mol": "num?", "V_min_kcal_mol": "num?", "V_max_kcal_mol": "num?"
     },
-    "surface_definition": {"property": "str", "isovalue_e_bohr3": "num"}
+    "surface_definition": {"property": "enum:electron_density", "isovalue_e_bohr3": "num"}
   },
   "record": {
     "schema": "str",
@@ -37,19 +38,20 @@
         "surface_definition": "#surface_definition"
       },
       "render": {
-        "cmap": "str", "kind": "str", "vmin": "num", "vmax": "num",
+        "cmap": "str", "kind": "enum:diverging|sequential", "vmin": "num", "vmax": "num",
         "elev": "num", "azim": "num", "size": "int", "ambient": "num"
       }
     },
     "geometry": {
       "symbols": ["str"], "xyz_angstrom": ["xyz"], "sha1": "str", "sha1_covers": "str",
-      "charge": "int", "spin": "int", "optimised_from_sha1": "str?"
+      "charge": "int", "spin": "int", "optimised_from_sha1": "str?",
+      "bonds": {"$nullable": true, "$list": ["int"]}
     },
     "input": {
       "smiles": "str?", "file": "str?",
       "record": {"$nullable": true, "index": "int", "of": "int"},
       "gate_smiles": "str?", "approved_smiles": "str?",
-      "gate": {"$nullable": true, "verdict": "str", "forced": "bool", "findings": [["str"]]},
+      "gate": {"$nullable": true, "verdict": "enum:INFO|WARN|BLOCK", "forced": "bool", "findings": [["str"]]},
       "computed_smiles": "str?", "structure_verified": "bool?",
       "formula": "str?", "charge": "int", "spin": "int"
     },
@@ -64,7 +66,7 @@
       "e_tot_Ha": "num", "nao": "int",
       "dipole": {
         "vector_D": "xyz", "magnitude_D": "num",
-        "origin": {"kind": "str", "xyz_angstrom": "xyz"}
+        "origin": {"kind": "enum:centre_of_nuclear_charge", "xyz_angstrom": "xyz"}
       },
       "V_min_kcal_mol": "num", "V_max_kcal_mol": "num",
       "sigma_hole": {
@@ -76,32 +78,36 @@
       "surface": {
         "definition": "#surface_definition",
         "closed": "bool", "open_edges": "int", "nonmanifold_edges": "int",
-        "components": "int", "genus": "int", "chi": "int", "face_max_rho": "num",
+        "components": "int", "genus": "int?", "chi": "int", "face_max_rho": "num",
         "margin_bohr": "num", "strict": "bool", "problems": ["str"], "valid": "bool"
       },
       "surface_stats": "#stats",
       "gipf": {
         "V_pos_mean_kcal_mol": "num?", "V_neg_mean_kcal_mol": "num?",
         "sigma2_pos_kcal2_mol2": "num?", "sigma2_neg_kcal2_mol2": "num?",
-        "sigma2_tot_kcal2_mol2": "num?", "nu": "num?", "weighting": "str"
+        "sigma2_tot_kcal2_mol2": "num?", "nu": "num?", "reason": "str?",
+        "min_area_fraction": "num", "weighting": "str"
       }
     },
     "sites": {
       "$nullable": true,
       "schema": "str",
-      "partition": {"primary": "str", "compared": "str?", "unit": "str", "radii": "str?"},
+      "partition": {"primary": "enum:nearest_nucleus", "compared": "enum:radius_scaled?",
+                    "unit": "enum:triangle", "radii": "str?"},
       "atoms": [{
         "index": "int", "atom_map": "int?", "element": "str", "parent": "int?",
-        "h_source": "str?",
+        "h_source": "enum:supplied|generated|generated_relaxed|optimised?",
         "nearest_nucleus": "#stats", "radius_scaled": "#stats?", "delta": "#delta?"
       }],
       "reaction_sites": [{
-        "label": "str", "source": "str", "atoms": ["int"], "h_generated_polar": "bool",
+        "label": "str", "source": "enum:default:map|default:index|caller:map|caller:index",
+        "atoms": ["int"], "overlaps": ["str"], "h_generated_polar": "bool",
         "nearest_nucleus": "#stats", "radius_scaled": "#stats?", "delta": "#delta?"
       }],
+      "sites_tile_surface": "bool",
       "solvent_esp": "str?",
       "geometry_provenance": {
-        "heavy_atoms": "str",
+        "heavy_atoms": "enum:supplied_frozen|generated|optimised",
         "hydrogens": {"supplied": "int", "generated": "int", "generated_relaxed": "int",
                       "optimised": "int"},
         "relaxation": "str", "caveat": "str"
@@ -119,10 +125,10 @@
     },
     "sites_reason": "str?",
     "scale": {
-      "kind": "str", "vmin": "num", "vmax": "num",
+      "kind": "enum:diverging|sequential", "vmin": "num", "vmax": "num",
       "sign_change_ratio": "num", "sign_change_threshold": "num",
       "cmap": "str", "cmap_requested": "str?", "cmap_substituted": "bool",
-      "cmap_forced": "bool", "source": "str", "colour_scale_fixed": "bool"
+      "cmap_forced": "bool", "source": "enum:user|auto", "colour_scale_fixed": "bool"
     },
     "provenance": {
       "espmap_version": "str", "code": "str", "python": "str", "numpy": "str",

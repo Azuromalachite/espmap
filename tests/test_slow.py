@@ -273,6 +273,24 @@ def test_record_matches_the_committed_schema_in_both_directions(tmp_path, monkey
     assert rec["schema"] == em.RECORD_SCHEMA
     assert tree_problems(schema["record"], rec) == []
     assert sorted(np.load(npz).files) == sorted(schema["npz"])
+    # A1: bonds in record order, each one a real contact in the geometry
+    xyz = np.array(rec["geometry"]["xyz_angstrom"])
+    assert len(rec["geometry"]["bonds"]) == 4
+    assert all(np.linalg.norm(xyz[i] - xyz[j]) < 2.0 for i, j, _ in rec["geometry"]["bonds"])
+
+
+@pytest.mark.parametrize("argv", [
+    ["--smiles", "O", "--margin", "2.0", "--no-strict"],                    # open surface
+    ["--atoms", "O 0 0 0; H 0.96 0 0; H -0.24 0.93 0; "
+                "O 3 0 0; H 3.96 0 0; H 2.76 0.93 0", "--force"],              # forced BLOCK
+    ["--smiles", "[CH3]", "--spin", "1"],                                    # UKS
+], ids=["open_surface", "forced_block", "uks"])
+def test_other_record_branches_match_the_schema(tmp_path, monkeypatch, argv):
+    """R4: the one-record schema test never wrote an open surface, whose
+    genus is null. These are the branches review 5 ran by hand."""
+    from record_tree import load_schema, tree_problems
+    rec = _run_json(tmp_path, monkeypatch, argv)
+    assert tree_problems(load_schema()["record"], rec) == []
 
 def test_json_geometry_reproduces_the_run_through_atoms(tmp_path, monkeypatch):
     """Review 3 H14 validation: re-running a JSON's recorded geometry through
