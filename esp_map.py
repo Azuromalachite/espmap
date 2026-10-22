@@ -162,7 +162,15 @@ SOLVENT_ESP = {False: "polarised solute only (reaction field excluded)",
 ISO_BADER = 0.002
 
 # basis sets at or below double zeta; penalty measured in the review
-SMALL_BASIS = {"sto-3g", "3-21g", "6-31g", "6-31g*", "def2-svp", "def2-sv(p)"}
+def basis_key(name):
+    """One spelling per basis set. PySCF resolves def2-TZVP, def2tzvp and
+    DEF2_TZVP to the same basis; review 4 N9 found them giving three
+    analysis_keys, and --basis def2svp skipping the double-zeta warning."""
+    return "".join(c for c in name.lower() if c not in "-_ ")
+
+
+SMALL_BASIS = {basis_key(b) for b in
+               ("sto-3g", "3-21g", "6-31g", "6-31g*", "def2-svp", "def2-sv(p)")}
 
 # dielectric constants for --solvent. Measured effect on the chlorobenzene
 # sigma-hole: gas +9.83 -> chloroform +7.14 -> water +6.22 kcal/mol, i.e. the
@@ -1027,7 +1035,7 @@ def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
                            f"{', spin=%d' % spin if spin else ''})")
     if gpu:
         mf = mf.to_cpu()    # np.asarray in total_dm refuses CuPy arrays
-    if basis.lower() in SMALL_BASIS:
+    if basis_key(basis) in SMALL_BASIS:
         print(f"WARNING: {basis} is double-zeta or smaller. Measured error on "
               f"the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to "
               f"def2-TZVPP.\n         Adequate for a picture; do not quote a "
@@ -1777,7 +1785,7 @@ def analysis_fields(xc, basis, solvent, iso, spacing, density_fit, geometry_meth
     made. Review 4 N2: it was absent, yet on small anions it is the largest
     measured axis (MMFF vs DFT up to 6.5 kcal/mol, above the basis row)."""
     solv = None if solvent is None or solvent.lower() == "vacuum" else solvent.lower()
-    return dict(xc=xc.lower(), basis=basis.lower(), solvent=solv,
+    return dict(xc=xc.lower(), basis=basis_key(basis), solvent=solv,
                 solvent_esp=SOLVENT_ESP[bool(reaction_field)] if solv else None,
                 spacing_bohr=float(spacing), density_fit=bool(density_fit),
                 geometry_method=geometry_method,
@@ -1795,7 +1803,7 @@ def geometry_method(source=None, forcefield=None, atoms=False, molecule=None,
     if optimize is not None:
         xc, basis, solvent = optimize
         solv = None if solvent in (None, "vacuum") else solvent.lower()
-        return f"dft_opt:{xc.lower()}/{basis.lower()}" + (f"/{solv}" if solv else "")
+        return f"dft_opt:{xc.lower()}/{basis_key(basis)}" + (f"/{solv}" if solv else "")
     if atoms:
         return "atoms_string"
     if molecule is not None:

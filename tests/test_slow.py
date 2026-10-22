@@ -367,3 +367,9 @@ def test_npz_of_a_valid_record_matches_its_json(tmp_path, monkeypatch):
     assert [k for k in z.files if k.startswith("tri_atom_")]
     assert str(z["geometry_sha1"]) == rec["geometry"]["sha1"]
     assert sorted(int(m) for m in z["atom_maps"] if m) == [1, 2]
+
+
+def test_double_zeta_warning_fires_for_an_unhyphenated_name(capsys):
+    """Review 4 N9 validation: --basis def2svp ran without the warning."""
+    em.run_scf("H 0 0 0; H 0 0 0.74", basis="def2svp")
+    assert "double-zeta" in capsys.readouterr().err
