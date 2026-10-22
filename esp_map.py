@@ -1825,6 +1825,10 @@ def declared_geometry_method(text):
     first = re.split(r"[\s,;(]", low, 1)[0]
     if first in _FORCE_FIELDS:
         return _FORCE_FIELDS[first]
+    # an ETKDG conformer relaxed with a force field is what a --smiles run
+    # makes; declaring it so gives the file the same key as that run (R6)
+    if first in ("etkdg_mmff94s", "etkdg_uff"):
+        return first
     m = re.match(r"([a-z0-9\-]+)/([a-z0-9()*+_\-]+)(?:\s*,\s*pcm\s+([a-z0-9_\-]+))?", low)
     if m and not m.group(1).startswith(tuple(_FORCE_FIELDS)):
         return _dft_label(m.group(1), m.group(2), m.group(3))

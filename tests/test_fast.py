@@ -2016,7 +2016,8 @@ def test_double_zeta_is_recognised_however_it_is_spelled(name):
     ("B3LYP/def2-TZVP, PCM water, Cartesian BFGS gtol 3e-4 Ha/A", "dft:b3lyp/def2tzvp/water"),
     ("PBE0/def2-SVP", "dft:pbe0/def2svp"),
     ("MMFF94s conformer 4 of 100 (from_smiles seed 0xC0FFEE)", "mmff94s"),
-    ("mmff94s", "mmff94s"), ("UFF", "uff"),
+    ("mmff94s", "mmff94s"), ("UFF", "uff"), ("etkdg_mmff94s", "etkdg_mmff94s"),
+    ("ETKDG_UFF", "etkdg_uff"),
     ("drawn by hand", None), ("", None), (None, None),
 ])
 def test_declared_geometry_origin_is_normalised(text, label):
@@ -2132,3 +2133,11 @@ def test_the_explicit_property_is_read(tmp_path):
     w = Chem.SDWriter(str(p)); w.write(m); w.close()
     info = em.from_file(str(p), charge=-1)[1]
     assert em.geometry_method(info["source"], declared=info["declared_geometry"]) == "mmff94s"
+
+
+def test_a_declared_etkdg_file_shares_the_smiles_label():
+    """The C18 fixtures are ETKDG + MMFF94s conformers, what --smiles makes;
+    declared so, they get the same label, hence the same key (review 5 R6)."""
+    info = em.from_smiles("CCO")[1]
+    assert (em.geometry_method("file 3D coordinates used as-is", declared="etkdg_mmff94s")
+            == em.geometry_method(info["source"], info["forcefield"]))
