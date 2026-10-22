@@ -84,7 +84,10 @@ stop and re-read this paragraph.
 7. **Diverging and symmetric only when the field changes sign.** An ion's
    surface never does, and centring on zero collapses its entire range into
    one colour. `--lim` is the diverging range; `--vmin`/`--vmax` are the
-   sequential ones.
+   sequential ones. "Changes sign" is `sign_change_ratio(V) > SIGN_CHANGE_MIN`
+   (0.05), never `V.min() < 0 < V.max()`: that knife-edge let 0.02 kcal/mol
+   decide the scale (review 3 H11). Anything that asks whether V changes sign,
+   the notebook included, calls the helper.
 8. **The isosurface must be closed and interior to its box**: no edge used by
    only one triangle, and no density above the isovalue on a box face. A
    clipped surface changed a measured V_max by 26 % with every other number in

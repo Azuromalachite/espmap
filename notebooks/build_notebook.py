@@ -278,7 +278,8 @@ if RUN_SERIES:
         zz = np.load(f"{out}/surface.npz")
         surfs.append((name, zz))
         print(f"{name:15s} V = {zz['V'].min():+.1f} … {zz['V'].max():+.1f} kcal/mol")
-    one_sign = [n for n, zz in surfs if not (zz["V"].min() < 0 < zz["V"].max())]
+    # the same rule as the CLI's scale choice: one place decides "changes sign"
+    one_sign = [n for n, zz in surfs if em.sign_change_ratio(zz["V"]) <= em.SIGN_CHANGE_MIN]
     if one_sign and len(one_sign) < len(surfs):
         raise RuntimeError(f"{', '.join(one_sign)} {'does' if len(one_sign) == 1 else 'do'} not change sign (ion?) while the others do. "
                            "One shared symmetric scale would misrepresent one group; compare "

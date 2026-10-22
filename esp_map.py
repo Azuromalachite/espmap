@@ -1142,31 +1142,54 @@ def build_maps():
 SEQUENTIAL = {"lajolla", "batlow", "viridis"}
 
 
+# The minority sign must reach this fraction of the larger extremum before a
+# surface counts as changing sign (review 3 H11).
+SIGN_CHANGE_MIN = 0.05
+
+
+def sign_change_ratio(V):
+    """min(|V_min|, |V_max|) / max(...) if V spans zero, else 0.
+
+    Review 3 H11: `V.min() < 0 < V.max()` was a knife-edge. A cation surface
+    from -0.01 to +120 got a diverging +-120 scale using half the ramp, and
+    from +0.01 to +120 a sequential one using all of it: 0.02 kcal/mol, far
+    below the 3.5 kcal/mol basis error, decided the picture.
+    """
+    lo, hi = float(np.min(V)), float(np.max(V))
+    if not lo < 0.0 < hi:
+        return 0.0
+    return min(-lo, hi) / max(-lo, hi)
+
+
 def choose_scale(V, lim=None, kind="auto", vmin=None, vmax=None):
     """Decide the colour scale from the data, not from habit.
 
     A diverging scale symmetric about zero is right only if the surface
     actually CHANGES SIGN. For an ion it does not: benzoate runs -158.7 to
     -40.7 kcal/mol, so centring on zero maps the whole molecule to one end
-    and hides 118 kcal/mol of structure.
+    and hides 118 kcal/mol of structure. "Changes sign" means the minority
+    sign reaches SIGN_CHANGE_MIN of the larger extremum (sign_change_ratio).
 
     Returns (vlim, kind, notes).
     """
     data_min, data_max = float(V.min()), float(V.max())
-    spans_zero = data_min < 0.0 < data_max
+    ratio = sign_change_ratio(V)
+    spans_zero = ratio > SIGN_CHANGE_MIN
+    sign_txt = (f"minority sign {ratio:.3f} of the larger extremum, threshold "
+                f"{SIGN_CHANGE_MIN}")
     notes = []
     if kind == "auto":
         kind = "diverging" if spans_zero else "sequential"
         if not spans_zero:
-            notes.append(f"surface does not change sign ({data_min:+.1f} to {data_max:+.1f} "
-                         f"kcal/mol): using a SEQUENTIAL scale over the actual "
-                         f"range. A diverging scale centred on zero would put the "
-                         f"whole molecule at one end of the ramp.")
+            notes.append(f"surface does not change sign appreciably ({data_min:+.1f} to "
+                         f"{data_max:+.1f} kcal/mol; {sign_txt}): using a SEQUENTIAL "
+                         f"scale over the actual range. A diverging scale centred on "
+                         f"zero would put the whole molecule at one end of the ramp.")
     if kind == "diverging":
         if not spans_zero:
-            notes.append(f"WARNING: diverging scale requested but V never changes "
-                         f"sign ({data_min:+.1f} to {data_max:+.1f}); every vertex falls on "
-                         f"one side of the midpoint colour.")
+            notes.append(f"WARNING: diverging scale requested but V barely or never "
+                         f"changes sign ({data_min:+.1f} to {data_max:+.1f}; {sign_txt}); "
+                         f"nearly every vertex falls on one side of the midpoint colour.")
         hi = abs(lim) if lim else max(abs(data_min), abs(data_max))
         vlim = (-hi, hi)
         asym = (max(abs(data_min), abs(data_max))
@@ -1998,6 +2021,8 @@ def main():
                          sigma_hole=sh_rec, sigma_hole_reason=sh_reason,
                          n_verts=int(diag["n_verts"]), surface=surface),
             scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
+                       sign_change_ratio=sign_change_ratio(V),
+                       sign_change_threshold=SIGN_CHANGE_MIN,
                        cmap=cmap_name, cmap_requested=a.cmap,
                        cmap_substituted=bool(cmap_warning),
                        cmap_forced=bool(a.cmap and a.force_cmap),

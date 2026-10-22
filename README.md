@@ -171,7 +171,10 @@ Three rules the tool enforces:
 - **Symmetric about zero — only if the field changes sign.** An ion's surface
   never does. Benzoate runs −158.7 to −40.7 kcal/mol; a diverging map centred
   on zero collapses 117 kcal/mol of structure into one flat colour. `espmap`
-  detects this and switches to a sequential scale.
+  detects this and switches to a sequential scale. "Changes sign" means the
+  minority sign reaches more than 5 % of the larger extremum: a cation at
+  −0.01 to +120 is sequential, as it would be at +0.01. The ratio is printed
+  and written to the JSON (`scale.sign_change_ratio`).
 - **No specular highlight.** A white patch at a position set by the camera
   reads as a potential extremum. Shading is held to a narrow 0.62–1.0 span so
   the colormap's own lightness carries the data.

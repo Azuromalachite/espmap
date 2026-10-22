@@ -173,6 +173,7 @@ def test_an_anion_is_drawn_sequential_end_to_end(tmp_path, monkeypatch, extra,
     em.main()
     scale = json.loads(js.read_text())["scale"]
     assert scale["kind"] == "sequential"
+    assert scale["sign_change_ratio"] == 0.0 and scale["sign_change_threshold"] == 0.05
     assert scale["cmap"] in em.SEQUENTIAL
     assert scale["cmap_requested"] == requested
     assert scale["cmap_substituted"] is substituted
