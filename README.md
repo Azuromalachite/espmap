@@ -224,8 +224,8 @@ Two consequences for anyone quoting a number from this:
 
 ```bash
 pip install -e ".[test]"
-pytest                      # 37 fast tests, ~2 s, no SCF
-pytest --runslow -m slow    # 11 tests with real DFT, ~4 min
+pytest                      # 100 fast tests, ~5 s, no SCF
+pytest --runslow -m slow    # 13 tests with real DFT, ~3 min
 ```
 
 Every test is a defect that actually shipped at some point, lifted from the two

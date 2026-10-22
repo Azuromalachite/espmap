@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-esp_map.py v4 — electrostatic-potential maps for organic molecules,
+esp_map.py — electrostatic-potential maps for organic molecules,
                 with a colormap that is not a dataviz disaster.
 
     pip install pyscf rdkit scikit-image matplotlib cmcrameri colorspacious
@@ -37,7 +37,7 @@ NEW IN v3 — the structure check (--check)
     geometry or SCF work:
 
       REJECTED  valence/charge errors, R-groups and query atoms, radicals
-                (this is restricted DFT), and disconnected fragments -- a
+                without --spin (open shells need UKS), and disconnected fragments -- a
                 salt has no single ESP surface and the counter-ion dominates
                 it (sodium acetate forced through reaches +113 kcal/mol,
                 against +61 for acetic acid's own proton).
@@ -135,7 +135,7 @@ COLOR CONVENTION
 WHAT THIS IS AND IS NOT
     An instrument for making legible pictures and for order-of-magnitude
     reasoning. Quantitative V_max values carry, at minimum, a basis-set
-    uncertainty; gas phase throughout; geometries are idealised unless you
+    uncertainty; gas phase unless --solvent is given; geometries are idealised unless you
     supply your own. Do not quote a number from it against a margin smaller
     than the convergence tests reported in the review.
 """
@@ -723,7 +723,8 @@ def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
     from a restricted wavefunction describing an open shell.
 
     density_fit is OFF by default and the error budget was measured without
-    it. Its effect on the ESP is unmeasured until bench/timing.py says so.
+    it. Measured since (bench/results.jsonl): it moves V_min/V_max by <= 0.02
+    kcal/mol across 7 pairs up to 898 nao, always upward on V_max.
 
     gpu runs the SCF ONLY on GPU4PySCF and hands back a CPU object, so
     total_dm and everything downstream are unchanged. Validated once
@@ -1401,7 +1402,7 @@ def main():
                     help="compute even if the structure check rejects")
     ap.add_argument("--basis", default="def2-tzvp")
     ap.add_argument("--density-fit", action="store_true",
-                    help="RI-J/K: much faster SCF; ESP effect not yet measured")
+                    help="RI-J/K: faster SCF up to ~600 nao; moves V by <= 0.02 kcal/mol (measured)")
     ap.add_argument("--gpu", action="store_true",
                     help="SCF on GPU4PySCF (NVIDIA only); validated with --density-fit")
     ap.add_argument("--xc", default="b3lyp")
