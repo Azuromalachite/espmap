@@ -177,7 +177,7 @@ def test_surface_report_states_the_surface_it_is_on():
 
 
 @pytest.mark.parametrize("gate, verified, problems, expect", [
-    (None, None, [], True),                                        # --atoms
+    (None, None, [], False),                 # no gate ran: never a pass (review 4 N3)
     ({"verdict": "ACCEPT", "forced": False}, True, [], True),
     ({"verdict": "BLOCK", "forced": True}, True, [], False),       # --force
     ({"verdict": "ACCEPT", "forced": False}, False, [], False),    # H2 mismatch
@@ -1690,3 +1690,56 @@ def test_optimizing_a_supplied_pose_is_refused_before_compute(monkeypatch):
                                       "--force"])
     with pytest.raises(_ReachedCompute):
         em.main()
+
+
+# --------------------------------------------- --atoms is gated (review 4 N3)
+_WATER = "O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692"
+_TWO_WATERS = _WATER + "; O 8 0 0.1173; H 8 0.7572 -0.4692; H 8 -0.7572 -0.4692"
+_NITRITE = "N 0 0 0.45; O 0 1.06 -0.2; O 0 -1.06 -0.2"
+
+
+def _cli(monkeypatch, *args):
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", *args])
+    em.main()
+
+
+def test_two_molecules_in_atoms_are_refused_before_compute(monkeypatch):
+    """Review 4 N3: two waters 8 A apart came out validity.input true with a
+    site table; the gate (which --atoms skipped) refuses them."""
+    _stop_before_scf(monkeypatch)
+    with pytest.raises(SystemExit):
+        _cli(monkeypatch, "--atoms", _TWO_WATERS)
+
+
+@pytest.mark.parametrize("args", [
+    ("--atoms", _WATER),
+    ("--atoms", _NITRITE, "--charge", "-1"),
+    ("--atoms", _TWO_WATERS, "--force"),
+    ("--molecule", "chlorobenzene"),
+    (),                                            # the default --molecule
+])
+def test_gated_coordinates_reach_compute(monkeypatch, args):
+    _stop_before_scf(monkeypatch)
+    with pytest.raises(_ReachedCompute):
+        _cli(monkeypatch, *args)
+
+
+@pytest.mark.parametrize("atoms, charge", [
+    ("O 0 0 0; H 0 0", None),                      # syntax
+    ("Xx 0 0 0; H 0 0 1", None),                   # not an element
+    (_NITRITE, None),                              # anion without --charge
+])
+def test_unreadable_or_uncharged_atoms_are_refused(monkeypatch, atoms, charge):
+    _stop_before_scf(monkeypatch)
+    extra = [] if charge is None else ["--charge", charge]
+    with pytest.raises(SystemExit):
+        _cli(monkeypatch, "--atoms", atoms, *extra)
+
+
+def test_atoms_can_be_checked_without_computing(monkeypatch):
+    with pytest.raises(SystemExit) as e:
+        _cli(monkeypatch, "--atoms", _WATER, "--check")
+    assert e.value.code == 0
+    with pytest.raises(SystemExit) as e:          # rejected: a message, never 0
+        _cli(monkeypatch, "--atoms", _TWO_WATERS, "--check")
+    assert e.value.code not in (0, None)

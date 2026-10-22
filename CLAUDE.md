@@ -64,6 +64,10 @@ when a feature builds on published methods.
 2. **Gate before compute.** Parse → check → embed → SCF. Checking after
    embedding wastes conformer generation on structures that were never
    computable and buries the real error under force-field complaints.
+   **Every input is gated**, `--atoms` and `--molecule` included (bonds
+   perceived from the coordinates, as for XYZ), and `validity.input` is true
+   only when a gate ran: an ungated `--atoms` pair of waters once came out
+   fully valid with a site table (review 4, N3).
 3. **The approved structure is the computed structure.** `verify_computed`
    reads `spec`, the coordinates PySCF receives, and nothing else:
    connectivity (hydrogens included) perceived from distances must match the

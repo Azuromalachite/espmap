@@ -298,3 +298,21 @@ def test_optimize_keeps_atom_maps_and_records_the_optimisation(tmp_path, monkeyp
     assert "optimised" in rec["settings"]["geometry"]
     g = rec["geometry"]
     assert g["optimised_from_sha1"] and g["optimised_from_sha1"] != g["sha1"]
+
+
+def test_forced_ungated_input_is_not_recorded_as_valid(tmp_path, monkeypatch):
+    """Review 4 N3 validation: the two-water --atoms record must not say
+    validity.input true, and must name the reason."""
+    import json
+    import sys
+    js = tmp_path / "w2.json"
+    atoms = ("O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692; "
+             "O 8 0 0.1173; H 8 0.7572 -0.4692; H 8 -0.7572 -0.4692")
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--atoms", atoms, "--force",
+                                      "--basis", "sto-3g", "--size", "80",
+                                      "--out", str(tmp_path / "w2.png"), "--json", str(js)])
+    em.main()
+    rec = json.loads(js.read_text())
+    assert rec["validity"]["input"] is False and rec["validity"]["sites"] is False
+    assert rec["input"]["gate"]["forced"] is True
+    assert ["BLOCK", "MULTIPLE_FRAGMENTS"] in rec["input"]["gate"]["findings"]
