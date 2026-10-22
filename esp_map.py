@@ -1903,9 +1903,13 @@ def partition_surface(P, faces, coords, symbols, rule):
 
 
 def site_parents(coords, symbols):
-    """Each hydrogen's heavy atom (the nearest one); None for heavy atoms."""
+    """Each hydrogen's heavy atom (the nearest one); None for heavy atoms,
+    and None for every atom of a molecule with no heavy atom (H2): review 4
+    N7, argmin over an empty list crashed the run after the SCF."""
     X = np.asarray(coords, float)
     heavy = [i for i, s in enumerate(symbols) if s != "H"]
+    if not heavy:
+        return [None] * len(symbols)
     return [None if s != "H" else
             heavy[int(np.argmin(np.linalg.norm(X[heavy] - X[i], axis=1)))]
             for i, s in enumerate(symbols)]
@@ -2024,6 +2028,9 @@ def sites_block(valid, P, faces, V, coords, symbols, **kw):
         return None, "input not valid (forced past the gate, or structure not verified)"
     if not valid["surface"]:
         return None, "surface not valid (see results.surface.problems)"
+    if all(s == "H" for s in symbols):
+        return None, ("no heavy atom: sites are heavy atoms with their hydrogens, "
+                      "and this molecule has none")
     return site_report(P, faces, V, coords, symbols, **kw), None
 
 

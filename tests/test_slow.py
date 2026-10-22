@@ -316,3 +316,19 @@ def test_forced_ungated_input_is_not_recorded_as_valid(tmp_path, monkeypatch):
     assert rec["validity"]["input"] is False and rec["validity"]["sites"] is False
     assert rec["input"]["gate"]["forced"] is True
     assert ["BLOCK", "MULTIPLE_FRAGMENTS"] in rec["input"]["gate"]["findings"]
+
+
+@pytest.mark.parametrize("src", [["--atoms", "H 0 0 0; H 0 0 0.74"],
+                                 ["--smiles", "[H][H]"]])
+def test_hydrogen_molecule_writes_its_record(tmp_path, monkeypatch, src):
+    """Review 4 N7 validation: H2 wrote the PNG, then crashed with no JSON."""
+    import json
+    import sys
+    js = tmp_path / "h2.json"
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", *src, "--basis", "sto-3g",
+                                      "--size", "80", "--out", str(tmp_path / "h2.png"),
+                                      "--json", str(js), "--npz", str(tmp_path / "h2.npz")])
+    em.main()
+    rec = json.loads(js.read_text())
+    assert rec["sites"] is None and "no heavy atom" in rec["sites_reason"]
+    assert rec["validity"]["sites"] is False and rec["validity"]["input"] is True
