@@ -270,9 +270,10 @@ def test_every_bibliography_entry_has_a_doi():
 def test_citation_cff_version_matches_the_package():
     import re
     cff = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    # the version lives in esp_map.__version__; pyproject.toml reads it (R18)
+    module = (ROOT / "esp_map.py").read_text(encoding="utf-8")
     v_cff = re.search(r"^version: (\S+)", cff, re.M).group(1)
-    v_pkg = re.search(r'^version = "([^"]+)"', pyproject, re.M).group(1)
+    v_pkg = re.search(r'^__version__ = "([^"]+)"', module, re.M).group(1)
     assert v_cff == v_pkg
 
 

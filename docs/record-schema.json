@@ -132,7 +132,8 @@
       "cmap_forced": "bool", "source": "enum:user|auto", "colour_scale_fixed": "bool"
     },
     "provenance": {
-      "espmap_version": "str", "code": "str", "python": "str", "numpy": "str",
+      "espmap_version": "str", "code": "str", "installed_distribution_version": "str?",
+      "python": "str", "numpy": "str",
       "scipy": "str?", "scikit_image": "str?", "pyscf": "str?", "rdkit": "str?",
       "matplotlib": "str?", "threads": "int",
       "blas": {"$nullable": true, "$list": {"api": "str?", "version": "str?", "threads": "int?"}}
