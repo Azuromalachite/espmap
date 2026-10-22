@@ -1,6 +1,6 @@
 # Per-site output: specification
 
-Status: **draft, revision 3. The site block is not implemented.** This is the
+Status: **draft, revision 3. P0 is done; P1 and P2 are implemented on branches awaiting review.** This is the
 contract that espmap's `--json` will grow into and that Arrowfield's v0.0
 fixtures are written against. It extends item 1 of `docs/roadmap-review.md`
 ("extend `--json` with shape descriptors") from whole-molecule numbers to
@@ -62,10 +62,10 @@ definition before writing the SDF.
 | H2 | identity checked against `spec`, the coordinates PySCF receives (`verify_computed`); §1 extends it to atom maps | **done**, #10 |
 | H3 | a one-signed field (every anion in the calibration set) gets a sequential colormap by default, never `vik`. Not needed by the site block; needed by Arrowfield, since a learner shown −80 kcal/mol in blue has been taught the wrong sign | **done**, #11, #12, #14 |
 | H4 | `results.surface = {closed, open_edges, …, strict, problems}` and `input.gate = {verdict, forced, findings}` | **done**, #11 |
-| H5 | planar 3D input kept; a single-element-pair molecule (nitrite) with z ≡ 0 is refused as ambiguous rather than guessed. Must land before any calibration fixture | in review, #17 |
-| H6 | unit-suffixed keys, `analysis_key` / `render_key` (§5), dipole with origin, σ-hole, `surface.definition`, and the `validity` envelope (§6) | in review, #18 |
-| H7 | `settings.solvent_esp` naming the PCM convention, part of `analysis_key` | field in #18; help text and README wording open |
-| H14 | `geometry = {xyz_angstrom, sha1}` and full version provenance. A site's `V_min_at_A` means nothing without its coordinates | open |
+| H5 | planar 3D input kept; a single-element-pair molecule (nitrite) with z ≡ 0 is refused as ambiguous rather than guessed. Must land before any calibration fixture | **done**, #17 |
+| H6 | unit-suffixed keys, `analysis_key` / `render_key` (§5), dipole with origin, σ-hole, `surface.definition`, and the `validity` envelope (§6) | **done**, #18 |
+| H7 | `settings.solvent_esp` naming the PCM convention, part of `analysis_key` | **done**, #19 (both conventions measured; `--include-reaction-field`) |
+| H14 | `geometry = {xyz_angstrom, sha1}` and full version provenance. A site's `V_min_at_A` means nothing without its coordinates | **done**, #20 |
 
 ## 1. Site identity and atom maps
 
