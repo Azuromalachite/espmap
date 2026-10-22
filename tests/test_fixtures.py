@@ -48,7 +48,11 @@ def test_fixture_matches_the_record_schema(name):
 @pytest.mark.parametrize("name", NAMES)
 def test_fixture_is_valid_and_verified(name):
     rec = _rec(name)
-    assert rec["validity"] == {"input": True, "surface": True, "sites": True}
+    # every validity field, electronic included (review 5 R3): no fixture is an
+    # anion left unbound by its basis
+    assert rec["validity"] == {"input": True, "surface": True, "electronic": True,
+                               "sites": True}
+    assert rec["results"]["electronic"]["problems"] == []
     assert rec["input"]["structure_verified"] is True
     assert rec["sites"]["identity"]["mapped_match"] is True
     assert rec["sites_reason"] is None
