@@ -80,8 +80,12 @@ NEW IN v3 — SMILES input
         paracetamol (2 rotatable bonds)  V_max +61.13 -> +62.33
         glycerol    (4 rotatable bonds)  V_max +60.33 -> +61.26
 
-    about 1 kcal/mol, i.e. the extrema are set by local chemistry and are
-    nearly conformation-independent. The SHAPE of the surface is not.
+    about 1 kcal/mol for these small molecules, and ~1.1 across 8 EXTENDED
+    conformers of a C18 acetate. That does not survive folding: the two
+    compact C18 conformers widened V_min to 5.2 and V_max to 2.5 kcal/mol
+    and changed the negative surface area by 60 % (bench/conformers.jsonl,
+    bench/f9_recheck.jsonl). Extrema are robust only while the molecule does
+    not fold onto itself; the SHAPE of the surface is never robust.
 
     CHARGED SPECIES CHANGE THE COLORMAP PROBLEM. Benzoate's surface runs
     -158.7 to -40.7 kcal/mol -- no sign change anywhere. A diverging map
@@ -946,6 +950,23 @@ MOLECULES = {"bromobenzene": ("Br", 1.890), "chlorobenzene": ("Cl", 1.740),
              "benzene": ("H", 1.080)}
 
 
+def scale_provenance(kind, lim=None, vmin=None, vmax=None):
+    """Where the colour limits came from, and whether panels can be compared.
+
+    Comparable means the limits were fixed by the user, so another molecule
+    run with the same flags maps a colour to the same kcal/mol. The first
+    --json marked every sequential scale comparable; an auto-scaled one (acetate
+    -170..-80 next to another anion at -130..-30) is not. --lim only fixes a
+    DIVERGING scale; --vmin/--vmax only fix a SEQUENTIAL one, and only as a
+    pair (choose_scale ignores the others for that kind).
+    """
+    if kind == "diverging":
+        fixed = lim is not None
+    else:
+        fixed = vmin is not None and vmax is not None
+    return dict(source="user" if fixed else "auto", comparable=fixed)
+
+
 def plotly_colorscale(cmap, n=33):
     """matplotlib colormap -> plotly colorscale, sampled t = 0 .. 1 in order.
 
@@ -1271,11 +1292,12 @@ def main():
         if gi["n_rot"] >= 1 and "as-is" not in gi["source"]:
             print(f"note: {gi['n_rot']} rotatable bond(s), force-field conformer "
                   f"spread {gi['e_spread']:.1f} kcal/mol. This map is ONE "
-                  f"conformer (the lowest-energy one). Measured: the ESP "
-                  f"EXTREMA barely move with conformation (~1 kcal/mol across "
-                  f"glycerol's full 8 kcal/mol conformer range), because they "
-                  f"are set by local chemistry. What does change is the SHAPE "
-                  f"of the surface and where those extrema sit on it.",
+                  f"conformer (the lowest-energy one). Measured: among extended "
+                  f"conformers the ESP extrema move ~1 kcal/mol, but a molecule "
+                  f"that can fold onto itself can move them much more (5.2 "
+                  f"kcal/mol on V_min for a C18 acetate) and the surface shape "
+                  f"changes either way. For a long flexible molecule, sample "
+                  f"shape-diverse conformers before quoting a number.",
                   file=sys.stderr)
         sym = [t.split()[0] for t in spec.split(";")]
         # F is deliberately excluded: fluorine is too electronegative to form
@@ -1400,7 +1422,7 @@ def main():
                          V_min=float(V.min()), V_max=float(V.max()),
                          n_verts=int(diag["n_verts"]), chi=int(diag["chi"])),
             scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
-                       cmap=a.cmap, comparable=a.lim is not None or kind != "diverging"),
+                       cmap=a.cmap, **scale_provenance(kind, a.lim, a.vmin, a.vmax)),
             versions=dict(pyscf=pyscf.__version__, rdkit=rdkit.__version__,
                           espmap_commit=commit),
             caveat=("Measured error budget (README): basis def2-SVP -> "

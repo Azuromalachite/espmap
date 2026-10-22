@@ -168,7 +168,7 @@ ESP shows where the electrostatic potential is negative or positive, which is no
 A descriptor earns its place by getting these right where ESP does not.
 
 **Limits, stated in the tool:**
-- **Enzyme selectivity cannot be computed from the free substrate.** Geometry, active-site electrostatics, protonation and dynamics need the protein (QM/MM), which is out of scope. espmap gives the intrinsic preference; the enzyme's contribution is the difference.
+- **Enzyme selectivity cannot be computed from the free substrate.** Geometry, active-site electrostatics, protonation and dynamics need the protein (QM/MM), which is out of scope. ESP, ALIE, frontier orbitals and Fukui functions are intrinsic electronic *descriptors*, not reaction preferences. espmap provides a free-substrate electronic baseline; enzyme selectivity emerges from how that baseline combines with substrate geometry, active-site electrostatics, protonation, dynamics and reaction barriers.
 - **Charged species** (protonated carbonyls, carboxylates) need implicit solvent and their own scale (F2). Gas-phase cations exaggerate electrophilicity.
 - **Cofactors** (PLP Schiff bases and similar) are large and often zwitterionic: feasible on a GPU, but advanced examples.
 
