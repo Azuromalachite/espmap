@@ -570,7 +570,7 @@ def total_dm(mf):
 
 
 def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
-            solvent=None, density_fit=False):
+            solvent=None, density_fit=False, gpu=False):
     """Restricted for a closed shell, UNRESTRICTED when spin != 0.
 
     v3 built an RKS object whatever the spin. PySCF does not refuse: on
@@ -580,7 +580,19 @@ def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
 
     density_fit is OFF by default and the error budget was measured without
     it. Its effect on the ESP is unmeasured until bench/timing.py says so.
+
+    gpu runs the SCF ONLY on GPU4PySCF and hands back a CPU object, so
+    total_dm and everything downstream are unchanged. Validated once
+    (bench/gpu_l4.json): RKS + density_fit, gas phase, decanoic acid, where
+    V_min/V_max matched the CPU to <0.001 kcal/mol. UKS, PCM and runs
+    without density fitting are untested on the GPU.
     """
+    if gpu:
+        try:
+            import gpu4pyscf  # noqa: F401
+        except ImportError:
+            raise RuntimeError("gpu=True needs gpu4pyscf (pip install "
+                               "gpu4pyscf-cuda12x) and an NVIDIA GPU") from None
     from pyscf import dft, gto
     mol = gto.M(atom=atom, basis=basis, charge=charge, spin=spin,
                 unit="Angstrom", verbose=verbose)
@@ -594,10 +606,14 @@ def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
             mf = mf.PCM()                 # polarises the solute density
             mf.with_solvent.eps = eps
     mf.grids.level = 3
+    if gpu:
+        mf = mf.to_gpu()
     mf.kernel()
     if not mf.converged:
         raise RuntimeError(f"SCF did not converge ({basis}/{xc}"
                            f"{', spin=%d' % spin if spin else ''})")
+    if gpu:
+        mf = mf.to_cpu()    # np.asarray in total_dm refuses CuPy arrays
     if basis.lower() in SMALL_BASIS:
         print(f"WARNING: {basis} is double-zeta or smaller. Measured error on "
               f"the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to "
@@ -1017,6 +1033,8 @@ def main():
     ap.add_argument("--basis", default="def2-tzvp")
     ap.add_argument("--density-fit", action="store_true",
                     help="RI-J/K: much faster SCF; ESP effect not yet measured")
+    ap.add_argument("--gpu", action="store_true",
+                    help="SCF on GPU4PySCF (NVIDIA only); validated with --density-fit")
     ap.add_argument("--xc", default="b3lyp")
     ap.add_argument("--solvent", default="vacuum",
                     choices=sorted(SOLVENTS),
@@ -1151,7 +1169,7 @@ def main():
 
     solv = None if a.solvent == "vacuum" else a.solvent
     mol, mf = run_scf(spec, basis=a.basis, xc=a.xc, charge=charge, spin=spin,
-                      density_fit=a.density_fit,
+                      density_fit=a.density_fit, gpu=a.gpu,
                       solvent=solv)
     if a.optimize:
         from pyscf.geomopt.berny_solver import optimize as _opt
@@ -1162,7 +1180,7 @@ def main():
             f"{mol.atom_coord(i)[0] * BOHR:.6f} {mol.atom_coord(i)[1] * BOHR:.6f} "
             f"{mol.atom_coord(i)[2] * BOHR:.6f}" for i in range(mol.natm))
         mol, mf = run_scf(spec, basis=a.basis, xc=a.xc, charge=charge,
-                          density_fit=a.density_fit,
+                          density_fit=a.density_fit, gpu=a.gpu,
                           spin=spin, solvent=solv)
     dm = total_dm(mf)
     print(f"SCF {mf.e_tot:.6f} Ha, {mol.nao} basis functions, {a.xc}/{a.basis}, "

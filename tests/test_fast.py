@@ -233,3 +233,16 @@ def test_cost_estimate_needs_no_scf_and_knows_the_spin():
     spec, info = em.from_smiles("C[CH2]")
     natm, nao = em.estimate_cost(spec, "def2-svp", charge=0, spin=1)
     assert natm == 7 and nao > 0
+
+
+def test_gpu_without_gpu4pyscf_fails_before_any_work():
+    """--gpu on a machine without GPU4PySCF must say what is missing, not
+    build a molecule and die inside to_gpu() with an opaque error."""
+    pytest.importorskip("pyscf")
+    try:
+        import gpu4pyscf  # noqa: F401
+        pytest.skip("gpu4pyscf is installed here")
+    except ImportError:
+        pass
+    with pytest.raises(RuntimeError, match="gpu4pyscf"):
+        em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True)
