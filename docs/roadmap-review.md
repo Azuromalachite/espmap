@@ -46,7 +46,7 @@ Labels: `[V]` verified in the repo · `[M]` measured or computed by me · `[I]` 
 - **Why density fitting slows down at 898 nao** `[I]`: peak memory was 2.9 GB, below PySCF's default `max_memory` of 4 GB. The integrals were probably sent out of core by that cap rather than by the machine's RAM. **Validation:** re-run with `mf.max_memory` raised to 6 GB.
 - **Scratch disk** `[M]`: the first C18 density-fitting runs failed with `OSError 28`, because WSL's `/tmp` is a 3.7 GB tmpfs. `PYSCF_TMPDIR` must point at real disk.
 
-**The basis step is large on the targets** `[M]`. Going from def2-SVP to def2-TZVP moves V_max by **+2.82** (decanoic acid), **+2.71** (BDSF) and **+2.65** (C18 acetate), and V_min by +1.18, +1.01 and +0.30. Differences between related pheromones may be smaller than this. **Validation:** def2-TZVPP on one C18, which is cheap on a GPU, to show whether TZVP is converged.
+**The basis step is large on the targets** `[M]`. Going from def2-SVP to def2-TZVP moves V_max by **+2.82** (decanoic acid), **+2.71** (BDSF), **+2.65** (C18 acetate) and **+1.53** (C18 alcohol), and V_min by +1.18, +1.01, +0.29 and +2.37. The alcohol, in the same file, was first left out; it is the molecule that shows the shift is molecule-specific (review 3 H8). Differences between related pheromones may be smaller than this. **Validation:** def2-TZVPP on one C18, which is cheap on a GPU, to show whether TZVP is converged.
 
 ### F2 · "Determine an appropriate common scale" collides with invariant 7 · HIGH
 
@@ -176,7 +176,7 @@ A descriptor earns its place by getting these right where ESP does not.
 
 These are the hard calls, checked:
 
-- **"More DFT methods" ranked last.** `[V]` This matches the measurements: the functional spread is 0.69 kcal/mol, against +3.55 for basis and −3.61 for solvent. On the targets the basis step alone is +2.7 `[M]`.
+- **"More DFT methods" ranked last.** `[V]` This matches the measurements: the functional spread is 0.69 kcal/mol, against +3.54 for basis and −3.60 for solvent. On the targets the basis step alone is +2.7 `[M]`.
 - **"Comparable" is the right framing.** `[V]` The code already warned that auto-scaled panels "are NOT comparable". The roadmap turns that warning into a feature.
 - **Protonation stays advisory.** No automatic pKa prediction is proposed.
 - **The gate stays visible in any UI.** The notebook kept it (`[V]`, the structure check runs before any SCF).

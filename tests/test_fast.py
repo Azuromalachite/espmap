@@ -1278,3 +1278,89 @@ def test_code_identity_matches_git_describe_inside_this_repo():
     if d.returncode != 0:
         pytest.skip("git cannot read this checkout")
     assert em.code_identity()["code"] == d.stdout.strip()
+
+
+# ------------------------------------------------------------- notebook (H10)
+# Review 3 H10. The notebook's logic is tested from the GENERATED .ipynb: the
+# code a user runs, which must also be what build_notebook.py produces.
+from pathlib import Path  # noqa: E402
+_NB_DIR = Path(__file__).resolve().parents[1] / "notebooks"
+
+
+def _nb_code():
+    import json
+    nb = json.loads((_NB_DIR / "espmap_colab.ipynb").read_text(encoding="utf-8"))
+    return ["".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"]
+
+
+def _nb_function(name, **env):
+    """Exec one top-level function out of the notebook's code cells."""
+    for src in _nb_code():
+        lines = src.splitlines()
+        for i, line in enumerate(lines):
+            if line.startswith(f"def {name}("):
+                body = [line]
+                for nxt in lines[i + 1:]:
+                    if nxt.strip() and not nxt[0].isspace():
+                        break
+                    body.append(nxt)
+                ns = dict(env)
+                exec("\n".join(body), ns)
+                return ns[name]
+    raise AssertionError(f"no function {name} in the notebook")
+
+
+def test_committed_notebook_is_what_the_builder_writes(tmp_path):
+    """CLAUDE.md: never hand-edit the .ipynb. A stale or hand-edited notebook
+    would also make the tests below test the wrong code."""
+    import subprocess
+    out = tmp_path / "nb.ipynb"
+    subprocess.run([sys.executable, str(_NB_DIR / "build_notebook.py"), str(out)],
+                   check=True, capture_output=True)
+    norm = lambda p: p.read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert norm(out) == norm(_NB_DIR / "espmap_colab.ipynb")
+
+
+def test_install_marker_follows_the_branch(tmp_path):
+    """The marker ignored BRANCH: after one install, changing it neither
+    cloned nor reinstalled, and the old code kept running silently."""
+    write = _nb_function("write_install_marker")
+    current = _nb_function("install_marker_current")
+    m = tmp_path / "ESPMAP_READY"
+    assert not current(str(m), "master")                  # nothing installed yet
+    write(str(m), "master", "abc1234")
+    assert current(str(m), "master")
+    assert not current(str(m), "v0.2.0")                  # branch changed: reinstall
+    assert "abc1234" in m.read_text()
+
+
+def test_cache_key_covers_colour_range_and_code_and_trusts_only_finished_runs():
+    run = next(s for s in _nb_code() if "4 · Run" in s)
+    settings = run[run.index("settings = dict("):run.index("tag = ")]
+    assert "lim=LIM" in settings and "espmap=ESPMAP_COMMIT" in settings
+    # settings.json is written last, so only a finished run is reused
+    assert 'os.path.isfile(os.path.join(JOB, "settings.json"))' in run
+    assert "if os.path.isfile(npz)" not in run
+
+
+def test_an_all_ion_series_gets_a_shared_sequential_scale():
+    """An all-ion series passed the old check and was drawn on a symmetric
+    +/-60 diverging scale: the failure the notebook's own text says it refuses."""
+    plan = _nb_function("series_scale", em=em)
+    acetate, benzoate = np.linspace(-170, -80, 50), np.linspace(-158, -41, 50)
+    kind, vlim = plan([acetate, benzoate], 60)
+    assert kind == "sequential" and vlim == pytest.approx((-170.0, -41.0))
+    kind, vlim = plan([np.linspace(-30, 20, 50), np.linspace(-12, 40, 50)], 60)
+    assert kind == "diverging" and vlim == (-60, 60)
+    with pytest.raises(ValueError, match="separate"):
+        plan([acetate, np.linspace(-30, 20, 50)], 60)    # mixed: still refused
+
+
+@pytest.mark.parametrize("phrase", [
+    "ESP extrema move little with conformation",   # 5.2 kcal/mol once folded
+    "about ±3.5 kcal/mol in absolute values",      # one signed, molecule-specific shift
+    "decanoic acid ~1 min",                         # a 16-thread laptop figure
+])
+def test_notebook_drops_review_3_stale_claims(phrase):
+    text = (_NB_DIR / "build_notebook.py").read_text(encoding="utf-8")
+    assert phrase not in text
