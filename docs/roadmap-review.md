@@ -176,7 +176,7 @@ A descriptor earns its place by getting these right where ESP does not.
 
 These are the hard calls, checked:
 
-- **"More DFT methods" ranked last.** `[V]` This matches the measurements: the functional spread is 0.69 kcal/mol, against +3.54 for basis and −3.60 for solvent. On the targets the basis step alone is +2.7 `[M]`.
+- **"More DFT methods" ranked last.** `[V]` This matches the measurements: the functional spread is 0.69 kcal/mol, against +3.54 for basis and −3.60 for solvent. On the targets the basis step alone is +1.53 to +2.82 `[M]`.
 - **"Comparable" is the right framing.** `[V]` The code already warned that auto-scaled panels "are NOT comparable". The roadmap turns that warning into a feature.
 - **Protonation stays advisory.** No automatic pKa prediction is proposed.
 - **The gate stays visible in any UI.** The notebook kept it (`[V]`, the structure check runs before any SCF).

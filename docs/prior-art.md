@@ -23,7 +23,7 @@ enough to support a novelty claim.
 | Evaluating the potential at surface vertices rather than interpolating from a volumetric grid | `esp_at_points` on the mesh | Bulat et al. 2010 and Lu & Chen 2012 discuss the cost of evaluating properties at surface vertices, artificial extrema from uneven discretisation, and grid-spacing effects |
 | The σ-hole and V_s,max along the R–X axis | `sigma_hole` | Clark et al. 2007 `clark2007` (the term); Murray, Lane & Politzer 2009 `murray2009`; Politzer, Murray & Clark 2013 `politzer2013` |
 | Global surface-ESP statistics (positive/negative areas, mean, variance) | planned (v0.2 global stats, PR #24) | Murray et al. 1994, GIPF `murray1994gipf`; Bulat et al. 2010 |
-| Local / per-atom molecular surfaces and their ESP statistics | planned (v0.2 per-site records, PR #24) | Multiwfn's quantitative molecular surface analysis, Lu & Chen 2012 `lu2012multiwfn`, `lu2012mt`; Lu 2024 `lu2024multiwfn` |
+| Local / per-atom molecular surfaces and their ESP statistics | `partition_surface`, `site_report` (per-site records, #24) | Multiwfn's quantitative molecular surface analysis, Lu & Chen 2012 `lu2012multiwfn`, `lu2012mt`; Lu 2024 `lu2024multiwfn` |
 | Average local ionisation energy | roadmap (v0.3) | Sjoberg et al. 1990 `sjoberg1990`; Bulat et al. 2010 |
 | Marching cubes | scikit-image `measure.marching_cubes` | Lorensen & Cline 1987 `lorensen1987`; Lewiner et al. 2003 `lewiner2003` |
 | Perceptual colormaps; diverging maps neutral at zero | `build_maps`, the colormap policy | Crameri et al. 2020 `crameri2020`, `crameri_scm`; Moreland 2009 `moreland2009` |

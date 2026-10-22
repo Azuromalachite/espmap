@@ -81,8 +81,9 @@ NEW IN v3 — SMILES input
     6.5 kcal/mol (bench/anion_geometry.jsonl). Use --optimize there.
 
     ETKDG is stochastic, so --seed is fixed by default: without it the same
-    SMILES gives a different conformer every run. Measured conformer effect on
-    the ESP extrema, lowest- vs highest-energy MMFF conformer:
+    SMILES gives a different conformer every run. Conformer effect on the ESP
+    extrema, lowest- vs highest-energy MMFF conformer (review 2; prose, with
+    no bench/ row, unlike the C18 figures below):
 
         paracetamol (2 rotatable bonds)  V_max +61.13 -> +62.33
         glycerol    (4 rotatable bonds)  V_max +60.33 -> +61.26

@@ -22,8 +22,8 @@ does not. Do not add a compatibility shim for a signature you changed.
 ```bash
 pip install -e ".[test]"
 python esp_map.py --selftest           # physics + all 11 colormap orientations
-pytest                                 # 100 fast tests, ~5 s, no SCF
-pytest --runslow -m slow               # 13 tests with real DFT, ~3 min
+pytest                                 # fast tests, seconds, no SCF
+pytest --runslow -m slow               # tests with real DFT, a few minutes
 python esp_map.py --smiles "Clc1ccccc1" --lim 25 --out esp.png
 ```
 
@@ -40,6 +40,7 @@ before and after any change to `esp_at_points`, `run_scf`, `total_dm` or
 | electronic | `run_scf`, `total_dm`, `density_on_grid`, `esp_at_points` | RKS, or UKS when `spin != 0` |
 | surface | `extract_surface`, `mesh_topology`, `surface_problems` | integrity-checked, raises by default |
 | property | `sigma_hole` | axis from the bond, not from a ring |
+| sites | `verify_mapping`, `resolve_site_groups`, `partition_surface`, `site_report`, `sites_block` | atom identity by index; triangles owned by atoms under two rules, both reported |
 | scale | `choose_scale`, `resolve_cmap`, `cmap_preflight`, `cmap_after_scf` | diverging only if the field changes sign; the map follows the scale |
 | render | `look_at`, `render`, `build_maps` | own z-buffer rasteriser, no VTK |
 
@@ -81,6 +82,10 @@ when a feature builds on published methods.
    check** (`check_identity`): `--optimize` once computed a gas-phase glycine
    zwitterion as neutral glycine under `structure_verified: true`, because
    the only check ran before the optimiser moved a proton (review 4, N1).
+   `verify_computed` finds *some* match, so it accepts reordered atoms;
+   `verify_mapping` checks the correspondence **index by index** (element and
+   neighbours, and a kept file's coordinates), which is what per-site rows and
+   atom maps rely on.
 4. **`int1e_grids` returns the positive Coulomb kernel**, so the electronic
    term is **subtracted**. A sign flip gives a smooth, structured, publishable,
    entirely wrong map. The far-field decay is the detector — a flipped kernel
@@ -105,6 +110,11 @@ when a feature builds on published methods.
    chain can give a closed surface of higher genus (two compact C18 acetate
    conformers had χ = −2 and −4 with nothing clipped). `mesh_topology` tells the
    two apart; genus > 0 passes with a note.
+9. **One geometry in, one record out.** A file with several records is a
+   BLOCK unless `--record N` picks one; a multi-fragment input is a BLOCK
+   unless forced, and then its record says `validity.input: false`. A docking
+   run's 20 poses once became an analysis of pose 1 with a warning nobody
+   reads in a pipeline (review 3, H5).
 
 ## Measured error budget — chlorobenzene σ-hole V_max
 
