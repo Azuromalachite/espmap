@@ -62,6 +62,63 @@ def test_ion_switches_to_a_sequential_scale():
     assert any("does not change sign" in n for n in notes)
 
 
+def test_default_colormap_follows_the_scale_kind():
+    """Review 3, H3: --cmap defaulted to vik on every scale, so an anion's
+    sequential scale was drawn diverging and its -80 kcal/mol end came out
+    dark blue, the colour every caption reads as positive."""
+    assert em.resolve_cmap("sequential") in em.SEQUENTIAL
+    assert em.resolve_cmap("diverging") not in em.SEQUENTIAL
+    _, kind, _ = em.choose_scale(_anion())
+    assert em.resolve_cmap(kind) in em.SEQUENTIAL
+
+
+@pytest.mark.parametrize("kind, cmap", [
+    ("sequential", "vik"),       # diverging map on an ion: the H3 defect
+    ("sequential", "RdBu"),
+    ("diverging", "lajolla"),    # sequential map on a sign-changing field hides the sign
+])
+def test_mismatched_colormap_is_refused_unless_forced(kind, cmap):
+    with pytest.raises(ValueError, match="does not fit"):
+        em.resolve_cmap(kind, cmap)
+    assert em.resolve_cmap(kind, cmap, force=True) == cmap
+
+
+@pytest.mark.parametrize("kind, cmap", [("sequential", "batlow"), ("diverging", "PuOr")])
+def test_matching_explicit_colormap_is_kept(kind, cmap):
+    assert em.resolve_cmap(kind, cmap) == cmap
+
+
+def _diag(**over):
+    d = dict(closed=True, open_edges=0, nonmanifold_edges=0, components=1, genus=0,
+             chi=2, face_max_rho=1e-6, margin=5.0, strict=True, problems=[])
+    d.update(over)
+    return d
+
+
+def test_surface_report_tells_clipped_from_folded():
+    """Review 3, H4: the JSON kept only chi, and chi = -2 is both a clipped
+    surface run with --no-strict (V_min 23 % wrong) and a valid genus-2 fold."""
+    clipped = em.surface_report(_diag(closed=False, open_edges=266, genus=None, chi=-2,
+                                      face_max_rho=4e-3, margin=2.0, strict=False,
+                                      problems=["... CLIPPED ...", "... OPEN ..."]))
+    folded = em.surface_report(_diag(genus=2, chi=-2))
+    assert clipped["chi"] == folded["chi"] == -2          # the old JSON's only field
+    assert clipped["valid"] is False and clipped["problems"] and clipped["strict"] is False
+    assert folded["valid"] is True and folded["problems"] == [] and folded["genus"] == 2
+    assert em.surface_report(_diag())["valid"] is True
+
+
+def test_gate_report_marks_a_forced_rejection():
+    """Review 3, H4: a structure the gate REJECTED and --force computed was
+    written to the JSON as approved_smiles, with no verdict."""
+    findings = [(em.BLOCK, "MULTIPLE_FRAGMENTS", "msg", "fix")]
+    g = em.gate_report(em.BLOCK, findings, forced=True)
+    assert g == {"verdict": "BLOCK", "forced": True,
+                 "findings": [["BLOCK", "MULTIPLE_FRAGMENTS"]]}
+    # --force on a structure the gate accepted overrides nothing
+    assert em.gate_report(em.WARN, [(em.WARN, "X", "m", "f")], forced=True)["forced"] is False
+
+
 def test_lim_does_not_reimpose_symmetry_on_a_sequential_scale():
     """Review 2, G6: --lim 200 on an anion gave -200..+200, more than half the
     ramp unreachable -- the exact failure the sequential branch exists for."""
@@ -483,3 +540,16 @@ def test_3d_view_maps_vlim_and_has_no_specular_highlight():
     assert list(surf.intensity) == list(V)
     assert surf.lighting.specular == 0.0
     assert len(fig.data[1].x) == 3                     # one O-H bond: 2 points + gap
+    assert "warm = negative" in surf.colorbar.title.text
+
+
+def test_3d_colourbar_does_not_say_warm_is_negative_on_a_sequential_scale():
+    """Review 3, H3: the HTML colourbar said 'warm = negative' on an ion too."""
+    pytest.importorskip("plotly")
+    verts = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], float)
+    faces = np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]])
+    V = np.array([-170.0, -150.0, -100.0, -80.0])
+    fig = em.esp_figure(verts, faces, V, ["O"], np.zeros((1, 3)),
+                        em.build_maps()["lajolla"], (-170.0, -80.0), kind="sequential")
+    title = fig.data[0].colorbar.title.text
+    assert "warm" not in title and "more negative" in title

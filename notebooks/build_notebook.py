@@ -181,7 +181,7 @@ code("""
 VIEW = "3D interactive"  #@param ["3D interactive", "image", "both"]
 #@markdown Colour range for display: `auto`, or ± a number in kcal/mol (use the same number across molecules you compare).
 DISPLAY_RANGE = "auto"  #@param {type:"string"}
-DISPLAY_CMAP = "vik"  #@param ["vik", "RdBu", "PuOr", "broc", "cork", "lajolla", "batlow", "viridis"]
+DISPLAY_CMAP = "auto"  #@param ["auto", "vik", "RdBu", "PuOr", "broc", "cork", "lajolla", "batlow", "viridis"]
 ELEVATION = 20  #@param {type:"slider", min:-90, max:90, step:5}
 AZIMUTH = 172  #@param {type:"slider", min:0, max:360, step:4}
 import numpy as np
@@ -197,10 +197,11 @@ for n in notes:
 print(f"V = {V.min():+.1f} … {V.max():+.1f} kcal/mol · {kind} scale {vlim[0]:+.1f} … {vlim[1]:+.1f}"
       + ("" if lim is not None or kind != "diverging" else
          " · auto range: NOT comparable with other molecules"))
-cmap = em.build_maps()[DISPLAY_CMAP if kind == "diverging" or DISPLAY_CMAP in em.SEQUENTIAL else "lajolla"]
+cmap_name = em.resolve_cmap(kind, None if DISPLAY_CMAP == "auto" else DISPLAY_CMAP)
+cmap = em.build_maps()[cmap_name]
 if VIEW in ("3D interactive", "both"):
     fig = em.esp_figure(z["verts"], z["faces"], V, [str(s) for s in z["symbols"]],
-                        z["coords"], cmap, vlim, title=f"{NAME} · {FUNCTIONAL}/{BASIS} · {SOLVENT}")
+                        z["coords"], cmap, vlim, title=f"{NAME} · {FUNCTIONAL}/{BASIS} · {SOLVENT}", kind=kind)
     fig.update_layout(height=560)
     fig.show()
 if VIEW in ("image", "both"):

@@ -815,12 +815,12 @@ def extract_surface(mol, dm, spacing, iso=ISO_BADER, margin=5.0, strict=True):
     faces = faces.astype(int)
     topo = mesh_topology(faces)
 
+    problems, notes = surface_problems(topo, face_max, iso)
     diag = dict(grid=tuple(int(x) for x in n), n_verts=len(verts),
                 face_max_rho=float(face_max), **topo,
                 rho_integral=float(rho.sum() * spacing ** 3),
-                nelec=int(mol.nelectron), margin=margin, spacing=spacing)
-
-    problems, notes = surface_problems(topo, face_max, iso)
+                nelec=int(mol.nelectron), margin=margin, spacing=spacing,
+                strict=bool(strict), problems=list(problems))
     for n_ in notes:
         print(("" if n_.startswith("WARNING") else "note: ") + n_, file=sys.stderr)
     if problems:
@@ -957,7 +957,7 @@ def build_maps():
 SEQUENTIAL = {"lajolla", "batlow", "viridis"}
 
 
-def choose_scale(V, lim=None, kind="auto", cmap_name="vik", vmin=None, vmax=None):
+def choose_scale(V, lim=None, kind="auto", vmin=None, vmax=None):
     """Decide the colour scale from the data, not from habit.
 
     A diverging scale symmetric about zero is right only if the surface
@@ -1003,16 +1003,60 @@ def choose_scale(V, lim=None, kind="auto", cmap_name="vik", vmin=None, vmax=None
         if lo >= hi:
             raise SystemExit(f"--vmin {lo} must be below --vmax {hi}")
         vlim = (lo, hi)
-        if cmap_name not in SEQUENTIAL:
-            notes.append(f"note: '{cmap_name}' is a diverging map being used on a "
-                         f"sequential scale; prefer lajolla/batlow/viridis.")
     return vlim, kind, notes
+
+
+DEFAULT_CMAP = {"diverging": "vik", "sequential": "lajolla"}
+
+
+def resolve_cmap(kind, requested=None, force=False):
+    """The colormap actually used, chosen AFTER the scale kind is known.
+
+    Review 3 H3: --cmap defaulted to 'vik' whatever the scale, so an anion's
+    sequential scale was drawn with a diverging map: acetate's -80 kcal/mol end
+    came out dark BLUE, the colour every caption says means positive, and the
+    map's white neutral sat at -125. A note was printed and the image shipped.
+    The reverse mismatch is as bad: a sequential map on a sign-changing field
+    hides the sign. Both now refuse unless force (--force-cmap) is given.
+    """
+    if requested is None:
+        return DEFAULT_CMAP[kind]
+    if not force and (requested in SEQUENTIAL) != (kind == "sequential"):
+        want = "a sequential map (lajolla, batlow, viridis)" if kind == "sequential" \
+            else "a diverging map (vik, RdBu, PuOr, broc, cork, pindr)"
+        raise ValueError(f"--cmap {requested} does not fit a {kind} scale: use {want}, "
+                         f"leave --cmap out to choose automatically, or pass "
+                         f"--force-cmap to draw it anyway")
+    return requested
 
 
 # ------------------------------------------------------------------ molecules
 MOLECULES = {"bromobenzene": ("Br", 1.890), "chlorobenzene": ("Cl", 1.740),
              "iodobenzene": ("I", 2.095), "fluorobenzene": ("F", 1.354),
              "benzene": ("H", 1.080)}
+
+
+def surface_report(diag):
+    """The surface-integrity block of --json.
+
+    Review 3 H4: the JSON kept only chi, and chi = -2 is what a clipped surface
+    run with --no-strict gives AND what a valid folded genus-2 surface gives.
+    A downstream reader could not tell a 23 %-wrong V_min from a good one.
+    """
+    return dict(closed=bool(diag["closed"]), open_edges=int(diag["open_edges"]),
+                nonmanifold_edges=int(diag["nonmanifold_edges"]),
+                components=int(diag["components"]), genus=diag["genus"],
+                chi=int(diag["chi"]), face_max_rho=float(diag["face_max_rho"]),
+                margin_bohr=float(diag["margin"]), strict=bool(diag["strict"]),
+                problems=list(diag["problems"]), valid=not diag["problems"])
+
+
+def gate_report(verdict, findings, forced):
+    """The structure-gate block of --json: what the gate said, and whether it
+    was overridden. Review 3 H4: a structure REJECTED by the gate and computed
+    with --force was written out as `approved_smiles`."""
+    return dict(verdict=verdict, forced=bool(forced and verdict == BLOCK),
+                findings=[[sev, code] for sev, code, *_ in findings])
 
 
 def scale_provenance(kind, lim=None, vmin=None, vmax=None):
@@ -1054,7 +1098,8 @@ _ATOM_RGB = {"H": "#f2f2f2", "C": "#555555", "N": "#3050f8", "O": "#ff0d0d",
              "S": "#d9c21f", "P": "#ff8000"}
 
 
-def esp_figure(verts, faces, V, symbols, coords, cmap, vlim, title=""):
+def esp_figure(verts, faces, V, symbols, coords, cmap, vlim, title="",
+               kind="diverging"):
     """Interactive 3D surface (plotly): rotate, zoom, hover to read V.
 
     verts and coords in BOHR (as computed); shown in Angstrom. Lighting has
@@ -1070,7 +1115,9 @@ def esp_figure(verts, faces, V, symbols, coords, cmap, vlim, title=""):
         i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
         intensity=V, intensitymode="vertex",
         colorscale=plotly_colorscale(cmap), cmin=vlim[0], cmax=vlim[1],
-        colorbar=dict(title="V (kcal/mol)<br>warm = negative", len=0.75),
+        colorbar=dict(title="V (kcal/mol)<br>" + ("warm = negative" if kind == "diverging"
+                                                  else "darker = more negative"),
+                      len=0.75),
         lighting=dict(ambient=0.62, diffuse=0.38, specular=0.0,
                       roughness=1.0, fresnel=0.0),
         hovertemplate="V = %{intensity:+.1f} kcal/mol<extra></extra>",
@@ -1261,7 +1308,11 @@ def main():
                     help="bohr of vacuum around the nuclei; below 4 risks clipping")
     ap.add_argument("--no-strict", action="store_true",
                     help="render even if the isosurface fails its integrity check")
-    ap.add_argument("--cmap", default="vik")
+    ap.add_argument("--cmap", default=None,
+                    help="default: vik for a diverging scale, lajolla for a "
+                         "sequential one (ions)")
+    ap.add_argument("--force-cmap", action="store_true",
+                    help="allow a diverging map on a sequential scale or vice versa")
     ap.add_argument("--vmin", type=float, default=None,
                     help="explicit lower bound for a SEQUENTIAL scale (ions)")
     ap.add_argument("--vmax", type=float, default=None,
@@ -1312,10 +1363,11 @@ def main():
     elif a.check:
         raise SystemExit("--check needs --smiles or --file")
 
-    approved = None
+    approved, gate = None, None
     if a.smiles or a.file:
         from rdkit import Chem as _C
         approved = _C.MolToSmiles(_C.RemoveHs(probe))
+        gate = gate_report(verdict, findings, a.force)
 
     if a.file:
         try:
@@ -1424,8 +1476,12 @@ def main():
 
     if a.lim == 0.0:
         raise SystemExit("--lim 0 is not a range")
-    vlim, kind, notes = choose_scale(V, lim=a.lim, kind=a.scale, cmap_name=a.cmap,
+    vlim, kind, notes = choose_scale(V, lim=a.lim, kind=a.scale,
                                      vmin=a.vmin, vmax=a.vmax)
+    try:
+        cmap_name = resolve_cmap(kind, a.cmap, a.force_cmap)
+    except ValueError as e:
+        raise SystemExit(str(e)) from None
     for n in notes:
         print(("WARNING: " if n.startswith("WARNING") else "note: ")
               + n.removeprefix("WARNING: "), file=sys.stderr)
@@ -1440,26 +1496,26 @@ def main():
               f"scale and are clamped to the end colours")
 
     cmaps = build_maps()
-    if a.cmap not in cmaps:
+    if cmap_name not in cmaps:
         raise SystemExit(f"--cmap must be one of {sorted(cmaps)}")
-    img = render(verts, faces, V, cmaps[a.cmap], vlim, size=a.size,
+    img = render(verts, faces, V, cmaps[cmap_name], vlim, size=a.size,
                  elev=a.elev, azim=a.azim, ambient=a.ambient,
                  diffuse=1.0 - a.ambient)
     plt.imsave(a.out, img)
     print(f"wrote {a.out}  ({kind} scale {vlim[0]:+.1f} to {vlim[1]:+.1f} "
-          f"kcal/mol, cmap {a.cmap})")
+          f"kcal/mol, cmap {cmap_name})")
 
     symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
     label = (gi or {}).get("formula") or a.smiles or a.file or a.molecule
     if a.html:
-        esp_figure(verts, faces, V, symbols, mol.atom_coords(), cmaps[a.cmap],
-                   vlim, title=f"{label} · {a.xc}/{a.basis}").write_html(
+        esp_figure(verts, faces, V, symbols, mol.atom_coords(), cmaps[cmap_name],
+                   vlim, title=f"{label} · {a.xc}/{a.basis}", kind=kind).write_html(
             a.html, include_plotlyjs=True)
         print(f"wrote {a.html}  (interactive 3D)")
     if a.npz:
         np.savez_compressed(a.npz, verts=verts, faces=faces, V=V,
                             symbols=np.array(symbols), coords=mol.atom_coords(),
-                            vlim=np.array(vlim), kind=kind, cmap=a.cmap)
+                            vlim=np.array(vlim), kind=kind, cmap=cmap_name)
         print(f"wrote {a.npz}  (surface, bohr; V in kcal/mol)")
     if a.json:
         import json
@@ -1470,7 +1526,11 @@ def main():
                                 text=True, cwd=os.path.dirname(os.path.abspath(
                                     __file__))).stdout.strip() or None
         rec = dict(
-            input=dict(smiles=a.smiles, file=a.file, approved_smiles=approved,
+            input=dict(smiles=a.smiles, file=a.file,
+                       # the structure the gate saw; "approved" only if it passed
+                       gate_smiles=approved,
+                       approved_smiles=approved if not (gate and gate["forced"]) else None,
+                       gate=gate,
                        formula=(gi or {}).get("formula"), charge=charge, spin=spin),
             settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
                           density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
@@ -1480,9 +1540,10 @@ def main():
                          dipole_D=float(np.linalg.norm(mf.dip_moment(
                              unit="Debye", verbose=0))),
                          V_min=float(V.min()), V_max=float(V.max()),
-                         n_verts=int(diag["n_verts"]), chi=int(diag["chi"])),
+                         n_verts=int(diag["n_verts"]), surface=surface_report(diag)),
             scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
-                       cmap=a.cmap, **scale_provenance(kind, a.lim, a.vmin, a.vmax)),
+                       cmap=cmap_name, cmap_forced=bool(a.cmap and a.force_cmap),
+                       **scale_provenance(kind, a.lim, a.vmin, a.vmax)),
             versions=dict(pyscf=pyscf.__version__, rdkit=rdkit.__version__,
                           espmap_commit=commit),
             caveat=("Measured error budget (README): basis def2-SVP -> "
