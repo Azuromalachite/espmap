@@ -25,7 +25,7 @@ Pipeline for bromobenzene, B3LYP/def2-SVP, on one CPU:
 
 Install is one line: `pip install pyscf scikit-image matplotlib cmcrameri colorspacious`. No Gaussian licence, no GaussView, no VMD, no cube files on disk.
 
-**The one trick worth keeping.** Do not compute the ESP on a volumetric grid and then interpolate it onto the surface, which is what the cube-file workflow does. Compute the density on a grid, extract the isosurface, then evaluate the ESP **only at the surface vertices** — 10⁴ points instead of 10⁶. That is the difference between 2.5 seconds and most of an hour, and it removes the interpolation error entirely, because the potential is evaluated exactly where it is displayed.
+**The implementation choice that matters most, borrowed rather than invented.** Do not compute the ESP on a volumetric grid and then interpolate it onto the surface, which is what the cube-file workflow does. Compute the density on a grid, extract the isosurface, then evaluate the ESP **only at the surface vertices** — 10⁴ points instead of 10⁶. Quantitative molecular-surface methods evaluate properties on polygonal surfaces in this way (Bulat et al. 2010; Lu & Chen 2012; see [prior-art.md](prior-art.md)); the measurement below is this project's. That is the difference between 2.5 seconds and most of an hour, and it removes the interpolation error entirely, because the potential is evaluated exactly where it is displayed.
 
 ### Validation
 
