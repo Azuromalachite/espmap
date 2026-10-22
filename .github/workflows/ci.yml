@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 1 * *"     # monthly: the slow, SCF-backed suite
+
+jobs:
+  fast:
+    name: fast suite (no SCF)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -e ".[test]"
+      - run: pytest -q
+
+  slow:
+    name: slow suite (real SCF)
+    # only on demand and monthly: these run genuine DFT and take minutes
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[test]"
+      - run: python esp_map.py --selftest
+      - run: pytest -q --runslow -m slow
