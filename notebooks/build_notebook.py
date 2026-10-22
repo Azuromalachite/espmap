@@ -30,7 +30,7 @@ SMILES → structure check → DFT (PySCF) → electrostatic potential on the ρ
 
 **Reading the colours:** warm/red = **negative** = electron-rich; cool/blue = **positive** = electron-poor (the chemistry convention).
 
-**Runtime:** CPU is fine for small molecules (ethanol ~10 s, decanoic acid ~1 min). For C12–C20 molecules or the publication setting, use a GPU: *Runtime → Change runtime type → L4*. On an L4 the SCF ran 4.3× faster than a 16-thread laptop and matched the CPU to < 0.001 kcal/mol.
+**Runtime:** CPU is fine for small molecules. Decanoic acid took about a minute at `preview` on a 16-thread laptop; Colab's free CPU runtime has 2 vCPUs, so expect several times that. For C12–C20 molecules or the publication setting, use a GPU: *Runtime → Change runtime type → L4*. On an L4 the SCF ran 4.3× faster than a 16-thread laptop and matched the CPU to < 0.001 kcal/mol.
 
 Research code from [github.com/Azuromalachite/espmap](https://github.com/Azuromalachite/espmap) (branch `{BRANCH}`). Limits, error budget and citations are at the bottom.
 """)
@@ -54,7 +54,7 @@ print(f"molecule: {SMILES}   name: {NAME}   charge: {CHARGE}   spin: {SPIN}")
 
 code("""
 #@title 2 · Advanced settings (the defaults are fine)
-#@markdown **Quality.** `preview` = def2-SVP: right for pictures and teaching, about ±3.5 kcal/mol in absolute values. `publication` = def2-TZVP: quote numbers only from this.
+#@markdown **Quality.** `preview` = def2-SVP: right for pictures and teaching, but it read V_max about 2.7 kcal/mol low on the molecules benchmarked, and the shift is molecule-specific (bromobenzene −0.76, the other sign). `publication` = def2-TZVP: quote numbers only from this.
 QUALITY = "preview (def2-SVP)"  #@param ["preview (def2-SVP)", "publication (def2-TZVP)"]
 SOLVENT = "vacuum"  #@param ["vacuum", "water", "hexane", "chloroform", "toluene", "methanol", "acetonitrile", "dmso"]
 FUNCTIONAL = "b3lyp"  #@param ["b3lyp", "pbe0", "m06-2x"]
@@ -92,19 +92,41 @@ if USE_GPU and not HAS_GPU:
     raise RuntimeError("GPU = on, but this runtime has no GPU. "
                        "Runtime → Change runtime type → L4 (or set GPU to auto/off).")
 
-# marker files, written only after a step SUCCEEDS, so re-running is instant
+def write_install_marker(path, branch, commit):
+    import os
+    with open(path, "w") as f:
+        f.write(branch + " " + commit + os.linesep)
+
+
+def install_marker_current(path, branch):
+    # the marker names the branch it was installed from: a changed BRANCH
+    # must reinstall, not keep running the old code (review 3 H10)
+    import os
+    if not os.path.isfile(path):
+        return False
+    parts = open(path).read().split()
+    return len(parts) == 2 and parts[0] == branch
+
+
+# the marker is written only after the install SUCCEEDS, so re-running is instant
 t0 = time.time()
-if not os.path.isfile(os.path.join(WORK, "ESPMAP_READY")):
-    if not os.path.isdir(REPO):
-        _sh(f"git clone -q --depth 1 -b {{BRANCH}} https://github.com/Azuromalachite/espmap.git {{REPO}}")
+MARKER = os.path.join(WORK, "ESPMAP_READY")
+if not install_marker_current(MARKER, BRANCH):
+    if os.path.isfile(MARKER):
+        print(f"BRANCH is now {{BRANCH}}, not the installed one: reinstalling")
+    if os.path.isdir(REPO):
+        import shutil
+        shutil.rmtree(REPO)
+    _sh(f"git clone -q --depth 1 -b {{BRANCH}} https://github.com/Azuromalachite/espmap.git {{REPO}}")
     # PySCF and RDKit pinned to bench/env.json: the error budget was measured
     # with these, and ETKDG geometries (so geometry hashes) depend on RDKit
     _sh(f"pip install -q -e '{{REPO}}[viz]' 'pyscf==2.14.0' 'rdkit==2026.9.1'")
     out = _sh(f"cd {{REPO}} && {{sys.executable}} esp_map.py --selftest")
     if "selftest: PASS" not in out:
         raise RuntimeError("self-test FAILED; do not trust results from this install:\\n" + out)
-    open(os.path.join(WORK, "ESPMAP_READY"), "w").close()
+    write_install_marker(MARKER, BRANCH, _sh(f"git -C {{REPO}} rev-parse --short HEAD").strip())
     print("espmap installed, self-test PASS")
+ESPMAP_COMMIT = open(MARKER).read().split()[1]       # part of every result's cache key
 if USE_GPU and not os.path.isfile(os.path.join(WORK, "ESPMAP_GPU_READY")):
     # Colab ships cupy-cuda13x; gpu4pyscf-cuda12x brings cupy-cuda12x. Two CuPys conflict.
     _sh("pip uninstall -y -q cupy-cuda13x")
@@ -115,7 +137,7 @@ sys.path.insert(0, REPO)
 os.chdir(REPO)
 import esp_map as em, pyscf, rdkit
 gpu_name = _sh("nvidia-smi --query-gpu=name --format=csv,noheader").strip() if HAS_GPU else "none"
-print(f"ready in {{time.time() - t0:.0f}} s · pyscf {{pyscf.__version__}} · rdkit {{rdkit.__version__}} · GPU: {{gpu_name}}"
+print(f"ready in {{time.time() - t0:.0f}} s · espmap {{BRANCH}} @ {{ESPMAP_COMMIT}} · pyscf {{pyscf.__version__}} · rdkit {{rdkit.__version__}} · GPU: {{gpu_name}}"
       f"{{' (in use)' if USE_GPU else ''}}")
 if not HAS_GPU:
     print("note: CPU runtime. Fine for small molecules; for C12+ or 'publication' quality, "
@@ -145,15 +167,19 @@ if heavy > 14 and not USE_GPU:
     print(f"note: {heavy} heavy atoms on a CPU runtime; expect several minutes "
           f"({'tens of minutes' if BASIS == 'def2-tzvp' else 'a few minutes'}).")
 
+# everything that changes the files in the folder: the colour range changes
+# esp.png and esp_3d.html, and the code version can change every number
 settings = dict(smiles=canon, charge=CHARGE, spin=SPIN, basis=BASIS, xc=FUNCTIONAL,
                 solvent=SOLVENT, density_fit=DENSITY_FIT, gpu=USE_GPU,
-                nconfs=NCONFS, seed=SEED)
+                nconfs=NCONFS, seed=SEED, lim=LIM, espmap=ESPMAP_COMMIT)
 tag = hashlib.sha1(json.dumps(settings, sort_keys=True).encode()).hexdigest()[:5]
 JOB = os.path.join(WORK, f"{NAME}_{tag}")          # same molecule + settings → same folder
 os.makedirs(JOB, exist_ok=True)
 npz = os.path.join(JOB, "surface.npz")
 
-if os.path.isfile(npz):
+# settings.json is written LAST, after espmap succeeded: an interrupted run
+# leaves surface.npz without it and is computed again, never reused
+if os.path.isfile(os.path.join(JOB, "settings.json")):
     print(f"reusing {JOB} (same molecule and settings were already computed)")
 else:
     cmd = [sys.executable, "esp_map.py", "--smiles", SMILES, "--basis", BASIS,
@@ -256,7 +282,7 @@ if SAVE_TO_DRIVE:
 md("""
 ## Optional · Compare a series on one colour scale
 
-Panels are only comparable when they share **one** colour range. Ions need care: an ion's surface never changes sign, so it cannot share a symmetric scale with a neutral molecule honestly. The cell below **refuses** to mix them rather than drawing a misleading panel.
+Panels are only comparable when they share **one** colour range. Ions need care: an ion's surface never changes sign, so it cannot share a symmetric scale with a neutral molecule honestly. A series of neutral molecules shares a symmetric diverging scale; a series made only of ions shares one *sequential* scale over all their values; a series that mixes the two is **refused** rather than drawn misleadingly.
 """)
 
 code("""
@@ -264,6 +290,22 @@ code("""
 RUN_SERIES = False  #@param {type:"boolean"}
 SERIES = "ethanol:CCO, acetaldehyde:CC=O, acetic acid:CC(=O)O, ethyl acetate:CCOC(C)=O"  #@param {type:"string"}
 SHARED_RANGE = 60  #@param {type:"number"}
+
+
+def series_scale(Vs, shared_range):
+    # one colour scale for a whole series, by the CLI's own sign rule:
+    # sign-changing members share a symmetric diverging range, one-signed
+    # members (ions) share a sequential range over all their values, and a
+    # mix of the two gets no single honest scale (review 3 H10)
+    one_sign = [em.sign_change_ratio(V) <= em.SIGN_CHANGE_MIN for V in Vs]
+    if all(one_sign):
+        return "sequential", (float(min(V.min() for V in Vs)), float(max(V.max() for V in Vs)))
+    if any(one_sign):
+        raise ValueError("ions and sign-changing molecules cannot share one colour scale; "
+                         "compare them as two separate series")
+    return "diverging", (-shared_range, shared_range)
+
+
 if RUN_SERIES:
     items = [s.split(":", 1) for s in SERIES.split(",")]
     surfs = []
@@ -283,24 +325,23 @@ if RUN_SERIES:
         zz = np.load(f"{out}/surface.npz")
         surfs.append((name, zz))
         print(f"{name:15s} V = {zz['V'].min():+.1f} … {zz['V'].max():+.1f} kcal/mol")
-    # the same rule as the CLI's scale choice: one place decides "changes sign"
     one_sign = [n for n, zz in surfs if em.sign_change_ratio(zz["V"]) <= em.SIGN_CHANGE_MIN]
-    if one_sign and len(one_sign) < len(surfs):
-        raise RuntimeError(f"{', '.join(one_sign)} {'does' if len(one_sign) == 1 else 'do'} not change sign (ion?) while the others do. "
-                           "One shared symmetric scale would misrepresent one group; compare "
-                           "them as two separate series.")
+    try:
+        kind, vl = series_scale([zz["V"] for _, zz in surfs], SHARED_RANGE)
+    except ValueError as e:
+        raise RuntimeError(f"{e}. One-signed (ions?): {', '.join(one_sign)}.") from None
     over = [n for n, zz in surfs if np.abs(zz["V"]).max() > SHARED_RANGE]
-    if over:
+    if kind == "diverging" and over:
         print(f"note: {', '.join(over)} exceed ±{SHARED_RANGE}; those colours saturate. Raise SHARED_RANGE.")
-    vl = (-SHARED_RANGE, SHARED_RANGE)
-    cm = em.build_maps()["vik"]
+    cm = em.build_maps()[em.resolve_cmap(kind)]
     fig, axes = plt.subplots(1, len(surfs), figsize=(4 * len(surfs), 4.6), squeeze=False)
     for ax, (name, zz) in zip(axes[0], surfs):
         ax.imshow(em.render(zz["verts"], zz["faces"], zz["V"], cm, vl, size=420))
         ax.set_title(name); ax.axis("off")
     sm = plt.cm.ScalarMappable(cmap=cm, norm=plt.Normalize(*vl))
-    fig.colorbar(sm, ax=axes[0].tolist(), shrink=0.7, label="V (kcal/mol), warm = negative")
-    fig.suptitle(f"{FUNCTIONAL}/{BASIS}, shared scale ±{SHARED_RANGE} kcal/mol", y=0.99)
+    fig.colorbar(sm, ax=axes[0].tolist(), shrink=0.7,
+                 label=f"V (kcal/mol), {em.scale_caption(kind)}")
+    fig.suptitle(f"{FUNCTIONAL}/{BASIS}, one {kind} scale {vl[0]:+.0f} … {vl[1]:+.0f} kcal/mol", y=0.99)
     plt.show()
     print("interactive views:", os.path.join(WORK, "series", "*", "esp_3d.html"))
 else:
@@ -368,7 +409,7 @@ md(f"""
 The basis error is molecule-specific (bromobenzene: −0.76). Validating on one molecule licenses nothing about another.
 
 **Limits.**
-- **One conformer:** the lowest-energy force-field one. ESP extrema move little with conformation; the *shape* of the surface does.
+- **One conformer:** the lowest-energy force-field one. Across extended conformers of a C18 acetate the extrema moved ~1 kcal/mol, but folded conformers moved V_min by 5.2 kcal/mol, and the *shape* of the surface changes either way. For a flexible molecule, sample folded shapes before quoting a number.
 - **Protonation is your choice:** a carboxylic acid at pH 7 is mostly carboxylate (`[O-]`), and its ESP is completely different. Draw the state you mean.
 - **Out of scope:** transition metals, excited states, periodic systems; ωB97X-D is untested.
 - **Fluorine shows no σ-hole**, because it does not form one.
