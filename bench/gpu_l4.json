@@ -10,6 +10,7 @@
   "diff": {"e_tot_Ha": "< 5e-7 (printed as -0.000000)", "V_min": -0.000547, "V_max": 0.000681},
   "pass_condition": "e_tot within 1e-5 Ha, V_min and V_max within 0.05 kcal/mol, same geometry hash",
   "verdict": "PASS. SCF 4.3x faster than the 16-thread laptop CPU; t_scf includes any first-call GPU setup, so this is a lower bound.",
-  "not_covered": ["UKS (spin != 0)", "PCM solvent", "SCF without density fitting", "molecules other than decanoic acid", "the run_scf(gpu=True) code path itself, which was added after this measurement"],
+  "rerun_through_run_scf": {"how": "same notebook cell, at commit 183ccd7, calling em.run_scf(spec, basis='def2-tzvp', density_fit=True, gpu=True)", "hardware": "Google Colab, NVIDIA L4, 23034 MiB", "e_tot": -543.810315, "V_min": -37.278441, "V_max": 60.080529, "t_scf_s": 22.48, "verdict": "PASS; identical to the first run to the printed precision, so the built-in --gpu path reproduces the validated one"},
+  "not_covered": ["UKS (spin != 0)", "PCM solvent", "SCF without density fitting", "molecules other than decanoic acid"],
   "gpu_e_tot_precision_note": "GPU values were copied from the notebook's printed table (6 decimals), not from a full-precision dump."
 }

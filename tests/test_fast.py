@@ -246,3 +246,35 @@ def test_gpu_without_gpu4pyscf_fails_before_any_work():
         pass
     with pytest.raises(RuntimeError, match="gpu4pyscf"):
         em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True)
+
+
+def _rgb(s):
+    return np.array([int(x) for x in s[4:-1].split(",")]) / 255.0
+
+
+def test_3d_view_colours_run_the_same_way_as_the_image():
+    """The interactive view must not re-derive colour orientation: the same
+    trap as the three maps that shipped inverted (review 1)."""
+    for name, cmap in sorted(em.build_maps().items()):
+        cs = em.plotly_colorscale(cmap)
+        ts = [t for t, _ in cs]
+        assert ts[0] == 0.0 and ts[-1] == 1.0 and ts == sorted(ts), name
+        lo, hi = _rgb(cs[0][1]), _rgb(cs[-1][1])
+        assert np.allclose(lo, cmap(0.0)[:3], atol=1 / 255), name
+        assert np.allclose(hi, cmap(1.0)[:3], atol=1 / 255), name
+        if name not in em.SEQUENTIAL:
+            assert lo[0] > lo[2] and hi[2] > hi[0], f"{name}: warm must be negative"
+
+
+def test_3d_view_maps_vlim_and_has_no_specular_highlight():
+    pytest.importorskip("plotly")
+    verts = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], float)
+    faces = np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]])
+    V = np.array([-30.0, -5.0, 10.0, 40.0])
+    fig = em.esp_figure(verts, faces, V, ["O", "H"], np.array([[0, 0, 0], [0, 0, 1.8]]),
+                        em.build_maps()["vik"], (-40.0, 40.0))
+    surf = fig.data[0]
+    assert (surf.cmin, surf.cmax) == (-40.0, 40.0)    # V_min side gets t=0, warm
+    assert list(surf.intensity) == list(V)
+    assert surf.lighting.specular == 0.0
+    assert len(fig.data[1].x) == 3                     # one O-H bond: 2 points + gap

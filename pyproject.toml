@@ -32,7 +32,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=7.0"]
+test = ["pytest>=7.0", "plotly>=5"]
+viz = ["plotly>=5"]
 
 [project.urls]
 Homepage = "https://github.com/Azuromalachite/espmap"

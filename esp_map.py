@@ -134,6 +134,7 @@ WHAT THIS IS AND IS NOT
     than the convergence tests reported in the review.
 """
 import argparse
+import os
 import sys
 
 import numpy as np
@@ -892,7 +893,79 @@ MOLECULES = {"bromobenzene": ("Br", 1.890), "chlorobenzene": ("Cl", 1.740),
              "benzene": ("H", 1.080)}
 
 
-def monosubstituted_benzene(sub, c_sub, rcc=1.390, rch=1.080):
+def plotly_colorscale(cmap, n=33):
+    """matplotlib colormap -> plotly colorscale, sampled t = 0 .. 1 in order.
+
+    Built from the SAME cmap object render() uses, so the orientation that
+    --selftest asserts (warm = negative on diverging maps, V_min darkest on
+    sequential ones) carries over instead of being re-derived for plotly.
+    """
+    out = []
+    for t in np.linspace(0.0, 1.0, n):
+        r, g, b = (int(round(255 * c)) for c in cmap(float(t))[:3])
+        out.append([float(t), f"rgb({r},{g},{b})"])
+    return out
+
+
+# covalent radii (A) for drawing bonds in the 3D view; TESTED_ELEMENTS only
+_RCOV = {"H": .31, "B": .84, "C": .76, "N": .71, "O": .66, "F": .57, "Si": 1.11,
+         "P": 1.07, "S": 1.05, "Cl": 1.02, "Br": 1.20, "I": 1.39, "Se": 1.20}
+_ATOM_RGB = {"H": "#f2f2f2", "C": "#555555", "N": "#3050f8", "O": "#ff0d0d",
+             "F": "#90e050", "Cl": "#1ff01f", "Br": "#a62929", "I": "#940094",
+             "S": "#d9c21f", "P": "#ff8000"}
+
+
+def esp_figure(verts, faces, V, symbols, coords, cmap, vlim, title=""):
+    """Interactive 3D surface (plotly): rotate, zoom, hover to read V.
+
+    verts and coords in BOHR (as computed); shown in Angstrom. Lighting has
+    no specular term for the same reason render() has none: a white
+    highlight at an arbitrary place reads as a potential extremum. The
+    surface starts opaque so its colours are exact; a button makes it
+    see-through to show which atom a feature sits on.
+    """
+    import plotly.graph_objects as go
+    P, X = np.asarray(verts) * BOHR, np.asarray(coords) * BOHR
+    surf = go.Mesh3d(
+        x=P[:, 0], y=P[:, 1], z=P[:, 2],
+        i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+        intensity=V, intensitymode="vertex",
+        colorscale=plotly_colorscale(cmap), cmin=vlim[0], cmax=vlim[1],
+        colorbar=dict(title="V (kcal/mol)<br>warm = negative", len=0.75),
+        lighting=dict(ambient=0.62, diffuse=0.38, specular=0.0,
+                      roughness=1.0, fresnel=0.0),
+        hovertemplate="V = %{intensity:+.1f} kcal/mol<extra></extra>",
+        name="ESP surface", opacity=1.0)
+    bx, by, bz = [], [], []
+    for a in range(len(symbols)):
+        for b in range(a + 1, len(symbols)):
+            cut = 1.15 * (_RCOV.get(symbols[a], .8) + _RCOV.get(symbols[b], .8))
+            if np.linalg.norm(X[a] - X[b]) < cut:
+                for u in (X[a], X[b]):
+                    bx.append(u[0]); by.append(u[1]); bz.append(u[2])
+                bx.append(None); by.append(None); bz.append(None)
+    bonds = go.Scatter3d(x=bx, y=by, z=bz, mode="lines", hoverinfo="skip",
+                         line=dict(color="#444444", width=5), name="bonds")
+    atoms = go.Scatter3d(
+        x=X[:, 0], y=X[:, 1], z=X[:, 2], mode="markers", name="atoms",
+        text=symbols, hovertemplate="%{text}<extra></extra>",
+        marker=dict(size=[3 if s == "H" else 5 for s in symbols],
+                    color=[_ATOM_RGB.get(s, "#ff1493") for s in symbols],
+                    line=dict(color="#222222", width=1)))
+    fig = go.Figure([surf, bonds, atoms])
+    fig.update_layout(
+        title=title, showlegend=False, margin=dict(l=0, r=0, t=40, b=0),
+        scene=dict(aspectmode="data", xaxis_visible=False,
+                   yaxis_visible=False, zaxis_visible=False),
+        updatemenus=[dict(type="buttons", direction="right", x=0.0, y=1.0,
+                          xanchor="left", yanchor="top", buttons=[
+            dict(label="opaque", method="restyle", args=[{"opacity": 1.0}, [0]]),
+            dict(label="see-through", method="restyle",
+                 args=[{"opacity": 0.45}, [0]])])])
+    return fig
+
+
+def monosubstituted_benzene(sub,c_sub, rcc=1.390, rch=1.080):
     """Idealised planar C6H5X. NOT an optimised geometry.
 
     Measured dV_max/dR ~ -14 kcal/mol per Angstrom for the chlorobenzene
@@ -1063,10 +1136,19 @@ def main():
     ap.add_argument("--size", type=int, default=700)
     ap.add_argument("--ambient", type=float, default=0.62)
     ap.add_argument("--out", default="esp.png")
+    ap.add_argument("--html", help="also write an interactive 3D view (needs plotly)")
+    ap.add_argument("--npz", help="also save the surface (verts, faces, V, atoms) "
+                                  "so it can be re-rendered without an SCF")
+    ap.add_argument("--json", help="also write the settings and results")
     a = ap.parse_args()
 
     if a.selftest:
         raise SystemExit(selftest())
+    if a.html:
+        try:                        # fail before the SCF, not after it
+            import plotly  # noqa: F401
+        except ImportError:
+            raise SystemExit("--html needs plotly: pip install plotly") from None
 
     charge, spin, i_sub = a.charge or 0, a.spin, 6
     gi = None
@@ -1230,6 +1312,50 @@ def main():
     plt.imsave(a.out, img)
     print(f"wrote {a.out}  ({kind} scale {vlim[0]:+.1f} to {vlim[1]:+.1f} "
           f"kcal/mol, cmap {a.cmap})")
+
+    symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
+    label = (gi or {}).get("formula") or a.smiles or a.file or a.molecule
+    if a.html:
+        esp_figure(verts, faces, V, symbols, mol.atom_coords(), cmaps[a.cmap],
+                   vlim, title=f"{label} · {a.xc}/{a.basis}").write_html(
+            a.html, include_plotlyjs=True)
+        print(f"wrote {a.html}  (interactive 3D)")
+    if a.npz:
+        np.savez_compressed(a.npz, verts=verts, faces=faces, V=V,
+                            symbols=np.array(symbols), coords=mol.atom_coords(),
+                            vlim=np.array(vlim), kind=kind, cmap=a.cmap)
+        print(f"wrote {a.npz}  (surface, bohr; V in kcal/mol)")
+    if a.json:
+        import json
+        import subprocess
+        import pyscf
+        import rdkit
+        commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                                text=True, cwd=os.path.dirname(os.path.abspath(
+                                    __file__))).stdout.strip() or None
+        rec = dict(
+            input=dict(smiles=a.smiles, file=a.file, approved_smiles=approved,
+                       formula=(gi or {}).get("formula"), charge=charge, spin=spin),
+            settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
+                          density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
+                          spacing_bohr=a.spacing, seed=a.seed, nconfs=a.nconfs,
+                          optimize=a.optimize, geometry=(gi or {}).get("source")),
+            results=dict(e_tot_Ha=float(mf.e_tot), nao=int(mol.nao),
+                         dipole_D=float(np.linalg.norm(mf.dip_moment(
+                             unit="Debye", verbose=0))),
+                         V_min=float(V.min()), V_max=float(V.max()),
+                         n_verts=int(diag["n_verts"]), chi=int(diag["chi"])),
+            scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
+                       cmap=a.cmap, comparable=a.lim is not None or kind != "diverging"),
+            versions=dict(pyscf=pyscf.__version__, rdkit=rdkit.__version__,
+                          espmap_commit=commit),
+            caveat=("Measured error budget (README): basis def2-SVP -> "
+                    "def2-TZVPP moves the chlorobenzene sigma-hole by +3.55 "
+                    "kcal/mol; solvent gas -> water by -3.61. Quote numbers only "
+                    "against those margins."))
+        with open(a.json, "w") as f:
+            json.dump(rec, f, indent=2)
+        print(f"wrote {a.json}")
 
 
 if __name__ == "__main__":
