@@ -1,6 +1,6 @@
 # Per-site output: specification
 
-Status: **draft, revision 3. P0 is done; P1 and P2 are implemented on branches awaiting review.** This is the
+Status: **draft, revision 3. P0 is done; P2 (#24), P1 (#27) and caller-defined sites (#28) are in review.** This is the
 contract that espmap's `--json` will grow into and that Arrowfield's v0.0
 fixtures are written against. It extends item 1 of `docs/roadmap-review.md`
 ("extend `--json` with shape descriptors") from whole-molecule numbers to
@@ -42,16 +42,46 @@ involved, and never sees a docking score.
 **One geometry in, one record out.** A run computes one molecule in one
 geometry and writes one record. A file holding several records (a GNINA
 multi-pose SDF) is a gate BLOCK (`MULTIPLE_RECORDS`) unless `--record N`
-names one, and the record then says which. Today such a file warns and uses the
-first record `[V]`: fine for a person at a terminal, but in a pipeline 20 poses
-would silently become an analysis of pose 1. Arrowfield's adapter splits
-multi-pose files into one file per pose.
+names one, and the record then says which (done, #17). Before that, such a
+file warned and used the first record: fine for a person at a terminal, but in
+a pipeline 20 poses would silently have become an analysis of pose 1.
+Arrowfield's adapter splits multi-pose files into one file per pose.
 
 **Input for a pose is SDF (or MOL) with explicit bond orders.** PDB and XYZ
 are accepted, but their bond orders are perceived from geometry, not given
 (H1, fixed in #7), so the mapped structure Arrowfield intended is not
 guaranteed. Arrowfield's adapters assign bond orders from the mapped ligand
 definition before writing the SDF.
+
+## Prior art
+
+Nothing in this spec is new theory, and it claims none; `docs/prior-art.md`
+and `docs/references.bib` hold the full record, with DOIs. In that file's
+terms:
+
+- **Established.** Quantitative analysis of a property on a polygonal
+  molecular surface (areas, extrema, area-weighted statistics) is Bulat et al.
+  `bulat2010` and Lu & Chen `lu2012mt`. Global surface-ESP statistics
+  (positive and negative areas, mean, variance) go back to the GIPF approach
+  of Murray et al. `murray1994gipf`. The ρ = 0.002 e·bohr⁻³ surface is Bader's
+  `bader1987`, `bader1990`. The σ-hole is `clark2007`, `murray2009`,
+  `politzer2013`.
+- **Adapted.** Local, per-atom molecular surfaces and their ESP statistics are
+  Multiwfn's quantitative molecular-surface analysis `lu2012multiwfn`,
+  `lu2012mt`, `lu2024multiwfn`. Our nearest-nucleus and radius-scaled
+  triangle partitions, and the reaction sites built from them, are versions
+  of that idea. They were chosen to be simple to state and test, not because
+  either is believed to be the correct partition (§2).
+- **Possibly specific, unsearched.** Reporting both partitions with their
+  difference in every record, carrying measured budget rows with their data
+  files, and withholding site values behind a validity envelope are
+  engineering choices. No prior-art search has been thorough enough to
+  support calling them new, and this spec does not.
+
+One correction the prior-art pass made, worth repeating where surfaces are
+discussed: the ~98 % of the electron density often quoted for the "Bader
+surface" is Bader's figure for the 0.001 au envelope. For the 0.002 surface
+used here, `bench/isosurface_enclosed.jsonl` measures 98.5–99.1 %.
 
 ## 0. Prerequisites
 
@@ -282,7 +312,8 @@ what was measured, and it must point to what was not.
   while its mean barely moves.
 - `budget` at run level: see §6. A measured shift is evidence about how
   sensitive the method is, recorded with the molecule it was measured on. The
-  record does not turn it into a ±3.55 interval on every site.
+  record does not turn chlorobenzene's +3.54 basis shift into a ±3.54
+  interval on every site.
 - `conformer_scope`: `"single conformer"` together with the rotatable-bond
   count, plus the measured warning when a folded geometry is possible (C18
   acetate, V_min spread 1.1 → 5.2 kcal/mol once folded members are included)
@@ -399,11 +430,13 @@ The site block:
   "conformer_scope": "single conformer; 0 rotatable bonds",
   "topology": {"genus": 0, "components": 1},
   "budget": [
-    {"axis": "basis def2-SVP -> def2-TZVP", "V_max_kcal_mol": [1.53, 2.83],
+    {"axis": "basis def2-SVP -> def2-TZVP", "V_max_kcal_mol": [1.53, 2.82],
      "measured_on": "decanoic acid, BDSF, Z3Z13-18:OAc, Z3Z13-18:OH",
      "source": "bench/results.jsonl"},
-    {"axis": "solvent gas -> PCM water", "V_max_kcal_mol": -3.61,
-     "measured_on": "chlorobenzene", "source": "prose"}
+    {"axis": "solvent gas -> PCM water, polarised solute", "V_max_kcal_mol": -3.60,
+     "measured_on": "chlorobenzene", "source": "bench/solvent_convention.jsonl"},
+    {"axis": "partition rule, site means", "kcal_mol": 3.95,
+     "measured_on": "Z3Z13-18:OAc, 10 conformers", "source": "bench/site_partition.jsonl"}
   ]
 }
 ```
@@ -417,12 +450,14 @@ is set for hydrogens only. Coordinates come from `geometry.xyz_angstrom` by
 `index`. `source` on a site is `"default"` or `"caller"`.
 
 **Budget rows.** Each row names its source: a `bench/` file, or `"prose"` for
-the seven rows review 3 found with no data (H8). Arrowfield must display a
-`"prose"` row as unbacked. Rows are selected by the run's settings: the basis
-row appears for a def2-SVP run, the solvent row for a gas-phase run, and so
-on. The numbers come from one table in the module, and the claim-consistency
-test checks that table against `CLAUDE.md` and `README.md`. The two rows above
-are illustrations of the shape; the basis range is the one H8 recomputed.
+a figure with no data behind it. Since H8 (#25) every row of the σ-hole
+budget has a `bench/` file and `test_claims.py` recomputes each one from it;
+the per-site rows (partition, conformer, grid) do the same from
+`bench/site_partition.jsonl`. Arrowfield must display a `"prose"` row as
+unbacked. Rows are selected by the run's settings: the basis row appears for
+a def2-SVP run, the solvent row for a gas-phase run, and so on, and every
+solvent row names its convention (`solvent_esp`). The rows above illustrate
+the shape with the current measured values.
 
 **NPZ.** `--npz` gains `tri_atom` and `tri_atom_compared`: the atom index of
 every triangle under each rule. Sites are unions of atoms, so this is enough
