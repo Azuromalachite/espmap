@@ -1318,6 +1318,82 @@ def test_main_refuses_coordinates_whose_atom_order_moved(monkeypatch):
     with pytest.raises(SystemExit, match="atom order"):
         em.main()
 
+
+# ------------------------------------------------------------ caller sites
+# per-site-spec section 1: Arrowfield names its own sites ("C3-H",
+# "carbonyl O"); espmap only checks that every named atom exists.
+def _ethanol_mapped():
+    from rdkit import Chem
+    spec, info = em.from_smiles("[CH3:1][CH2:2][OH:3]")
+    sym, X = zip(*[(t.split()[0], [float(v) for v in t.split()[1:]]) for t in spec.split(";")])
+    maps = {a.GetIdx(): a.GetAtomMapNum() for a in info["mol"].GetAtoms() if a.GetAtomMapNum()}
+    return list(sym), np.array(X), maps
+
+
+def test_caller_groups_resolve_maps_and_hydrogens():
+    sym, X, maps = _ethanol_mapped()
+    groups = [{"label": "C1-H", "atoms": ["1+H"]}, {"label": "hydroxyl", "atoms": ["3+H"]},
+              {"label": "C2", "atoms": [2]}]
+    got = dict(em.resolve_site_groups(groups, sym, X, maps))
+    parent = em.site_parents(X, sym)
+    assert got["C1-H"] == sorted([0] + [i for i, p in enumerate(parent) if p == 0])
+    assert len(got["C1-H"]) == 4 and got["C2"] == [1]
+    assert got["hydroxyl"] == sorted([2] + [i for i, p in enumerate(parent) if p == 2])
+
+
+def test_unmapped_input_names_atoms_by_index():
+    spec, _ = em.from_smiles("CCO")
+    sym, X = zip(*[(t.split()[0], [float(v) for v in t.split()[1:]]) for t in spec.split(";")])
+    got = dict(em.resolve_site_groups([{"label": "O", "atoms": [2]}], list(sym), np.array(X), None))
+    assert got == {"O": [2]}
+
+
+@pytest.mark.parametrize("groups, words", [
+    ([{"label": "x", "atoms": [7]}], "7"),                         # no such map
+    ([{"label": "x", "atoms": []}], "no atoms"),
+    ([{"label": "a", "atoms": [1]}, {"label": "a", "atoms": [2]}], "twice"),
+    ([{"label": "x", "atoms": ["1+X"]}], r"1\+X"),                 # malformed token
+    ([{"atoms": [1]}], "label"),
+])
+def test_bad_caller_groups_are_refused_with_a_reason(groups, words):
+    sym, X, maps = _ethanol_mapped()
+    with pytest.raises(ValueError, match=words):
+        em.resolve_site_groups(groups, sym, X, maps)
+
+
+def test_overlapping_caller_groups_each_get_their_own_values():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    groups = [("CO", [0, 1]), ("O", [1]), ("C-H", [0, 2, 3])]
+    rep = em.site_report(P, faces, _field(P), X, sym, groups=groups)
+    s = {g["label"]: g for g in rep["reaction_sites"]}
+    assert set(s) == {"CO", "O", "C-H"} and all(g["source"] == "caller" for g in s.values())
+    by_atom = {a["index"]: a["nearest_nucleus"]["area_A2"] for a in rep["atoms"]}
+    assert s["CO"]["nearest_nucleus"]["area_A2"] == pytest.approx(by_atom[0] + by_atom[1])
+    assert s["O"]["nearest_nucleus"]["area_A2"] == pytest.approx(by_atom[1])
+
+
+def test_main_refuses_bad_groups_before_the_scf(tmp_path, monkeypatch):
+    import json
+    p = tmp_path / "g.json"
+    p.write_text(json.dumps([{"label": "C9-H", "atoms": ["9+H"]}]))
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][CH2:2][OH:3]",
+                                      "--sites", str(p)])
+    with pytest.raises(SystemExit, match="--sites"):
+        em.main()
+
+
+def test_main_lets_good_groups_through_to_the_scf(tmp_path, monkeypatch):
+    import json
+    p = tmp_path / "g.json"
+    p.write_text(json.dumps([{"label": "C1-H", "atoms": ["1+H"]}]))
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][CH2:2][OH:3]",
+                                      "--sites", str(p)])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
 # ------------------------------------------------------------- provenance (H14)
 def _water(charge=0, spin=0):
     from pyscf import gto
