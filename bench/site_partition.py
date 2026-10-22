@@ -19,10 +19,21 @@ them is quoted, three things have to be measured, and this script records them:
 The partition here is the PROTOTYPE of P2 (triangle centroid -> nearest
 nucleus or nearest by d / r_Bondi; hydrogens folded into their parent heavy
 atom; area-weighted statistics), kept so the recorded rows stay reproducible
-from this file. P2's esp_map.site_report reproduces it: recomputing the
-"grid|nitrite|0.26" row with esp_map gave site areas, means, p05 and V_min
-within 8.4e-10 of the recorded values, over every site and both rules.
-Calculations use esp_map's own run_scf / extract_surface / esp_at_points.
+from this file. Calculations use esp_map's own run_scf / extract_surface /
+esp_at_points.
+
+What validates the partition is the symmetry rows, which do not depend on
+how the partition was written: sites equivalent by construction agree within
+mesh noise. Benzene's six C site means span 2.378–2.566 kcal/mol at 0.26 bohr,
+tightening to 2.487–2.539 at 0.16. Nitrite's O1 and O2 means differ by 0.013
+kcal/mol at 0.26 bohr (the grid rows, built symmetric). tests/test_claims.py
+recomputes all three from site_partition.jsonl.
+
+P2's esp_map.site_report also reproduces this prototype: recomputing the
+"grid|nitrite|0.26" row with esp_map agreed to 8.4e-10 over every site and
+both rules. That is not a validation (review 4 N12). Both were written in one
+session with the same algorithm, so it shows only that the refactor kept the
+prototype's behaviour, assumptions included.
 
 Provenance of the recorded rows: every row says commit "unknown", because
 they ran in a worktree created from Windows that WSL's git cannot read. They

@@ -337,6 +337,30 @@ def test_every_per_site_row_is_recomputed_from_bench(row, expect):
     assert expect in _site_table(), f"README per-site table lacks {row} = {expect}"
 
 
+def _symmetry_rows():
+    """The independent check on the partition: sites equivalent by
+    construction must agree. Review 4 N12: the 8.4e-10 agreement of
+    site_report with the bench prototype only proves the refactor."""
+    rows = {r["key"]: r["sites"]["nearest_nucleus"] for r in _jsonl("site_partition.jsonl")}
+
+    def c_range(sp):
+        m = [v["V_area_mean"] for k, v in rows[f"symmetry|benzene|{sp}"].items() if k[0] == "C"]
+        return f"{min(m):.3f}–{max(m):.3f}"
+    o = rows["grid|nitrite|0.26"]
+    return {"benzene 0.26": c_range(0.26), "benzene 0.16": c_range(0.16),
+            "nitrite O1/O2": f"{abs(o['O1']['V_area_mean'] - o['O2']['V_area_mean']):.3f}"}
+
+
+@pytest.mark.parametrize("row, expect", [
+    ("benzene 0.26", "2.378–2.566"), ("benzene 0.16", "2.487–2.539"), ("nitrite O1/O2", "0.013"),
+])
+def test_symmetry_rows_are_the_quoted_validation(row, expect):
+    assert _symmetry_rows()[row] == expect
+    doc = (BENCH / "site_partition.py").read_text(encoding="utf-8")
+    assert expect in doc, f"bench/site_partition.py does not quote {row} = {expect}"
+    assert "not a validation" in doc, "the prototype agreement must not read as validation"
+
+
 def test_site_areas_conserve_the_surface_in_every_row():
     for r in _jsonl("site_partition.jsonl"):
         assert max(abs(v) for v in r["sites"]["conservation"].values()) < 1e-12, r["key"]
