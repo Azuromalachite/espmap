@@ -1130,6 +1130,19 @@ def reaction_field_at_points(mf, pts):
     return V
 
 
+HA2EV = 27.211386
+
+
+def frontier_orbitals_eV(mf):
+    """(HOMO, LUMO) in eV; for UKS the highest occupied and lowest virtual
+    over both spins. LUMO is None when the basis has no virtual orbital."""
+    e = np.atleast_2d(np.asarray(mf.mo_energy, dtype=float))
+    occ = np.atleast_2d(np.asarray(mf.mo_occ, dtype=float))
+    virt = e[occ == 0]
+    return (float(e[occ > 0].max()) * HA2EV,
+            float(virt.min()) * HA2EV if virt.size else None)
+
+
 def unbound_anion_warning(mf, charge, solvent):
     """A gas-phase anion whose HOMO is above zero has an electron the basis
     is holding in place: in a complete basis it would leave. Its surface
@@ -1137,15 +1150,26 @@ def unbound_anion_warning(mf, charge, solvent):
     chemistry. A continuum binds it, so name --solvent as the remedy."""
     if charge >= 0 or solvent:
         return None
-    e = np.atleast_2d(np.asarray(mf.mo_energy, dtype=float))
-    occ = np.atleast_2d(np.asarray(mf.mo_occ, dtype=float))
-    homo = float(e[occ > 0].max())
+    homo = frontier_orbitals_eV(mf)[0]
     if homo <= 0:
         return None
-    return (f"gas-phase anion with HOMO {homo * 27.211386:+.2f} eV: the outer "
+    return (f"gas-phase anion with HOMO {homo:+.2f} eV: the outer "
             f"electron is unbound and held only by the basis, so the map tracks "
             f"the basis set, not the molecule. Compute it in a continuum "
             f"(--solvent water) or as the neutral/protonated form.")
+
+
+def electronic_report(mf, charge, solvent):
+    """results.electronic: frontier orbitals and the problems that make the
+    electronic structure, and so the map, not the molecule's. Review 5 R3:
+    the unbound-anion condition was a stderr warning, and the record of a
+    gas-phase acetate at def2-SVP (HOMO +0.17 eV) said validity all true."""
+    homo, lumo = frontier_orbitals_eV(mf)
+    warn = unbound_anion_warning(mf, charge, solvent)
+    # each problem leads with a stable code, so a consumer branches on the
+    # code, not the prose (as gate findings do)
+    return dict(homo_eV=homo, lumo_eV=lumo,
+                problems=[f"UNBOUND_ANION_GAS: {warn}"] if warn else [])
 
 
 # ------------------------------------------------------------------- surface
@@ -1888,15 +1912,17 @@ def geometry_method(source=None, forcefield=None, atoms=False, molecule=None,
     raise ValueError(f"unrecognised geometry source: {source!r}")
 
 
-def validity(gate, verified, surface):
+def validity(gate, verified, surface, *, electronic):
     """One place a consumer reads validity from (spec section 6), never from
     stderr, chi or a filename. sites is False until a site block exists.
 
     input is true only if a gate RAN and passed (not forced) and the
     computed structure was not found to differ. Review 4 N3: absence of a
-    gate used to read as a pass, so ungated --atoms records said true."""
+    gate used to read as a pass, so ungated --atoms records said true.
+    electronic is false when results.electronic has problems (review 5 R3)."""
     return dict(input=gate is not None and not gate["forced"] and verified is not False,
-                surface=not surface["problems"], sites=False)
+                surface=not surface["problems"], electronic=not electronic["problems"],
+                sites=False)
 
 
 def render_fields(cmap, kind, vlim, elev, azim, size, ambient):
@@ -2229,6 +2255,8 @@ def sites_block(valid, P, faces, V, coords, symbols, **kw):
         return None, "input not valid (forced past the gate, or structure not verified)"
     if not valid["surface"]:
         return None, "surface not valid (see results.surface.problems)"
+    if not valid.get("electronic", True):
+        return None, "electronic structure not valid (see results.electronic.problems)"
     if all(s == "H" for s in symbols):
         return None, ("no heavy atom: sites are heavy atoms with their hydrogens, "
                       "and this molecule has none")
@@ -2703,9 +2731,9 @@ def main():
           f"{'PCM ' + a.solvent if solv else 'GAS PHASE'}"
           + (f", UNRESTRICTED (spin={spin}, <S^2>={mf.spin_square()[0]:.3f})"
              if spin else ""))
-    warn = unbound_anion_warning(mf, charge, solv)
-    if warn:
-        print(f"WARNING: {warn}", file=sys.stderr)
+    electronic = electronic_report(mf, charge, solv)
+    for p in electronic["problems"]:
+        print(f"WARNING: {p}", file=sys.stderr)
 
     verts, faces, diag = extract_surface(mol, dm, a.spacing, iso=a.iso,
                                          margin=a.margin, strict=not a.no_strict)
@@ -2778,7 +2806,8 @@ def main():
     P_A, coords_A = verts * BOHR, mol.atom_coords() * BOHR
     surface = surface_report(diag, a.iso)
     # an atom order forced past verify_mapping invalidates the input too
-    valid = validity(gate, False if mapped_ok is False else verified, surface)
+    valid = validity(gate, False if mapped_ok is False else verified, surface,
+                     electronic=electronic)
     # what the coordinates are; settings.geometry said "generated by ETKDGv3"
     # even after --optimize had replaced them (review 4 N1)
     geom_source = (gi["source"] if gi is not None else
@@ -2836,7 +2865,7 @@ def main():
         # review 4 N8, the NPZ let a consumer redo a partition of a record
         # whose JSON withheld its sites as invalid.
         tri_atom = {}
-        if valid["input"] and valid["surface"]:
+        if valid["input"] and valid["surface"] and valid["electronic"]:
             for r in PARTITION_RULES:
                 t = partition_surface(P_A, faces, coords_A, symbols, r)
                 tri_atom[f"tri_atom_{r}"] = np.full(len(faces), -1) if t is None else t
@@ -2889,6 +2918,7 @@ def main():
                          dipole=dipole_about_nuclear_centre(mol, dm),
                          V_min_kcal_mol=float(V.min()), V_max_kcal_mol=float(V.max()),
                          sigma_hole=sh_rec, sigma_hole_reason=sh_reason,
+                         electronic=electronic,
                          n_verts=int(diag["n_verts"]), surface=surface,
                          surface_stats=area_stats(P_A, faces, V),
                          gipf=gipf_stats(P_A, faces, V)),
