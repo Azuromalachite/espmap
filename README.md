@@ -106,7 +106,10 @@ python esp_map.py --smiles "CCO" --out esp.png \
   thread count. Read
   `validity` before anything else. Compare **numbers** only between records
   whose `analysis_key` matches (method, solvent convention, surface, and how
-  the geometry was made: `etkdg_mmff94s`, `file_frozen`, `dft_opt:…`, …), and
+  the geometry was made: `etkdg_mmff94s`, `dft:b3lyp/def2tzvp/water`,
+  `mmff94s`, or `file_frozen:undeclared` for a file that does not say; a
+  file declares its origin with an `espmap_geometry_origin` (or `geometry`)
+  SDF property, or `--geometry-origin`), and
   **pictures** only when `render_key` matches as well (colormap, limits,
   camera). `key_fields` lists what each key hashes.
 
