@@ -456,6 +456,25 @@ def _stop_before_scf(monkeypatch):
     monkeypatch.setattr(em, "estimate_cost", stop)
 
 
+def test_optimize_without_pyberny_is_refused_before_the_scf(monkeypatch):
+    """--optimize imported pyscf.geomopt.berny_solver only after the first SCF,
+    and pyberny was in no dependency list: the run computed, then crashed."""
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setitem(sys.modules, "berny", None)        # import berny -> ImportError
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO", "--optimize"])
+    with pytest.raises(SystemExit, match="pyberny"):
+        em.main()
+
+
+def test_optimize_with_pyberny_reaches_the_compute(monkeypatch):
+    import types
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setitem(sys.modules, "berny", types.ModuleType("berny"))
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO", "--optimize"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
 def test_main_refuses_coordinates_that_are_not_the_approved_structure(monkeypatch):
     """Fault injection at the boundary the old check could not see: the gate
     approves CCO, the geometry step hands PySCF acetaldehyde. Only the

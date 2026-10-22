@@ -1450,6 +1450,12 @@ def main():
             import plotly  # noqa: F401
         except ImportError:
             raise SystemExit("--html needs plotly: pip install plotly") from None
+    if a.optimize:
+        try:                        # same reason: the optimiser runs AFTER the first SCF
+            import berny  # noqa: F401  (pyberny; pyscf.geomopt.berny_solver needs it)
+        except ImportError:
+            raise SystemExit("--optimize needs pyberny: pip install 'espmap[opt]' "
+                             "(or pip install pyberny)") from None
     if a.lim == 0.0:
         raise SystemExit("--lim 0 is not a range")
     err = cmap_preflight(a.scale, a.cmap, a.force_cmap, available=set(build_maps()))
