@@ -201,3 +201,19 @@ def test_json_record_carries_sigma_hole_keys_and_validity(tmp_path, monkeypatch)
     assert rec["results"]["dipole"]["origin"]["kind"] == "centre_of_nuclear_charge"
     z = np.load(npz)
     assert str(z["analysis_key"]) == rec["analysis_key"] and "bohr" in str(z["units"])
+
+
+def test_reaction_field_reads_pyscf_charges_correctly():
+    """The reaction field uses PySCF's internal PCM charges, so check the
+    reading against PySCF's own solvation energy, E = q . v_solute / 2, and
+    the physics: around an anion the surface charge is +|Q|(eps-1)/eps and
+    its potential on the molecular surface is positive."""
+    spec, _ = em.from_smiles("CC(=O)[O-]")
+    mol, mf = em.run_scf(spec, basis="sto-3g", charge=-1, solvent="water")
+    ws = mf.with_solvent
+    q, v = ws._intermediates["q"], ws._intermediates["v_grids"]
+    assert 0.5 * float(np.dot(q, v)) == pytest.approx(mf.scf_summary["e_solvent"], rel=1e-6)
+    eps = ws.eps
+    assert q.sum() == pytest.approx((eps - 1) / eps, abs=0.02)
+    verts, _, _ = em.extract_surface(mol, em.total_dm(mf), 0.4, margin=5.0)
+    assert em.reaction_field_at_points(mf, verts).min() > 0

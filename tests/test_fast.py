@@ -814,8 +814,68 @@ def test_auto_scaled_panels_get_different_render_keys():
 
 
 def test_solvent_esp_is_recorded_with_solvent_only():
-    assert em.analysis_fields(**{**_A, "solvent": "water"})["solvent_esp"] == em.SOLVENT_ESP
+    assert em.analysis_fields(**{**_A, "solvent": "water"})["solvent_esp"] == em.SOLVENT_ESP[False]
     assert em.analysis_fields(**_A)["solvent_esp"] is None
+
+
+def test_reaction_field_convention_is_a_different_analysis_key():
+    """Review 3 H7: the two conventions give solvent shifts of opposite sign
+    on the chlorobenzene sigma-hole. Numbers under one must never be compared
+    with numbers under the other."""
+    water = {**_A, "solvent": "water"}
+    a = em.analysis_fields(**water)
+    b = em.analysis_fields(**water, reaction_field=True)
+    assert b["solvent_esp"] == em.SOLVENT_ESP[True]
+    assert em.record_key(a) != em.record_key(b)
+    assert em.analysis_fields(**_A, reaction_field=True)["solvent_esp"] is None
+
+
+class _FakePCM:
+    def __init__(self, q, centres, zeta):
+        import types
+        self.with_solvent = types.SimpleNamespace(
+            _intermediates={"q": np.asarray(q, float)},
+            surface={"grid_coords": np.asarray(centres, float),
+                     "charge_exp": np.asarray(zeta, float)})
+
+
+def test_reaction_field_is_coulombic_far_away_and_finite_on_a_charge():
+    """Smeared charges q erf(zeta r)/r: a point charge at long range, and
+    2 zeta q / sqrt(pi) on top of one, where a bare 1/r would blow up."""
+    from math import erf, pi, sqrt
+    centres = [[0, 0, 0], [3.0, 0, 0]]
+    mf = _FakePCM([0.4, -0.1], centres, [2.0, 1.5])
+    far = np.array([[60.0, 0, 0]])
+    assert em.reaction_field_at_points(mf, far)[0] == pytest.approx(0.4 / 60 - 0.1 / 57, rel=1e-9)
+    on = em.reaction_field_at_points(mf, np.array([[0.0, 0, 0]]))[0]
+    assert on == pytest.approx(2 * 2.0 * 0.4 / sqrt(pi) - 0.1 * erf(1.5 * 3.0) / 3.0)
+
+
+class _FakeSCF:
+    def __init__(self, e, occ):
+        self.mo_energy, self.mo_occ = np.asarray(e, float), np.asarray(occ, float)
+
+
+@pytest.mark.parametrize("e, occ, charge, solvent, warns", [
+    ([-0.5, 0.02, 0.3], [2, 2, 0], -1, None, True),        # unbound HOMO
+    ([-0.5, -0.02, 0.3], [2, 2, 0], -1, None, False),      # bound
+    ([-0.5, 0.02, 0.3], [2, 2, 0], -1, "water", False),    # continuum binds it
+    ([-0.5, 0.02, 0.3], [2, 2, 0], 0, None, False),        # not an anion
+    ([[-0.5, 0.02], [-0.5, 0.3]], [[1, 1], [1, 0]], -1, None, True),   # UKS
+])
+def test_unbound_gas_phase_anion_is_warned(e, occ, charge, solvent, warns):
+    w = em.unbound_anion_warning(_FakeSCF(e, occ), charge, solvent)
+    assert bool(w) is warns
+    if w:
+        assert "--solvent" in w
+
+
+def test_reaction_field_without_solvent_is_refused_before_compute(monkeypatch):
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO",
+                                      "--include-reaction-field"])
+    with pytest.raises(SystemExit, match="needs --solvent"):
+        em.main()
 
 
 def _fake_dm(mol, seed=0):
