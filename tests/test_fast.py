@@ -178,9 +178,9 @@ def test_surface_report_states_the_surface_it_is_on():
 
 @pytest.mark.parametrize("gate, verified, problems, expect", [
     (None, None, [], False),                 # no gate ran: never a pass (review 4 N3)
-    ({"verdict": "ACCEPT", "forced": False}, True, [], True),
+    ({"verdict": "INFO", "forced": False}, True, [], True),
     ({"verdict": "BLOCK", "forced": True}, True, [], False),       # --force
-    ({"verdict": "ACCEPT", "forced": False}, False, [], False),    # H2 mismatch
+    ({"verdict": "INFO", "forced": False}, False, [], False),      # H2 mismatch
 ])
 def test_validity_input(gate, verified, problems, expect):
     v = em.validity(gate, verified, {"problems": problems})
@@ -1398,6 +1398,94 @@ def test_record_schema_names_its_version():
     s = load_schema()
     assert s["schema"] == em.RECORD_SCHEMA == "espmap.record/1"
     assert s["record"]["schema"] == "str" and s["record"]["sites"]["schema"] == "str"
+
+
+# ----------------------------- review 5: the contract before the P3 freeze
+def test_default_site_labels_use_the_atom_map_on_a_mapped_input():
+    """R5: nitrite's 'O1' was atom index 1 = map 2, beside C18 'C3-H' = map 3.
+    A mapped input now labels default sites by map, an unmapped one by
+    index, and source says which."""
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    mapped = em.site_report(P, faces, _field(P), X, sym, atom_maps={0: 1, 1: 2})
+    assert [s["label"] for s in mapped["reaction_sites"]] == ["C1", "O2"]
+    assert {s["source"] for s in mapped["reaction_sites"]} == {"default:map"}
+    plain = em.site_report(P, faces, _field(P), X, sym)
+    assert [s["label"] for s in plain["reaction_sites"]] == ["C0", "O1"]
+    assert {s["source"] for s in plain["reaction_sites"]} == {"default:index"}
+
+
+def test_overlapping_sites_say_so():
+    """Review 5: the C18 'acetyl' and 'carbonyl O' groups share map 32, so
+    the site areas summed to 1.041 of the surface with nothing saying so."""
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    rep = em.site_report(P, faces, _field(P), X, sym,
+                         groups=[("carbonyl", [0, 1, 2, 3]), ("O", [1]), ("CH2", [0, 2, 3])])
+    ov = {s["label"]: s["overlaps"] for s in rep["reaction_sites"]}
+    assert ov == {"carbonyl": ["O", "CH2"], "O": ["carbonyl"], "CH2": ["carbonyl"]}
+    assert rep["sites_tile_surface"] is False
+    default = em.site_report(P, faces, _field(P), X, sym)
+    assert default["sites_tile_surface"] is True
+    assert all(s["overlaps"] == [] for s in default["reaction_sites"])
+
+
+def test_caller_sites_that_miss_atoms_do_not_tile_the_surface():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    rep = em.site_report(P, faces, _field(P), X, sym, groups=[("O", [1])])
+    assert rep["sites_tile_surface"] is False
+
+
+def test_gipf_needs_both_signs_above_a_minimum_area():
+    """R14: one triangle at +0.01 on an all-negative surface turned nu from
+    null into 0.0. The same knife-edge review 3 H11 removed from the scale."""
+    P, faces, V = _three_triangles()
+    P[6:9] = P[6] + 0.1 * (P[6:9] - P[6])          # third triangle: area 1 -> 0.01
+    V = V - 20.0                                   # all negative
+    V[6:9] = 0.01                                  # one small positive triangle
+    a = em.triangle_areas(P, faces)
+    assert a[2] / a.sum() < em.GIPF_MIN_AREA_FRACTION
+    g = em.gipf_stats(P, faces, V)
+    assert g["nu"] is None and g["sigma2_pos_kcal2_mol2"] is None
+    assert "positive" in g["reason"] and g["min_area_fraction"] == em.GIPF_MIN_AREA_FRACTION
+    both = em.gipf_stats(*_three_triangles())
+    assert both["reason"] is None
+
+
+def test_record_bonds_are_the_approved_structure_in_record_order():
+    """A1: a consumer could rebuild bonds only from a mapped SMILES. The
+    record now carries them: one Kekule structure, hydrogens included."""
+    from rdkit import Chem
+    probe = Chem.MolFromSmiles("c1ccccc1O")
+    bonds = em.record_bonds(probe)
+    heavy = [b for b in bonds if b[0] < 7 and b[1] < 7]
+    assert len(bonds) == 13 and len(heavy) == 7
+    assert sorted(b[2] for b in heavy if b[0] < 6 and b[1] < 6) == [1, 1, 1, 2, 2, 2]
+    assert all(b[0] < b[1] for b in bonds)
+    h = Chem.AddHs(probe)
+    assert {(b[0], b[1]) for b in bonds} == {
+        tuple(sorted((x.GetBeginAtomIdx(), x.GetEndAtomIdx()))) for x in h.GetBonds()}
+
+
+def test_schema_vocabularies_are_enforced():
+    """R10: spec and tests used verdict 'ACCEPT', which the code never
+    writes. Closed vocabularies are now enums the comparison checks."""
+    from record_tree import load_schema, tree_problems
+    gate = load_schema()["record"]["input"]["gate"]
+    ok = {"verdict": "INFO", "forced": False, "findings": []}
+    assert tree_problems(gate, ok) == []
+    assert tree_problems(gate, dict(ok, verdict="ACCEPT")) == [
+        "record.verdict: 'ACCEPT', expected one of INFO|WARN|BLOCK"]
+    assert tree_problems({"x": "enum:a|b?"}, {"x": None}) == []
+
+
+def test_open_surface_genus_is_allowed_to_be_null():
+    """R4: mesh_topology writes genus None on an open surface; the schema
+    said int, so a --no-strict record failed its own contract."""
+    from record_tree import load_schema, tree_problems
+    surf = load_schema()["record"]["results"]["surface"]
+    assert tree_problems(surf["genus"], None) == []
 
 
 def test_h_source_records_which_hydrogens_the_file_supplied(tmp_path):
