@@ -1,0 +1,5 @@
+positive triangle at None: positive area fraction 0.00e+00; nu=None sigma2_pos=None V_pos_mean=None sign_change_ratio=0.0000
+positive triangle at 0.01: positive area fraction 5.81e-04; nu=0.0 sigma2_pos=0.0 V_pos_mean=0.01 sign_change_ratio=0.0001
+positive triangle at 0.5: positive area fraction 5.81e-04; nu=0.0 sigma2_pos=0.0 V_pos_mean=0.5 sign_change_ratio=0.0063
+positive triangle at 5.0: positive area fraction 5.81e-04; nu=0.0 sigma2_pos=0.0 V_pos_mean=5.0 sign_change_ratio=0.0625
+peak 36064 kB, 0.32 s

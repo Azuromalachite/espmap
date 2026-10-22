@@ -1,0 +1,20 @@
+4a vs 4b: 221 differing leaves; max |numeric diff| 3.683e-11
+    .results.e_tot_Ha -228.43837275036984 -228.43837275037006
+    .results.dipole.vector_D[0] -4.130207253226828 -4.130207253226977
+    .results.dipole.vector_D[1] -0.3011685064396887 -0.3011685064394515
+    .results.dipole.vector_D[2] -0.735461175627046 -0.7354611756269002
+    .results.dipole.magnitude_D 4.205974032817289 4.205974032817393
+    .results.V_min_kcal_mol -179.96246053519164 -179.96246053518772
+    .results.V_max_kcal_mol -72.01445929461681 -72.0144592946157
+    .results.surface.face_max_rho 6.522803573439529e-06 6.522803573435802e-06
+    npz V max |diff| 2.507e-11, faces equal True
+4a vs 1: 224 differing leaves; max |numeric diff| 7.387e-10
+    .results.e_tot_Ha -228.43837275036984 -228.4383727503696
+    .results.dipole.vector_D[0] -4.130207253226828 -4.130207253228983
+    .results.dipole.vector_D[1] -0.3011685064396887 -0.30116850643844
+    .results.dipole.vector_D[2] -0.735461175627046 -0.735461175627645
+    .results.dipole.magnitude_D 4.205974032817289 4.20597403281942
+    .results.V_min_kcal_mol -179.96246053519164 -179.96246053520667
+    .results.V_max_kcal_mol -72.01445929461681 -72.01445929459508
+    .results.surface.face_max_rho 6.522803573439529e-06 6.522803573427271e-06
+    npz V max |diff| 4.903e-11, faces equal True
