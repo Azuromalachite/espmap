@@ -899,9 +899,9 @@ def test_geometry_method_for_cli_only_sources():
     assert em.geometry_method(molecule="chlorobenzene") == "idealised_builtin"
     opt = ("B3LYP", "def2-TZVP", "Water")
     assert em.geometry_method("3D generated from SMILES by ETKDGv3",
-                              optimize=opt) == "dft_opt:b3lyp/def2-tzvp/water"
+                              optimize=opt) == "dft_opt:b3lyp/def2tzvp/water"
     assert em.geometry_method(atoms=True, optimize=("b3lyp", "sto-3g", "vacuum")) \
-        == "dft_opt:b3lyp/sto-3g"
+        == "dft_opt:b3lyp/sto3g"
     with pytest.raises(ValueError):
         em.geometry_method("from a source nobody wrote down")
 
@@ -1757,3 +1757,30 @@ def test_sites_block_names_why_a_hydrogen_only_molecule_has_no_sites():
     sites, why = em.sites_block(valid, P, np.array([[0, 1, 2]]), np.zeros(3),
                                 np.array([[0, 0, 0], [0, 0, 0.74]]), ["H", "H"])
     assert sites is None and "no heavy atom" in why
+
+
+# ------------------------------------------- basis spellings (review 4 N9)
+_SPELLINGS = ["def2-tzvp", "def2tzvp", "DEF2_TZVP", "Def2-TZVP"]
+
+
+def test_pyscf_resolves_the_spellings_to_one_basis():
+    """The premise: these are one calculation, so they must get one key."""
+    from pyscf import gto
+    nao = {gto.M(atom="O 0 0 0; H 0 0.757 0.587; H 0 -0.757 0.587", basis=b,
+                 verbose=0).nao for b in _SPELLINGS}
+    assert len(nao) == 1
+
+
+def test_one_basis_gets_one_analysis_key_however_it_is_spelled():
+    """Review 4 N9: def2-tzvp, def2tzvp and DEF2_TZVP gave three keys."""
+    keys = {_keys(a={"basis": b})[0] for b in _SPELLINGS}
+    assert len(keys) == 1
+    assert em.analysis_fields(**{**_A, "basis": "DEF2_TZVP"})["basis"] == "def2tzvp"
+
+
+@pytest.mark.parametrize("name", ["def2svp", "DEF2-SVP", "def2_svp", "sto3g", "STO-3G",
+                                  "6-31G*"])
+def test_double_zeta_is_recognised_however_it_is_spelled(name):
+    """--basis def2svp skipped the +3.5 kcal/mol double-zeta warning."""
+    assert em.basis_key(name) in em.SMALL_BASIS
+    assert em.basis_key("def2-tzvp") not in em.SMALL_BASIS
