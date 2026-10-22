@@ -570,18 +570,23 @@ def total_dm(mf):
 
 
 def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
-            solvent=None):
+            solvent=None, density_fit=False):
     """Restricted for a closed shell, UNRESTRICTED when spin != 0.
 
     v3 built an RKS object whatever the spin. PySCF does not refuse: on
     O with spin=2 (nelec 5,3) RKS returned -74.998688 Ha against UKS
     -75.000759, i.e. a converged, plausible, physically meaningless number
     from a restricted wavefunction describing an open shell.
+
+    density_fit is OFF by default and the error budget was measured without
+    it. Its effect on the ESP is unmeasured until bench/timing.py says so.
     """
     from pyscf import dft, gto
     mol = gto.M(atom=atom, basis=basis, charge=charge, spin=spin,
                 unit="Angstrom", verbose=verbose)
     mf = dft.UKS(mol) if spin else dft.RKS(mol)
+    if density_fit:
+        mf = mf.density_fit()
     mf.xc = xc
     if solvent is not None:
         eps = SOLVENTS[solvent] if isinstance(solvent, str) else float(solvent)
@@ -1010,6 +1015,8 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="compute even if the structure check rejects")
     ap.add_argument("--basis", default="def2-tzvp")
+    ap.add_argument("--density-fit", action="store_true",
+                    help="RI-J/K: much faster SCF; ESP effect not yet measured")
     ap.add_argument("--xc", default="b3lyp")
     ap.add_argument("--solvent", default="vacuum",
                     choices=sorted(SOLVENTS),
@@ -1144,6 +1151,7 @@ def main():
 
     solv = None if a.solvent == "vacuum" else a.solvent
     mol, mf = run_scf(spec, basis=a.basis, xc=a.xc, charge=charge, spin=spin,
+                      density_fit=a.density_fit,
                       solvent=solv)
     if a.optimize:
         from pyscf.geomopt.berny_solver import optimize as _opt
@@ -1154,6 +1162,7 @@ def main():
             f"{mol.atom_coord(i)[0] * BOHR:.6f} {mol.atom_coord(i)[1] * BOHR:.6f} "
             f"{mol.atom_coord(i)[2] * BOHR:.6f}" for i in range(mol.natm))
         mol, mf = run_scf(spec, basis=a.basis, xc=a.xc, charge=charge,
+                          density_fit=a.density_fit,
                           spin=spin, solvent=solv)
     dm = total_dm(mf)
     print(f"SCF {mf.e_tot:.6f} Ha, {mol.nao} basis functions, {a.xc}/{a.basis}, "
