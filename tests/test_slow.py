@@ -233,6 +233,28 @@ def _run_json(tmp_path, monkeypatch, argv):
     return json.loads(js.read_text())
 
 
+def test_a_gas_phase_unbound_anion_withholds_its_sites(tmp_path, monkeypatch):
+    """Review 5 R3 through main(), on the record P2 used to compute: nitrite
+    in the gas phase at STO-3G has HOMO ~ +7 eV, so its ESP is an artefact of
+    the basis. The record says so, withholds the site table, and the NPZ
+    carries no partition, while the record still matches its schema."""
+    from record_tree import load_schema, tree_problems
+    h = np.radians(116.4) / 2
+    atoms = (f"N 0 0 0; O {-1.2577 * np.sin(h):.6f} {-1.2577 * np.cos(h):.6f} 0; "
+             f"O {1.2577 * np.sin(h):.6f} {-1.2577 * np.cos(h):.6f} 0")
+    npz = tmp_path / "g.npz"
+    rec = _run_json(tmp_path, monkeypatch, ["--atoms", atoms, "--charge", "-1",
+                                            "--npz", str(npz)])
+    el = rec["results"]["electronic"]
+    assert el["homo_eV"] > 0
+    assert any(p.startswith("UNBOUND_ANION_GAS") for p in el["problems"])
+    assert rec["validity"]["electronic"] is False and rec["validity"]["sites"] is False
+    assert rec["validity"]["input"] is True and rec["validity"]["surface"] is True
+    assert rec["sites"] is None and "electronic" in rec["sites_reason"]
+    assert not any(k.startswith("tri_atom_") for k in np.load(npz).files)
+    assert tree_problems(load_schema()["record"], rec) == []
+
+
 def test_sites_end_to_end_on_a_symmetric_nitrite(tmp_path, monkeypatch):
     """per-site-spec P2 through main(): a C2v nitrite built symmetric, so its
     two O sites must agree; the site areas must add up to the surface."""
