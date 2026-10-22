@@ -443,7 +443,8 @@ def atom_map_findings(mol, smiles=None):
     return out
 
 
-def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None):
+def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None,
+                    charge=None):
     """Can this drawing be translated into SMILES unambiguously, and is the
     result a molecule this pipeline can compute?
 
@@ -453,6 +454,10 @@ def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None)
 
     maps_from: the parsed molecule WITH its hydrogens, for the atom-map rules
     (callers pass RemoveHs(mol) here, which drops mapped hydrogens).
+
+    charge and spin are what the SCF will be given (--charge, --spin). The
+    SCF receives nuclei, charge and spin; review 5 R2 found the gate checking
+    only the drawing, so benzene --charge 2 was recorded as verified benzene.
 
     Returns (verdict, findings) where findings is a list of
     (severity, code, message, remedy).
@@ -476,6 +481,12 @@ def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None)
                     f"{len(wild)} wildcard/R-group atom(s) at index {wild}",
                     "replace R / * / query atoms with explicit atoms; a generic "
                     "structure has no electron density"))
+    formal = Chem.GetFormalCharge(mol)
+    if charge is not None and charge != formal:
+        out.append((BLOCK, "CHARGE_OVERRIDE",
+                    f"--charge {charge:+d} but the structure's formal charge is "
+                    f"{formal:+d}: the species computed would not be the one drawn",
+                    "draw the charge on the atom that carries it, or drop --charge"))
     rad = sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms())
     if rad and spin == 0:
         out.append((BLOCK, "OPEN_SHELL",
@@ -484,14 +495,18 @@ def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None)
                     f"RESTRICTED wavefunction that cannot represent it",
                     f"pass --spin {rad} to use unrestricted DFT (UKS), or "
                     f"complete the valences / add the missing charge"))
-    elif rad:
+    elif rad and spin == rad:
         out.append((INFO, "OPEN_SHELL_UNRESTRICTED",
                     f"{rad} unpaired electron(s); --spin {spin} selected, so "
-                    f"UKS will be used"
-                    + ("" if spin == rad else
-                       f". NOTE: --spin {spin} does not match the {rad} radical "
-                       f"electron(s) RDKit perceives"),
-                    "none needed" if spin == rad else "check the multiplicity"))
+                    f"UKS will be used", "none needed"))
+    elif spin and spin != rad:
+        # a deliberate triplet (O2 drawn O=O, --spin 2) is legitimate, so this
+        # warns rather than refuses -- and it is written to the record
+        out.append((WARN, "SPIN_OVERRIDE",
+                    f"--spin {spin} but the structure as drawn has {rad} unpaired "
+                    f"electron(s); it will be computed with UKS at spin {spin}, "
+                    f"which is not the electronic state the drawing shows",
+                    "draw the radical centres, or check the multiplicity"))
     frags = Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=False)
     if len(frags) > 1:
         names = ", ".join(Chem.MolToSmiles(f) for f in frags[:4])
@@ -2497,7 +2512,7 @@ def main():
         from rdkit import Chem
         verdict, findings = check_structure(Chem.RemoveHs(probe), a.basis,
                                             spin=a.spin, maps_from=probe,
-                                            smiles=a.smiles)
+                                            smiles=a.smiles, charge=a.charge)
         print_check(verdict, findings, Chem.MolToSmiles(Chem.RemoveHs(probe)))
         if verdict == BLOCK and not a.force:
             raise SystemExit("structure rejected; fix the drawing, or pass "
