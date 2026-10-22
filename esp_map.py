@@ -606,16 +606,29 @@ def _quiet_rdkit():
     RDLogger.DisableLog("rdApp.*")
 
 
-def parse_for_check(smiles=None, path=None, charge=0, record=None):
+def parse_for_check(smiles=None, path=None, charge=0, record=None, atoms=None):
     """Parse to an RDKit mol WITHOUT generating 3D coordinates.
 
     The admissibility gate must run before embedding: a radical or an R-group
     structure should be rejected in milliseconds, not after twenty conformers
     have been generated and a force field has complained about them.
     Returns (mol or None, list of BLOCK findings explaining a parse failure).
+
+    atoms is an --atoms string ("Sym x y z; ..."). Its bonds are perceived
+    from the coordinates the way an XYZ file's are, so it passes the same
+    gate. Review 4 N3: --atoms skipped the gate, and two waters 8 A apart
+    came out validity.input: true with a site table.
     """
     from rdkit import Chem
     _quiet_rdkit()
+    if atoms is not None:
+        try:
+            m = _mol_from_atoms(atoms)
+        except ValueError as e:
+            return None, [(BLOCK, "ATOMS_SYNTAX", str(e),
+                           "write --atoms as 'Sym x y z; Sym x y z; ...' in Angstrom")]
+        m = _perceive_bonds(m, charge, "ATOMS")
+        return (None, m) if isinstance(m, list) else (m, [])
     if smiles is not None:
         mol = Chem.MolFromSmiles(smiles)
         if mol is not None:
@@ -630,6 +643,26 @@ def parse_for_check(smiles=None, path=None, charge=0, record=None):
                        "check the SMILES syntax")]
     mol, problems, _ = read_structure(path, charge=charge, record=record)
     return mol, problems
+
+
+def _mol_from_atoms(spec):
+    """An --atoms string as an RDKit mol: atoms and a conformer, no bonds."""
+    from rdkit import Chem
+    rows = [t.split() for t in spec.split(";") if t.strip()]
+    if not rows or any(len(r) != 4 for r in rows):
+        raise ValueError(f"cannot read {spec[:60]!r}: every atom needs a symbol "
+                         f"and three coordinates")
+    rw = Chem.RWMol()
+    conf = Chem.Conformer(len(rows))
+    for i, (sym, *xyz) in enumerate(rows):
+        try:
+            rw.AddAtom(Chem.Atom(sym.capitalize()))
+            conf.SetAtomPosition(i, [float(v) for v in xyz])
+        except (RuntimeError, ValueError):
+            raise ValueError(f"atom {i}: {' '.join([sym, *xyz])!r} is not 'Sym x y z'") from None
+    conf.Set3D(True)
+    rw.AddConformer(conf, assignId=True)
+    return rw.GetMol()
 
 
 def _perceive_bonds(m, charge, fmt):
@@ -1782,8 +1815,12 @@ def geometry_method(source=None, forcefield=None, atoms=False, molecule=None,
 
 def validity(gate, verified, surface):
     """One place a consumer reads validity from (spec section 6), never from
-    stderr, chi or a filename. sites is False until a site block exists."""
-    return dict(input=not (gate and gate["forced"]) and verified is not False,
+    stderr, chi or a filename. sites is False until a site block exists.
+
+    input is true only if a gate RAN and passed (not forced) and the
+    computed structure was not found to differ. Review 4 N3: absence of a
+    gate used to read as a pass, so ungated --atoms records said true."""
+    return dict(input=gate is not None and not gate["forced"] and verified is not False,
                 surface=not surface["problems"], sites=False)
 
 
@@ -2199,11 +2236,16 @@ def main():
     if a.smiles and a.file:
         raise SystemExit("--smiles and --file are mutually exclusive")
 
-    if a.smiles or a.file:
+    # --atoms and --molecule coordinates are gated too (review 4 N3): their
+    # bonds are perceived from the coordinates, as for an XYZ file.
+    atoms_spec = (None if (a.smiles or a.file) else
+                  a.atoms or monosubstituted_benzene(*MOLECULES[a.molecule]))
+    if a.smiles or a.file or atoms_spec:
         probe, probs = parse_for_check(smiles=a.smiles, path=a.file,
-                                       charge=a.charge or 0, record=a.record)
+                                       charge=a.charge or 0, record=a.record,
+                                       atoms=atoms_spec)
         if probe is None:
-            print_check(BLOCK, probs, a.smiles or str(a.file))
+            print_check(BLOCK, probs, a.smiles or str(a.file or "--atoms"))
             raise SystemExit(1)
         from rdkit import Chem
         verdict, findings = check_structure(Chem.RemoveHs(probe), a.basis,
@@ -2215,14 +2257,10 @@ def main():
                              "--force to compute anyway")
         if a.check:
             raise SystemExit(0 if verdict != BLOCK else 1)
-    elif a.check:
-        raise SystemExit("--check needs --smiles or --file")
 
-    approved, gate = None, None
-    if a.smiles or a.file:
-        from rdkit import Chem as _C
-        approved = _C.MolToSmiles(_C.RemoveHs(probe))
-        gate = gate_report(verdict, findings, a.force)
+    from rdkit import Chem as _C
+    approved = _C.MolToSmiles(_C.RemoveHs(probe))
+    gate = gate_report(verdict, findings, a.force)
 
     if a.file:
         try:
@@ -2283,12 +2321,15 @@ def main():
             sh_reason = "fluorine does not form one"
             print("note: fluorine present; no sigma-hole is reported because F "
                   "does not form one.", file=sys.stderr)
-    elif a.atoms:
-        spec, i_sub = a.atoms, None
-        sh_reason = "input has no halogen index (--atoms)"
-    else:
-        spec = monosubstituted_benzene(*MOLECULES[a.molecule])
-        i_sub = None if a.molecule == "benzene" else 6
+    else:                           # --atoms / --molecule: gated above
+        spec = atoms_spec
+        # the coordinates are the input, so verify against them as given
+        verified, computed, mapped_ok = check_identity(
+            spec, probe, approved, True, a.force, "before the SCF")
+        if a.atoms:
+            i_sub, sh_reason = None, "input has no halogen index (--atoms)"
+        else:
+            i_sub = None if a.molecule == "benzene" else 6
 
     site_groups = None
     if a.sites:                     # resolved now, so a bad file costs no SCF
@@ -2329,7 +2370,7 @@ def main():
             f"{mol.atom_symbol(i)} "
             f"{mol.atom_coord(i)[0] * BOHR:.6f} {mol.atom_coord(i)[1] * BOHR:.6f} "
             f"{mol.atom_coord(i)[2] * BOHR:.6f}" for i in range(mol.natm))
-        if gi is not None and approved is not None:
+        if approved is not None:
             # the coordinates PySCF now receives are not the ones checked
             # (invariant 3): a proton can move, e.g. a gas-phase zwitterion.
             # reference=False: optimisation legitimately moves a file's atoms
