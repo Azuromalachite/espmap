@@ -207,8 +207,9 @@ Two consequences for anyone quoting a number from this:
   with dispersion are **untested**.
 - Geometries from `--smiles` are force-field (MMFF94s), adequate for local
   electronic properties at 0.35 kcal/mol but **not** for conformational
-  energies or barriers. `--optimize` runs a DFT optimisation and is exercised
-  on one molecule only.
+  energies or barriers. `--optimize` runs a DFT optimisation (needs
+  `pip install 'espmap[opt]'`, which adds pyberny) and is exercised on one
+  molecule only.
 - The gate checks that a structure is *unambiguous*. It cannot tell you it is
   the molecule you meant to draw: a cleanly drawn wrong tautomer passes with a
   note.

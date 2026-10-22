@@ -34,6 +34,7 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=7.0", "plotly>=5"]
 viz = ["plotly>=5"]
+opt = ["pyberny>=0.6"]
 
 [project.urls]
 Homepage = "https://github.com/Azuromalachite/espmap"
