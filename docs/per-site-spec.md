@@ -117,22 +117,35 @@ definition.
 - **Default groups**, used when the caller gives none: one group per heavy
   atom with its attached hydrogens, labelled by element and index. This keeps
   the CLI output meaningful on its own.
-- **Caller groups** (`--sites groups.json`): a list of `{label, atoms}`, where
-  `atoms` are atom-map numbers if the input is mapped, otherwise heavy-atom
-  indices; hydrogens are included by naming their parent with `"+H"`
+- **Caller groups** (`--sites groups.json`):
+  `{"by": "map" | "index", "groups": [{label, atoms}, ...]}`. The file says
+  how it counts atoms:
+  - `"by": "map"` names them by atom-map number, and is refused on an input
+    with no maps;
+  - `"by": "index"` names them by RDKit atom index in file order, hydrogens
+    included, and refuses an index that is a hydrogen.
+
+  Hydrogens join a site by naming their parent with `"+H"`
   (`{"label": "C3-H", "atoms": ["3+H"]}`). espmap checks only that every named
-  atom exists. It does not know what an enolate is. Arrowfield's lessons
-  define the groups.
+  atom exists. It does not know what an enolate is; Arrowfield's lessons
+  define the groups. A site records how it was named in `source`
+  (`"caller:map"`, `"caller:index"` or `"default"`).
+
+  Review 4 (N6) found the earlier format, a bare list read as maps when the
+  input was mapped and as indices otherwise, silently changed meaning when
+  maps were lost. Maps are 1-based and indices 0-based, so the wrong atom was
+  always a plausible neighbour.
 - Groups may overlap (the carbonyl O inside a `CO2` group and on its own). Each
   group's values are computed from its own triangles, so overlap
   double-counts nothing.
 
 Rules for both levels:
 
-- A heavy atom is keyed by `index`, the 0-based heavy-atom index in input order.
-  `[V]` `Chem.AddHs` appends hydrogens after the heavy atoms and
-  `_mol_to_spec` writes atoms in RDKit index order, so RDKit index i is PySCF
-  atom i for every heavy atom.
+- An atom is keyed by `index`, its RDKit atom index in file order, hydrogens
+  included. `_mol_to_spec` writes atoms in RDKit index order, so RDKit index
+  i is PySCF atom i for every atom. `Chem.AddHs` appends only the hydrogens it
+  adds. A file that lists hydrogens among the heavy atoms keeps that order:
+  in an SDF ordered C H H H C H H O H, O is index 7, not heavy atom 2.
 - `atom_map` is the input's atom-map number, or `null` if the input has none.
   It is metadata: it never changes what is computed.
 - **Maps are all or nothing on heavy atoms.** Some heavy atoms mapped and
@@ -447,7 +460,7 @@ replace them.
 
 `parent` is the heavy-atom index for a hydrogen, `null` otherwise; `h_source`
 is set for hydrogens only. Coordinates come from `geometry.xyz_angstrom` by
-`index`. `source` on a site is `"default"` or `"caller"`.
+`index`. `source` on a site is `"default"`, `"caller:map"` or `"caller:index"`.
 
 **Budget rows.** Each row names its source: a `bench/` file, or `"prose"` for
 a figure with no data behind it. Since H8 (#25) every row of the σ-hole

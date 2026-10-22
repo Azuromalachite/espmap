@@ -1935,27 +1935,40 @@ def _delta(nn, rs):
 
 
 def load_site_groups(path):
-    """--sites file: a JSON list of {"label": ..., "atoms": [...]}."""
+    """--sites file: {"by": "map" | "index", "groups": [{"label", "atoms"}, ...]}."""
     import json
     with open(path) as f:
-        groups = json.load(f)
-    if not isinstance(groups, list):
-        raise ValueError("a JSON list of {label, atoms} objects is expected")
-    return groups
+        return json.load(f)
 
 
-def resolve_site_groups(groups, symbols, coords, atom_maps):
-    """Caller-named reaction sites -> [(label, sorted atom indices)].
+def resolve_site_groups(spec, symbols, coords, atom_maps):
+    """Caller-named reaction sites -> (by, [(label, sorted atom indices)]).
 
-    Atoms are named by atom-map number when the input is mapped, else by atom
-    index; "3+H" adds that atom's hydrogens (a C-H site is the unit a
-    desaturation or oxidation question is about, spec section 1). espmap only
-    checks that every named atom exists: it does not know what an enolate is.
-    Raises ValueError naming the group and atom at fault. Groups may overlap.
+    The file says how it counts atoms (review 4 N6): "by": "map" names atoms
+    by atom-map number and is refused on an input with no maps; "by": "index"
+    names them by RDKit atom index in FILE order, hydrogens included, and
+    refuses an index that is a hydrogen (name its heavy atom with "N+H").
+    Before, a name meant a map on mapped input and an index otherwise,
+    silently: maps are 1-based and indices 0-based, so a lost map always
+    landed on a plausible neighbour. "3+H" adds that atom's hydrogens (a C-H
+    site is the unit a desaturation or oxidation question is about). espmap
+    only checks that every named atom exists: it does not know what an
+    enolate is. Raises ValueError naming the fault. Groups may overlap.
     """
-    by_name = ({m: i for i, m in atom_maps.items()} if atom_maps
-               else {i: i for i in range(len(symbols))})
-    naming = "atom map" if atom_maps else "atom index"
+    if not isinstance(spec, dict) or spec.get("by") not in ("map", "index"):
+        raise ValueError('a --sites file says how it counts atoms: {"by": "map" | "index", '
+                         '"groups": [{"label": ..., "atoms": [...]}, ...]}')
+    by, groups = spec["by"], spec.get("groups")
+    if not isinstance(groups, list):
+        raise ValueError('"groups" must be a list of {label, atoms}')
+    if by == "map":
+        if not atom_maps:
+            raise ValueError('"by": "map", but the input has no atom maps (were they lost '
+                             'on the way?); write the input with maps, or use "by": "index"')
+        by_name = {m: i for i, m in atom_maps.items()}
+    else:
+        by_name = {i: i for i, s in enumerate(symbols)}
+    naming = "atom map" if by == "map" else "atom index"
     parent = site_parents(coords, symbols)
     out, seen = [], set()
     for g in groups:
@@ -1976,21 +1989,27 @@ def resolve_site_groups(groups, symbols, coords, atom_maps):
             if not isinstance(name, int) or name not in by_name:
                 raise ValueError(f"{label!r}: no {naming} {tok} in this molecule")
             i = by_name[name]
+            if symbols[i] == "H":
+                raise ValueError(f"{label!r}: {naming} {tok} is a hydrogen; a site names "
+                                 f"heavy atoms, and 'N+H' adds a heavy atom's hydrogens")
             members.add(i)
             if with_h:
                 members.update(j for j, p in enumerate(parent) if p == i)
         if not members:
             raise ValueError(f"{label!r} names no atoms")
         out.append((label, sorted(members)))
-    return out
+    return by, out
 
 
-def site_report(P, faces, V, coords, symbols, atom_maps=None, h_source=None, groups=None):
+def site_report(P, faces, V, coords, symbols, atom_maps=None, h_source=None, groups=None,
+                source="caller"):
     """atoms and reaction_sites under both partition rules (spec sections
     1-3). P and coords in A. Reaction sites are the caller's groups
-    [(label, atom indices)], or by default each heavy atom with its
-    hydrogens. Every atom is listed, a buried one with area 0 and null
-    potentials, so 'not on the surface' never reads as 'not computed'."""
+    [(label, atom indices)], recorded with `source` ("caller:map" or
+    "caller:index", how the --sites file named them), or by default each
+    heavy atom with its hydrogens ("default"). Every atom is listed, a buried
+    one with area 0 and null potentials, so 'not on the surface' never reads
+    as 'not computed'."""
     parent = site_parents(coords, symbols)
     owner = {r: partition_surface(P, faces, coords, symbols, r) for r in PARTITION_RULES}
 
@@ -2012,8 +2031,6 @@ def site_report(P, faces, V, coords, symbols, atom_maps=None, h_source=None, gro
         source = "default"
         groups = [(f"{symbols[h]}{h}", [h] + [i for i, p in enumerate(parent) if p == h])
                   for h, s in enumerate(symbols) if s != "H"]
-    else:
-        source = "caller"
     sites = []
     for label, members in groups:
         # a generated hydrogen in the group, on a polar atom of the group
@@ -2218,9 +2235,10 @@ def main():
     ap.add_argument("--npz", help="also save the surface (verts, faces, V, atoms) "
                                   "so it can be re-rendered without an SCF")
     ap.add_argument("--json", help="also write the settings and results")
-    ap.add_argument("--sites", help="JSON list of {label, atoms}: reaction sites to report "
-                                    "instead of one per heavy atom; atoms by atom map "
-                                    "(or index if unmapped), '3+H' adds 3's hydrogens")
+    ap.add_argument("--sites", help='JSON {"by": "map"|"index", "groups": [{label, atoms}]}: '
+                                    "reaction sites to report instead of one per heavy "
+                                    "atom; atoms by atom-map number or by atom index in "
+                                    "file order (heavy atoms only), '3+H' adds 3's hydrogens")
     a = ap.parse_args()
 
     if a.selftest:
@@ -2347,13 +2365,13 @@ def main():
         else:
             i_sub = None if a.molecule == "benzene" else 6
 
-    site_groups = None
+    site_groups, sites_by = None, None
     if a.sites:                     # resolved now, so a bad file costs no SCF
         rows = [t.split() for t in spec.split(";")]
         maps = ({x.GetIdx(): x.GetAtomMapNum() for x in gi["mol"].GetAtoms()
                  if x.GetAtomMapNum()} if gi is not None else None)
         try:
-            site_groups = resolve_site_groups(
+            sites_by, site_groups = resolve_site_groups(
                 load_site_groups(a.sites), [r[0] for r in rows],
                 np.array([[float(v) for v in r[1:4]] for r in rows]), maps)
         except (OSError, ValueError) as e:
@@ -2491,7 +2509,7 @@ def main():
                     for s in symbols]
     sites, sites_reason = sites_block(valid, P_A, faces, V, coords_A, symbols,
                                       atom_maps=atom_maps, h_source=h_source,
-                                      groups=site_groups)
+                                      groups=site_groups, source=f"caller:{sites_by}")
     valid["sites"] = sites is not None
     if sites is not None:
         n_h = [x for x in h_source if x is not None]

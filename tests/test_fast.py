@@ -1382,22 +1382,30 @@ def _ethanol_mapped():
     return list(sym), np.array(X), maps
 
 
+def _ethanol_plain():
+    spec, _ = em.from_smiles("CCO")
+    sym, X = zip(*[(t.split()[0], [float(v) for v in t.split()[1:]]) for t in spec.split(";")])
+    return list(sym), np.array(X)
+
+
 def test_caller_groups_resolve_maps_and_hydrogens():
     sym, X, maps = _ethanol_mapped()
     groups = [{"label": "C1-H", "atoms": ["1+H"]}, {"label": "hydroxyl", "atoms": ["3+H"]},
               {"label": "C2", "atoms": [2]}]
-    got = dict(em.resolve_site_groups(groups, sym, X, maps))
+    by, res = em.resolve_site_groups({"by": "map", "groups": groups}, sym, X, maps)
+    got = dict(res)
     parent = em.site_parents(X, sym)
+    assert by == "map"
     assert got["C1-H"] == sorted([0] + [i for i, p in enumerate(parent) if p == 0])
     assert len(got["C1-H"]) == 4 and got["C2"] == [1]
     assert got["hydroxyl"] == sorted([2] + [i for i, p in enumerate(parent) if p == 2])
 
 
 def test_unmapped_input_names_atoms_by_index():
-    spec, _ = em.from_smiles("CCO")
-    sym, X = zip(*[(t.split()[0], [float(v) for v in t.split()[1:]]) for t in spec.split(";")])
-    got = dict(em.resolve_site_groups([{"label": "O", "atoms": [2]}], list(sym), np.array(X), None))
-    assert got == {"O": [2]}
+    sym, X = _ethanol_plain()
+    by, res = em.resolve_site_groups({"by": "index", "groups": [{"label": "O", "atoms": [2]}]},
+                                     sym, X, None)
+    assert by == "index" and dict(res) == {"O": [2]}
 
 
 @pytest.mark.parametrize("groups, words", [
@@ -1410,7 +1418,63 @@ def test_unmapped_input_names_atoms_by_index():
 def test_bad_caller_groups_are_refused_with_a_reason(groups, words):
     sym, X, maps = _ethanol_mapped()
     with pytest.raises(ValueError, match=words):
-        em.resolve_site_groups(groups, sym, X, maps)
+        em.resolve_site_groups({"by": "map", "groups": groups}, sym, X, maps)
+
+
+# Review 4 N6: a name meant map numbers on mapped input and atom indices on
+# unmapped input, silently. Maps are 1-based and indices 0-based, so a lost
+# map always landed on a plausible NEIGHBOUR.
+@pytest.mark.parametrize("spec, words", [
+    ([{"label": "C1-H", "atoms": ["1+H"]}], "by"),                 # how atoms are counted, unsaid
+    ({"groups": [{"label": "C1-H", "atoms": ["1+H"]}]}, "by"),
+    ({"by": "name", "groups": []}, "by"),
+])
+def test_a_sites_file_must_say_how_it_counts_atoms(spec, words):
+    sym, X, maps = _ethanol_mapped()
+    with pytest.raises(ValueError, match=words):
+        em.resolve_site_groups(spec, sym, X, maps)
+
+
+def test_map_names_on_an_unmapped_input_are_refused():
+    """['1+H'] written for map 1 resolved to C index 1 when the maps were lost."""
+    sym, X = _ethanol_plain()
+    with pytest.raises(ValueError, match="no atom maps"):
+        em.resolve_site_groups({"by": "map", "groups": [{"label": "C1-H", "atoms": ["1+H"]}]},
+                               sym, X, None)
+
+
+@pytest.mark.parametrize("atoms", [[5], ["5+H"]])
+def test_an_index_naming_a_hydrogen_is_refused(atoms):
+    sym, X = _ethanol_plain()
+    assert sym[5] == "H"
+    with pytest.raises(ValueError, match="hydrogen"):
+        em.resolve_site_groups({"by": "index", "groups": [{"label": "h", "atoms": atoms}]},
+                               sym, X, None)
+
+
+def test_an_index_is_the_file_order_index_hydrogens_included(tmp_path):
+    """An SDF that interleaves its hydrogens: O is index 7, not heavy atom 2."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    m = Chem.AddHs(Chem.MolFromSmiles("CCO"))
+    AllChem.EmbedMolecule(m, randomSeed=1)
+    order = [0, 3, 4, 5, 1, 6, 7, 2, 8]                   # C H H H C H H O H
+    m2 = Chem.RenumberAtoms(m, order)
+    p = tmp_path / "interleaved.sdf"
+    w = Chem.SDWriter(str(p)); w.write(m2); w.close()
+    spec, info = em.from_file(str(p))
+    sym = [t.split()[0] for t in spec.split(";")]
+    X = np.array([[float(v) for v in t.split()[1:4]] for t in spec.split(";")])
+    _, res = em.resolve_site_groups({"by": "index", "groups": [{"label": "O", "atoms": [7]}]},
+                                    sym, X, None)
+    assert sym[7] == "O" and dict(res) == {"O": [7]}
+
+
+def test_sites_record_how_they_were_named():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    rep = em.site_report(P, faces, _field(P), X, sym, groups=[("O", [1])], source="caller:index")
+    assert rep["reaction_sites"][0]["source"] == "caller:index"
 
 
 def test_overlapping_caller_groups_each_get_their_own_values():
@@ -1428,7 +1492,7 @@ def test_overlapping_caller_groups_each_get_their_own_values():
 def test_main_refuses_bad_groups_before_the_scf(tmp_path, monkeypatch):
     import json
     p = tmp_path / "g.json"
-    p.write_text(json.dumps([{"label": "C9-H", "atoms": ["9+H"]}]))
+    p.write_text(json.dumps({"by": "map", "groups": [{"label": "C9-H", "atoms": ["9+H"]}]}))
     _stop_before_scf(monkeypatch)
     monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][CH2:2][OH:3]",
                                       "--sites", str(p)])
@@ -1439,7 +1503,7 @@ def test_main_refuses_bad_groups_before_the_scf(tmp_path, monkeypatch):
 def test_main_lets_good_groups_through_to_the_scf(tmp_path, monkeypatch):
     import json
     p = tmp_path / "g.json"
-    p.write_text(json.dumps([{"label": "C1-H", "atoms": ["1+H"]}]))
+    p.write_text(json.dumps({"by": "map", "groups": [{"label": "C1-H", "atoms": ["1+H"]}]}))
     _stop_before_scf(monkeypatch)
     monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][CH2:2][OH:3]",
                                       "--sites", str(p)])
