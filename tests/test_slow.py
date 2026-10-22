@@ -195,7 +195,9 @@ def test_json_record_carries_sigma_hole_keys_and_validity(tmp_path, monkeypatch)
     assert sh["V_max_kcal_mol"] is not None and sh["n_cap_vertices"] > 0
     assert rec["results"]["sigma_hole_reason"] is None
     assert "V_min_kcal_mol" in rec["results"] and "V_min" not in rec["results"]
-    assert rec["validity"] == {"input": True, "surface": True, "sites": False}
+    # sites became True with P2: a valid record now carries a site block
+    assert rec["validity"] == {"input": True, "surface": True, "sites": True}
+    assert rec["sites"]["schema"] == em.SITES_SCHEMA and rec["sites_reason"] is None
     assert rec["analysis_key"] == em.record_key(rec["key_fields"]["analysis"])
     assert rec["render_key"] == em.record_key(rec["key_fields"]["render"])
     assert rec["results"]["dipole"]["origin"]["kind"] == "centre_of_nuclear_charge"
@@ -217,3 +219,40 @@ def test_reaction_field_reads_pyscf_charges_correctly():
     assert q.sum() == pytest.approx((eps - 1) / eps, abs=0.02)
     verts, _, _ = em.extract_surface(mol, em.total_dm(mf), 0.4, margin=5.0)
     assert em.reaction_field_at_points(mf, verts).min() > 0
+
+
+def _run_json(tmp_path, monkeypatch, argv):
+    import json
+    import sys
+    js = tmp_path / "rec.json"
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", *argv, "--basis", "sto-3g",
+                                      "--size", "80", "--out", str(tmp_path / "x.png"),
+                                      "--json", str(js)])
+    em.main()
+    return json.loads(js.read_text())
+
+
+def test_sites_end_to_end_on_a_symmetric_nitrite(tmp_path, monkeypatch):
+    """per-site-spec P2 through main(): a C2v nitrite built symmetric, so its
+    two O sites must agree; the site areas must add up to the surface."""
+    h = np.radians(116.4) / 2
+    atoms = (f"N 0 0 0; O {-1.2577 * np.sin(h):.6f} {-1.2577 * np.cos(h):.6f} 0; "
+             f"O {1.2577 * np.sin(h):.6f} {-1.2577 * np.cos(h):.6f} 0")
+    rec = _run_json(tmp_path, monkeypatch, ["--atoms", atoms, "--charge", "-1"])
+    assert rec["validity"]["sites"] is True and rec["sites"]["schema"] == em.SITES_SCHEMA
+    total = rec["results"]["surface_stats"]["area_A2"]
+    for rule in em.PARTITION_RULES:
+        s = {x["label"]: x[rule] for x in rec["sites"]["reaction_sites"]}
+        assert sum(v["area_A2"] for v in s.values()) == pytest.approx(total, rel=1e-9)
+        assert s["O1"]["area_A2"] == pytest.approx(s["O2"]["area_A2"], rel=0.01)
+        assert s["O1"]["V_area_mean_kcal_mol"] == pytest.approx(
+            s["O2"]["V_area_mean_kcal_mol"], abs=0.5)
+        assert min(v["V_min_kcal_mol"] for v in s.values()) == pytest.approx(
+            rec["results"]["V_min_kcal_mol"])
+
+
+def test_a_generated_polar_hydrogen_is_flagged_on_its_site(tmp_path, monkeypatch):
+    rec = _run_json(tmp_path, monkeypatch, ["--smiles", "CCO"])
+    flags = {s["label"]: s["h_generated_polar"] for s in rec["sites"]["reaction_sites"]}
+    assert flags == {"C0": False, "C1": False, "O2": True}
+    assert rec["sites"]["geometry_provenance"]["hydrogens"] == {"generated_relaxed": 6}
