@@ -2509,12 +2509,18 @@ def main():
             a.html, include_plotlyjs=True)
         print(f"wrote {a.html}  (interactive 3D)")
     if a.npz:
+        import json
         # the atom owning each triangle, per partition rule (-1: rule not
-        # available): enough to colour or regroup by site without another SCF
+        # available): enough to colour or regroup by site without another SCF.
+        # Written only when a site table would be (sites_block's conditions):
+        # review 4 N8, the NPZ let a consumer redo a partition of a record
+        # whose JSON withheld its sites as invalid.
         tri_atom = {}
-        for r in PARTITION_RULES:
-            t = partition_surface(P_A, faces, coords_A, symbols, r)
-            tri_atom[f"tri_atom_{r}"] = np.full(len(faces), -1) if t is None else t
+        if valid["input"] and valid["surface"]:
+            for r in PARTITION_RULES:
+                t = partition_surface(P_A, faces, coords_A, symbols, r)
+                tri_atom[f"tri_atom_{r}"] = np.full(len(faces), -1) if t is None else t
+        maps = np.array([(atom_maps or {}).get(i, 0) for i in range(len(symbols))])
         np.savez_compressed(a.npz, verts=verts, faces=faces, V=V,
                             symbols=np.array(symbols), coords=mol.atom_coords(),
                             vlim=np.array(vlim), kind=kind, cmap=cmap_name,
@@ -2522,7 +2528,11 @@ def main():
                             xc=a.xc, basis=a.basis, solvent=a.solvent,
                             solvent_esp=str(a_fields["solvent_esp"]), iso=a.iso,
                             analysis_key=record_key(a_fields),
-                            render_key=record_key(r_fields), **tri_atom)
+                            render_key=record_key(r_fields),
+                            validity=json.dumps(valid),
+                            surface_problems=json.dumps(list(diag["problems"])),
+                            geometry_sha1=geometry_record(mol, charge, spin)["sha1"],
+                            atom_maps=maps, **tri_atom)
         print(f"wrote {a.npz}  (surface, bohr; V in kcal/mol)")
     if a.json:
         import json
