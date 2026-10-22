@@ -668,13 +668,70 @@ def euler_characteristic(faces):
     return len(np.unique(faces)) - n_edges + len(faces)
 
 
+def mesh_topology(faces):
+    """What the mesh IS, measured directly, rather than inferred from chi alone.
+
+    chi = 2 was the clipping detector, but chi conflates two things: an OPEN
+    mesh (clipped by the box: edges used by one triangle) and a CLOSED mesh of
+    higher genus (a handle, e.g. a folded chain touching itself at the
+    isovalue). Two of ten C18 acetate conformers (bench/conformers.jsonl, the
+    two most compact) were refused at chi = -2 and -4 although nothing was
+    clipped. Counting edge use separates the cases: every edge of a closed
+    manifold is shared by exactly two triangles.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    e = np.sort(np.vstack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [0, 2]]]), axis=1)
+    _, use = np.unique(e, axis=0, return_counts=True)
+    used = np.unique(faces)
+    remap = np.full(faces.max() + 1, -1)
+    remap[used] = np.arange(len(used))
+    f = remap[faces]
+    a = np.concatenate([f[:, 0], f[:, 1], f[:, 0]])
+    b = np.concatenate([f[:, 1], f[:, 2], f[:, 2]])
+    adj = coo_matrix((np.ones(len(a)), (a, b)), shape=(len(used),) * 2)
+    n_comp = int(connected_components(adj, directed=False)[0])
+    chi = int(len(used) - len(use) + len(faces))
+    open_e, nonman = int((use == 1).sum()), int((use > 2).sum())
+    closed = open_e == 0 and nonman == 0
+    # closed orientable surfaces: chi = 2 * components - 2 * total genus
+    genus = (2 * n_comp - chi) // 2 if closed else None
+    return dict(chi=chi, components=n_comp, open_edges=open_e,
+                nonmanifold_edges=nonman, closed=closed, genus=genus)
+
+
+def surface_problems(topo, face_max_rho, iso):
+    """(problems, notes): problems refuse the surface, notes only inform."""
+    problems, notes = [], []
+    if face_max_rho > iso:
+        problems.append(f"density on a grid-box face is {face_max_rho:.2e} > iso={iso}; "
+                        f"the isosurface is CLIPPED (raise --margin)")
+    if topo["open_edges"]:
+        problems.append(f"the mesh is OPEN ({topo['open_edges']} edges belong to one "
+                        f"triangle only): not a single closed surface")
+    if topo["nonmanifold_edges"]:
+        problems.append(f"{topo['nonmanifold_edges']} edges are shared by more than two "
+                        f"triangles: not a single closed surface")
+    if topo["closed"] and topo["genus"]:
+        notes.append(f"closed surface of genus {topo['genus']} (chi = {topo['chi']}): the "
+                     f"molecule folds back on itself at the isovalue. Valid; the surface "
+                     f"has {topo['genus']} handle(s), so the 3D view may show a tunnel.")
+    if topo["closed"] and topo["components"] > 1:
+        notes.append(f"WARNING: {topo['components']} separate closed surfaces (an enclosed "
+                     f"void, or fragments the gate should have caught). Areas and extrema "
+                     f"include all of them.")
+    return problems, notes
+
+
 def extract_surface(mol, dm, spacing, iso=ISO_BADER, margin=5.0, strict=True):
     """F4: a clipped isosurface is the silent failure of this pipeline.
 
     At margin 3.5 bohr the review measured the chlorobenzene sigma-hole at
     +4.69 instead of +6.35 kcal/mol -- a 26% error -- while every other number
     in the run stayed plausible. Two cheap, independent detectors: density on
-    the grid-box faces, and the Euler characteristic of the mesh.
+    the grid-box faces, and the topology of the mesh (open edges). chi = 2 is
+    no longer required: a folded molecule can give a closed surface of higher
+    genus, which is valid (see mesh_topology).
     """
     from skimage import measure
     co = mol.atom_coords()
@@ -687,20 +744,16 @@ def extract_surface(mol, dm, spacing, iso=ISO_BADER, margin=5.0, strict=True):
     verts_i, faces, _, _ = measure.marching_cubes(rho, level=iso)
     verts = lo + verts_i * spacing
     faces = faces.astype(int)
-    chi = euler_characteristic(faces)
+    topo = mesh_topology(faces)
 
     diag = dict(grid=tuple(int(x) for x in n), n_verts=len(verts),
-                face_max_rho=float(face_max), chi=int(chi),
+                face_max_rho=float(face_max), **topo,
                 rho_integral=float(rho.sum() * spacing ** 3),
                 nelec=int(mol.nelectron), margin=margin, spacing=spacing)
 
-    problems = []
-    if face_max > iso:
-        problems.append(f"density on a grid-box face is {face_max:.2e} > iso={iso}; "
-                        f"the isosurface is CLIPPED (raise --margin)")
-    if chi != 2:
-        problems.append(f"Euler characteristic is {chi}, not 2; the mesh is not a "
-                        f"single closed surface")
+    problems, notes = surface_problems(topo, face_max, iso)
+    for n_ in notes:
+        print(("" if n_.startswith("WARNING") else "note: ") + n_, file=sys.stderr)
     if problems:
         msg = "isosurface integrity failed:\n  - " + "\n  - ".join(problems)
         if strict:
@@ -1272,8 +1325,9 @@ def main():
 
     verts, faces, diag = extract_surface(mol, dm, a.spacing, iso=a.iso,
                                          margin=a.margin, strict=not a.no_strict)
-    print(f"grid {diag['grid']}, {diag['n_verts']:,} vertices, chi={diag['chi']}, "
-          f"max rho on a box face {diag['face_max_rho']:.1e}")
+    print(f"grid {diag['grid']}, {diag['n_verts']:,} vertices, chi={diag['chi']} "
+          f"({'closed' if diag['closed'] else 'OPEN'}, genus {diag['genus']}, "
+          f"{diag['components']} piece(s)), max rho on a box face {diag['face_max_rho']:.1e}")
     # F3: diagnostic only. This number moves -5%..+7% with grid spacing while
     # V_max moves 0.5%, and is IDENTICAL between def2-SVP and def2-TZVP where
     # V_max moves 3.5 kcal/mol. It cannot validate the quantity of interest.

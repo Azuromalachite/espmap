@@ -226,6 +226,65 @@ def test_euler_characteristic_detects_an_open_surface():
     assert em.euler_characteristic(faces) != 2
 
 
+def _torus_faces(nu=12, nv=8):
+    """A closed triangulated torus: genus 1, chi = 0."""
+    idx = lambda i, j: (i % nu) * nv + (j % nv)
+    f = []
+    for i in range(nu):
+        for j in range(nv):
+            a, b, c, d = idx(i, j), idx(i + 1, j), idx(i + 1, j + 1), idx(i, j + 1)
+            f += [[a, b, c], [a, c, d]]
+    return np.array(f)
+
+
+_TET = np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]])
+
+
+def test_closed_higher_genus_surface_passes_with_a_note():
+    """F9: two compact C18 conformers were refused at chi = -2 / -4 with
+    nothing clipped. A closed surface with handles is valid."""
+    topo = em.mesh_topology(_torus_faces())
+    assert topo == dict(chi=0, components=1, open_edges=0, nonmanifold_edges=0,
+                        closed=True, genus=1)
+    problems, notes = em.surface_problems(topo, 1e-6, em.ISO_BADER)
+    assert problems == [] and "genus 1" in notes[0]
+
+
+def test_two_closed_pieces_pass_with_a_warning():
+    """Genus is summed over pieces (chi = 2C - 2g): two separate tori give
+    C = 2, g = 2. Closed, so not refused, but the extra piece is flagged."""
+    t = _torus_faces()
+    topo = em.mesh_topology(np.vstack([t, t + t.max() + 1]))
+    assert (topo["components"], topo["chi"], topo["genus"]) == (2, 0, 2)
+    problems, notes = em.surface_problems(topo, 1e-6, em.ISO_BADER)
+    assert problems == [] and any("2 separate closed surfaces" in n for n in notes)
+
+
+def test_open_mesh_is_still_refused():
+    """The reason the check exists: a clipped surface is open."""
+    topo = em.mesh_topology(_TET[:3])
+    assert topo["open_edges"] == 3 and not topo["closed"] and topo["genus"] is None
+    problems, _ = em.surface_problems(topo, 1e-6, em.ISO_BADER)
+    assert any("OPEN" in p and "not a single closed" in p for p in problems)
+
+
+def test_density_on_the_box_face_is_refused_even_if_closed():
+    problems, _ = em.surface_problems(em.mesh_topology(_TET), 5e-3, em.ISO_BADER)
+    assert any("CLIPPED" in p for p in problems)
+
+
+def test_sphere_like_surface_passes_silently():
+    topo = em.mesh_topology(_TET)
+    assert (topo["closed"], topo["genus"], topo["components"]) == (True, 0, 1)
+    assert em.surface_problems(topo, 1e-6, em.ISO_BADER) == ([], [])
+
+
+def test_nonmanifold_edge_is_refused():
+    fan = np.array([[0, 1, 2], [0, 1, 3], [0, 1, 4]])     # one edge, three triangles
+    problems, _ = em.surface_problems(em.mesh_topology(fan), 1e-6, em.ISO_BADER)
+    assert any("more than two" in p for p in problems)
+
+
 # ------------------------------------------------------------------- cost
 def test_cost_estimate_needs_no_scf_and_knows_the_spin():
     """Review 2, G8: estimate_cost omitted spin, so the guard meant to prevent
