@@ -181,6 +181,17 @@ def _rows():
     }
 
 
+def quotes(text, value):
+    """True if `value` appears in `text` as a whole number, not as part of
+    another one. Review 5 R12: substring checks let "5.1" match "5.16" and
+    "2.69" match "−2.69", so CLAUDE.md could change both and still pass. An
+    unsigned value must not follow a digit, a point or a sign; nothing may
+    follow it but a non-digit (a trailing "." ends a sentence)."""
+    import re
+    before = r"(?<![\d.])" if value[0] in "+-−≤<~" else r"(?<![\d.+\-−])"
+    return re.search(before + re.escape(value) + r"(?!\d)(?!\.\d)", text) is not None
+
+
 @pytest.mark.parametrize("row, expect", [
     ("basis", "+3.54"), ("solvent water", "−3.60"), ("solvent chloroform", "−2.69"),
     ("reaction field", "+0.05"), ("functional", "0.69"), ("grid", "0.04"),
@@ -190,14 +201,14 @@ def _rows():
 def test_every_budget_row_is_recomputed_from_bench(row, expect):
     got = _rows()[row]
     assert got == expect, f"{row}: data gives {got}, the docs say {expect}"
-    assert expect in _budget_table(), f"README budget table lacks {row} = {expect}"
+    assert quotes(_budget_table(), expect), f"README budget table lacks {row} = {expect}"
 
 
 @pytest.mark.parametrize("name", ["README.md", "CLAUDE.md"])
 def test_chlorobenzene_budget_is_quoted_identically(name):
     rows = _rows()
     for key in ("basis", "solvent water", "geometry", "stereo"):
-        assert rows[key] in TEXT[name], f"{name} lacks {key} = {rows[key]}"
+        assert quotes(TEXT[name], rows[key]), f"{name} lacks {key} = {rows[key]}"
 
 
 def test_retracted_budget_figures_are_gone():
@@ -376,7 +387,7 @@ def _site_rows():
 def test_every_per_site_row_is_recomputed_from_bench(row, expect):
     got = _site_rows()[row]
     assert got == expect, f"{row}: data gives {got}, the docs say {expect}"
-    assert expect in _site_table(), f"README per-site table lacks {row} = {expect}"
+    assert quotes(_site_table(), expect), f"README per-site table lacks {row} = {expect}"
 
 
 def _symmetry_rows():
@@ -434,18 +445,48 @@ def test_record_budget_rows_are_the_recomputed_ones():
         assert (ROOT / r["source"]).exists()
 
 
-def test_claude_md_quotes_the_per_site_budget():
-    rows = _site_rows()
-    for key in ("partition small anions", "partition C18", "conformer C18", "grid mean",
-                "conformer C18 extended", "conformer C18 extended max", "partition atoms",
-                "partition atoms C18", "atoms buried C18"):
-        assert rows[key] in TEXT["CLAUDE.md"], f"CLAUDE.md lacks {key} = {rows[key]}"
+def _per_site_paragraph(text):
+    return text[text.index("**Per-site statistics have their own budget**"):
+                text.index("## Deliberately absent")]
+
+
+def _claude_md_per_site_problems(text):
+    """What the CLAUDE.md per-site paragraph fails to quote, by whole number,
+    in that paragraph only (R12: the chloroform row's −2.69 elsewhere in the
+    file used to satisfy the extended-conformer 2.69)."""
+    rows, para = _site_rows(), _per_site_paragraph(text)
+    out = [f"{key} = {rows[key]}" for key in (
+        "partition small anions", "partition C18", "conformer C18", "grid mean",
+        "conformer C18 extended", "conformer C18 extended max", "partition atoms",
+        "partition atoms C18", "atoms buried C18") if not quotes(para, rows[key])]
     # review 4 N13: each number with its protocol, read first by a new session
+    out += [f"protocol {p!r}" for p in ("def2-TZVP", "PCM water", "DFT geometries",
+                                        "def2-SVP + RI", "gas phase", "folded conformers")
+            if p not in para]
+    return out
+
+
+def test_claude_md_quotes_the_per_site_budget():
+    assert _claude_md_per_site_problems(TEXT["CLAUDE.md"]) == []
+
+
+@pytest.mark.parametrize("old, new", [("2.69", "2.96"), ("5.1 ", "5.7 "), ("8.7", "8.2")])
+def test_a_changed_per_site_number_in_claude_md_fails(old, new):
+    """R12's mutation run: these edits passed every claims test before."""
     t = TEXT["CLAUDE.md"]
-    para = t[t.index("**Per-site statistics have their own budget**"):t.index("## Deliberately absent")]
-    for protocol in ("def2-TZVP", "PCM water", "DFT geometries", "def2-SVP + RI",
-                     "gas phase", "folded conformers"):
-        assert protocol in para, f"CLAUDE.md per-site paragraph lacks {protocol!r}"
+    para = _per_site_paragraph(t)
+    assert old in para
+    mutated = t.replace(para, para.replace(old, new))
+    assert _claude_md_per_site_problems(mutated) != []
+
+
+@pytest.mark.parametrize("text, value, hit", [
+    ("median 5.16 here", "5.1", False), ("chloroform −2.69", "2.69", False),
+    ("is 2.69 (max", "2.69", True), ("by 5.1.", "5.1", True), ("**+3.54**", "+3.54", True),
+    ("+3.545", "+3.54", False),
+])
+def test_quotes_matches_whole_numbers_only(text, value, hit):
+    assert quotes(text, value) is hit
 
 
 # ------------------------------------------- stale figures stay gone (review 4 N10)
