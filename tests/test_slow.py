@@ -152,3 +152,28 @@ def test_render_writes_an_image(tmp_path):
     assert img.shape == (80, 80, 3)
     assert 0.0 <= img.min() and img.max() <= 1.0
     assert img.std() > 0.01, "a flat image means the surface was not painted"
+
+
+@pytest.mark.parametrize("extra, requested, substituted", [
+    ([], None, False),                  # default flags: the map follows the scale
+    (["--cmap", "vik"], "vik", True),   # diverging map asked for, scale known only after V
+])
+def test_an_anion_is_drawn_sequential_end_to_end(tmp_path, monkeypatch, extra,
+                                                  requested, substituted):
+    """Review 3, H3, through main() where it shipped: acetate never changes
+    sign, so its scale is sequential and so is the map actually drawn, with
+    or without a contradicting --cmap. sto-3g still gives an all-negative
+    surface (-181 to -86 kcal/mol)."""
+    import json
+    import sys
+    out, js = tmp_path / "ac.png", tmp_path / "ac.json"
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-]",
+                                      "--basis", "sto-3g", "--size", "120",
+                                      "--out", str(out), "--json", str(js), *extra])
+    em.main()
+    scale = json.loads(js.read_text())["scale"]
+    assert scale["kind"] == "sequential"
+    assert scale["cmap"] in em.SEQUENTIAL
+    assert scale["cmap_requested"] == requested
+    assert scale["cmap_substituted"] is substituted
+    assert out.exists()
