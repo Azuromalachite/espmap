@@ -190,6 +190,23 @@ def from_smiles(smiles, n_confs=20, seed=0xC0FFEE, max_iters=2000):
     return _mol_to_spec(mol, best), info
 
 
+def conformer_note(n_rot, e_spread):
+    """The warning printed for a generated conformer of a flexible molecule.
+
+    A function so tests/test_claims.py can check its numbers against the
+    measurements in bench/: this text once kept a claim (~1 kcal/mol, from
+    glycerol) for a day after the C18 data had disproved it.
+    """
+    return (f"note: {n_rot} rotatable bond(s), force-field conformer spread "
+            f"{e_spread:.1f} kcal/mol. This map is ONE conformer (the "
+            f"lowest-energy one). Measured: among extended conformers the ESP "
+            f"extrema move ~1 kcal/mol, but a molecule that can fold onto "
+            f"itself can move them much more (5.2 kcal/mol on V_min for a C18 "
+            f"acetate) and the surface shape changes either way. For a long "
+            f"flexible molecule, sample shape-diverse conformers before quoting "
+            f"a number.")
+
+
 def _mol_to_spec(mol, conf_id=-1):
     conf = mol.GetConformer(conf_id)
     syms = [a.GetSymbol() for a in mol.GetAtoms()]
@@ -1290,15 +1307,7 @@ def main():
             print(f"WARNING: --charge {a.charge} overrides the structure's formal "
                   f"charge {gi['charge']:+d}", file=sys.stderr)
         if gi["n_rot"] >= 1 and "as-is" not in gi["source"]:
-            print(f"note: {gi['n_rot']} rotatable bond(s), force-field conformer "
-                  f"spread {gi['e_spread']:.1f} kcal/mol. This map is ONE "
-                  f"conformer (the lowest-energy one). Measured: among extended "
-                  f"conformers the ESP extrema move ~1 kcal/mol, but a molecule "
-                  f"that can fold onto itself can move them much more (5.2 "
-                  f"kcal/mol on V_min for a C18 acetate) and the surface shape "
-                  f"changes either way. For a long flexible molecule, sample "
-                  f"shape-diverse conformers before quoting a number.",
-                  file=sys.stderr)
+            print(conformer_note(gi["n_rot"], gi["e_spread"]), file=sys.stderr)
         sym = [t.split()[0] for t in spec.split(";")]
         # F is deliberately excluded: fluorine is too electronegative to form
         # a sigma-hole, so reporting a "V_max on the F cap" invites a reader
