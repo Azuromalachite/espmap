@@ -26,10 +26,11 @@ unchanged; only the frame differs from bench/fixtures/nitrite.sdf.
 Every record is computed from a committed file with every atom supplied, so
 nothing is embedded or relaxed: geometry_provenance.relaxation is "none".
 
-    python fixtures/make_records.py                      # the fixtures (~1.5 h)
+    python fixtures/make_records.py                      # the fixtures (~10 min, 4 threads)
     python fixtures/make_records.py --basis sto-3g --out DIR   # dry run, minutes
 
-One process per record; a record whose JSON exists is skipped.
+One process per record. A record whose JSON exists is skipped only if the same
+code revision made it; a real run refuses an unknown or dirty code identity.
 """
 import argparse
 import json
@@ -111,6 +112,9 @@ def write_input(src, dst, transform):
             a.SetAtomMapNum(maps.get(a.GetIdx(), 0))
         mol.SetProp("atom_maps", "chain numbering: map n = Cn; acetyl CH3 21, C=O 22; "
                                  "ester O 31, carbonyl O 32 (fixtures/make_records.py)")
+        # an ETKDG conformer minimised with MMFF94s: the same method label a
+        # --smiles run gives it, so the two share an analysis_key (review 5 R1/R6)
+        mol.SetProp("espmap_geometry_origin", "etkdg_mmff94s")
     elif transform == "tilt":
         conf = mol.GetConformer()
         for i, p in enumerate(tilted(conf.GetPositions())):
@@ -148,12 +152,26 @@ def main():
     GEOM.mkdir(exist_ok=True)
     (GEOM / C18["sites"]).write_text(json.dumps(C18_SITES, indent=1) + "\n")
     for name, fx in FIXTURES.items():
-        if "source" in fx and not fx["file"].exists():
+        if "source" in fx:              # deterministic, so rewriting is a no-op unless changed
             write_input(fx["source"], fx["file"], fx["transform"])
+    # Review 5 R17: one set of fixtures, one code revision. Skipping a record
+    # that exists used to mix revisions on a partial re-run, and a run that
+    # cannot name its code (outside git) or runs edited code is refused.
+    sys.path.insert(0, str(ROOT))
+    import esp_map as em
+    code = em.code_identity()["code"]
+    if a.basis is None and (code == "unknown" or code.endswith("-dirty")):
+        sys.exit(f"code identity is {code!r}: run from a clean git checkout, so every "
+                 f"record names the code that made it")
     failed = []
     for name in a.names or FIXTURES:
-        if (out / f"{name}.json").exists():
-            print(f"{name}: exists, skipped", flush=True)
+        js = out / f"{name}.json"
+        if js.exists():
+            old = json.loads(js.read_text())["provenance"]["code"]
+            if old != code:
+                sys.exit(f"{js.name} was made by {old}, this is {code}: delete the old "
+                         f"records so the set comes from one revision")
+            print(f"{name}: exists, made by this revision, skipped", flush=True)
             continue
         print(f"{name}: computing", flush=True)
         if subprocess.run(argv(name, FIXTURES[name], out, a.basis)).returncode:

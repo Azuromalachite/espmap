@@ -109,14 +109,16 @@ def test_fixture_npz_is_the_same_record(name):
 
 @pytest.mark.parametrize("name", NAMES)
 def test_fixture_budget_is_the_one_its_settings_select(name):
-    rec = _rec(name)
-    s, n_rot = rec["settings"], None
-    scope = rec["sites"]["conformer_scope"]
-    if scope.startswith("single conformer; "):
-        n_rot = int(scope.split("; ")[1].split()[0])
-    solvent = None if s["solvent"] == "vacuum" else s["solvent"]
-    assert rec["sites"]["budget"] == em.budget_rows(
-        basis=s["basis"], solvent=solvent, charge=rec["geometry"]["charge"], n_rot=n_rot)
+    """Explicit row ids per fixture, not budget_rows() recomputed: review 5 R1
+    found the old test checking the producer against itself, so it passed
+    while DFT geometries carried the MMFF->DFT anion row.
+    - small four: DFT geometries (no anion-geometry row), def2-TZVP (no
+      double-zeta basis row), PCM water (no gas->solvent rows), rigid;
+    - C18: def2-SVP (basis row), gas (both solvent rows), flexible."""
+    always = {"functional", "grid", "partition small anions", "partition C18", "grid mean"}
+    expect = (always | {"basis", "solvent water", "solvent chloroform", "conformer C18"}
+              if name in C18 else always)
+    assert {r["id"] for r in _rec(name)["sites"]["budget"]} == expect
 
 
 @pytest.mark.skipif(DRY, reason="a dry run overrides the basis on purpose")
@@ -126,6 +128,42 @@ def test_fixture_settings_are_the_declared_protocol(name):
     assert em.basis_key(s["basis"]) == em.basis_key(fx["basis"])
     assert s["solvent"] == (fx["solvent"] or "vacuum")
     assert s["density_fit"] is fx["density_fit"]
+
+
+@pytest.mark.skipif(DRY, reason="a dry run is not a committed set")
+def test_fixtures_come_from_one_clean_named_revision():
+    """Review 5 R17: nothing stopped a partial regeneration mixing revisions,
+    or a record whose code was 'unknown'."""
+    prov = [_rec(n)["provenance"] for n in NAMES]
+    codes = {p["code"] for p in prov}
+    assert len(codes) == 1, codes
+    code = codes.pop()
+    assert code != "unknown" and not code.endswith("-dirty"), code
+    for k in ("espmap_version", "pyscf", "rdkit", "numpy", "threads"):
+        assert len({p[k] for p in prov}) == 1, k
+
+
+# V_min, V_max and the mean of the site holding atom 0 (nearest-nucleus), as
+# computed. The records reproduced to <= 1e-10 kcal/mol across checkouts and
+# thread counts (#44, review 5), so 1e-6 catches a changed result, not noise.
+PINNED = {
+    "benzene": (-18.410642400668962, 21.500566795728, 2.127480708211835),
+    "nitrite": (-167.75227445962423, -132.13490018495082, -140.77754117328),
+    "thiocyanate": (-141.26273840198374, -94.82782124016789, -118.32279758131904),
+    "enolate": (-166.67195269173814, -78.27554378692678, -114.16333654057361),
+    "Z3Z13-18OAc_extended": (-40.737152865309504, 19.87057637821997, -1.376987102617478),
+    "Z3Z13-18OAc_folded": (-35.702106899216, 22.20914819815874, 3.685052850206189),
+}
+
+
+@pytest.mark.skipif(DRY, reason="a dry run uses another basis")
+@pytest.mark.parametrize("name", NAMES)
+def test_fixture_values_are_pinned(name):
+    rec = _rec(name)
+    site = next(s for s in rec["sites"]["reaction_sites"] if 0 in s["atoms"])
+    got = (rec["results"]["V_min_kcal_mol"], rec["results"]["V_max_kcal_mol"],
+           site["nearest_nucleus"]["V_area_mean_kcal_mol"])
+    assert got == pytest.approx(PINNED[name], abs=1e-6)
 
 
 def _site_means(name, prefix):
@@ -141,8 +179,20 @@ def test_benzene_six_carbon_sites_agree():
 
 
 def test_nitrite_two_oxygen_sites_agree():
-    m = _site_means("nitrite", "O")
-    assert len(m) == 2 and abs(m["O1"] - m["O2"]) < 0.1
+    a, b = _site_means("nitrite", "O").values()      # labels come from the maps (R5)
+    assert abs(a - b) < 0.1
+
+
+@pytest.mark.parametrize("name", [n for n in NAMES if n not in C18])
+def test_default_site_labels_are_atom_maps(name):
+    """Review 5 R5: nitrite's 'O1' was atom index 1 = map 2. On a mapped
+    input a default site's number is its heavy atom's map."""
+    rec = _rec(name)
+    maps = {a["index"]: a["atom_map"] for a in rec["sites"]["atoms"]}
+    for s in rec["sites"]["reaction_sites"]:
+        heavy = [i for i in s["atoms"] if rec["geometry"]["symbols"][i] != "H"]
+        assert s["source"] == "default:map"
+        assert s["label"] == f"{rec['geometry']['symbols'][heavy[0]]}{maps[heavy[0]]}"
 
 
 @pytest.mark.parametrize("name", C18)
