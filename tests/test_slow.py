@@ -173,6 +173,7 @@ def test_an_anion_is_drawn_sequential_end_to_end(tmp_path, monkeypatch, extra,
     em.main()
     scale = json.loads(js.read_text())["scale"]
     assert scale["kind"] == "sequential"
+    assert scale["sign_change_ratio"] == 0.0 and scale["sign_change_threshold"] == 0.05
     assert scale["cmap"] in em.SEQUENTIAL
     assert scale["cmap_requested"] == requested
     assert scale["cmap_substituted"] is substituted
@@ -256,3 +257,24 @@ def test_a_generated_polar_hydrogen_is_flagged_on_its_site(tmp_path, monkeypatch
     flags = {s["label"]: s["h_generated_polar"] for s in rec["sites"]["reaction_sites"]}
     assert flags == {"C0": False, "C1": False, "O2": True}
     assert rec["sites"]["geometry_provenance"]["hydrogens"] == {"generated_relaxed": 6}
+
+def test_json_geometry_reproduces_the_run_through_atoms(tmp_path, monkeypatch):
+    """Review 3 H14 validation: re-running a JSON's recorded geometry through
+    --atoms reproduces V_min/V_max to 1e-6."""
+    import json
+    import sys
+    recs = []
+    for i, src in enumerate([["--smiles", "CCO"], None]):
+        js = tmp_path / f"r{i}.json"
+        if src is None:
+            src = ["--atoms", em.atoms_from_geometry(recs[0]["geometry"])]
+        monkeypatch.setattr(sys, "argv", ["esp_map.py", *src, "--basis", "sto-3g",
+                                          "--size", "80", "--out", str(tmp_path / f"r{i}.png"),
+                                          "--json", str(js)])
+        em.main()
+        recs.append(json.loads(js.read_text()))
+    a, b = (r["results"] for r in recs)
+    assert abs(a["V_min_kcal_mol"] - b["V_min_kcal_mol"]) < 1e-6
+    assert abs(a["V_max_kcal_mol"] - b["V_max_kcal_mol"]) < 1e-6
+    assert recs[0]["geometry"]["sha1"] == recs[1]["geometry"]["sha1"]
+    assert recs[0]["provenance"]["code"]

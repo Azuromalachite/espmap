@@ -70,7 +70,8 @@ def one(mol, basis, df, threads):
     lib.num_threads(threads or ALL)
     smi = MOLECULES[mol]
     row = {"key": key(mol, basis, df, threads), "molecule": mol, "smiles": smi,
-           "basis": basis, "density_fit": df, "threads": lib.num_threads()}
+           "basis": basis, "density_fit": df, "threads": lib.num_threads(),
+           "code": em.code_identity()["code"]}    # per row: this file re-reads itself
 
     # gate before compute (invariant 2), through the one reader (invariant 1)
     probe, probs = em.parse_for_check(smiles=smi, path=None, charge=0)
