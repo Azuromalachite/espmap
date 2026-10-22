@@ -5,7 +5,7 @@ Edit this file, not the .ipynb:  python notebooks/build_notebook.py notebooks/es
 import json
 import sys
 
-BRANCH = "bench/timing"
+BRANCH = "master"
 cells = []
 
 

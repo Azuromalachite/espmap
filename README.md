@@ -10,6 +10,9 @@ python esp_map.py --selftest
 python esp_map.py --smiles "Clc1ccccc1" --lim 25 --out esp.png
 ```
 
+No install needed to try it: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Azuromalachite/espmap/blob/master/notebooks/espmap_colab.ipynb)
+(type a SMILES, then *Runtime → Run all*; a rotatable 3D surface, an image and a zip of results come back).
+
 ![six colormaps on one molecule](docs/esp-colormap-comparison.png)
 
 *The same bromobenzene surface, identical geometry, viewpoint and lighting in
@@ -47,6 +50,43 @@ it is displayed. Bromobenzene, end to end, on one core:
 | render | 1.2 s |
 
 No Gaussian, no GaussView, no cube files on disk.
+
+## Speed: preview, density fitting, GPU
+
+Measured on a 16-thread laptop CPU (Ryzen 7 260, 7.4 GB in WSL2), B3LYP, SCF
+time only (`bench/`):
+
+| molecule | basis functions (TZVP) | def2-SVP | def2-TZVP |
+| --- | --- | --- | --- |
+| chlorobenzene | 253 | — | 39 s |
+| decanoic acid | 492 | 66 s | 211 s |
+| C18 pheromone acetate | 898 | 182 s | 875 s |
+
+- **`--basis def2-svp`** is the preview: right for pictures, about +2.7 kcal/mol
+  low on V<sub>max</sub> for these molecules, so do not quote numbers from it.
+- **`--density-fit`** changed V<sub>min</sub>/V<sub>max</sub> by ≤ 0.02 kcal/mol in every pair
+  measured, and halves the SCF time up to ~600 basis functions. At 898 it was
+  *slower* (1,175 s vs 875 s), most likely because its integrals went to disk;
+  time it on your machine before relying on it.
+- **`--gpu`** runs the SCF on an NVIDIA GPU via
+  [GPU4PySCF](https://github.com/pyscf/gpu4pyscf). On a Colab L4 it matched the
+  CPU to < 0.001 kcal/mol and was 4.3× faster than the laptop above
+  (`bench/gpu_l4.json`). Validated for closed-shell, gas-phase, density-fitted
+  runs only.
+
+## Outputs
+
+```bash
+python esp_map.py --smiles "CCO" --out esp.png \
+    --html esp_3d.html --npz surface.npz --json results.json
+```
+
+- `--html`: an interactive 3D view (rotate, hover to read V, see-through
+  toggle). Same colour map and scale rules as the image; works offline.
+- `--npz`: the surface (vertices, faces, V, atoms) so it can be re-rendered
+  without another SCF.
+- `--json`: settings, energy, dipole, V range, package versions, git commit
+  and the error-budget caveat, for anything you will compare later.
 
 ## Input
 
@@ -133,7 +173,9 @@ the chlorobenzene σ-hole V<sub>max</sub>, B3LYP unless stated:
 | **solvent** (gas → PCM water) | **−3.61** | +9.83 → +6.22; co-dominant |
 | solvent (gas → chloroform) | −2.69 | +7.14 |
 | functional (B3LYP / PBE0 / M06-2X / HF) | 0.69 | spread, +9.51 to +10.20 |
-| conformer (lowest vs highest MMFF) | ~1 | glycerol, across 8 kcal/mol |
+| conformer (lowest vs highest MMFF) | ~1 | glycerol; C18 acetate: 1.1 over 8 extended conformers, **5.2** on V<sub>min</sub> once folded ones are included |
+| density fitting (`--density-fit`) | ≤ 0.02 | 7 pairs, always upward on V<sub>max</sub> |
+| GPU vs CPU (`--gpu`) | < 0.001 | decanoic acid, density-fitted |
 | stereochemistry (diastereomers) | ~0.9 | against a 0.4 noise floor |
 | geometry source (MMFF / idealised / DFT) | 0.35 | +9.59 to +9.94 |
 | grid spacing (0.26 → 0.16 bohr) | 0.04 | converged |
@@ -141,8 +183,16 @@ the chlorobenzene σ-hole V<sub>max</sub>, B3LYP unless stated:
 
 **The basis-set error is molecule-specific and cannot be calibrated away**: the
 same def2-SVP → def2-TZVP change moves bromobenzene by **−0.76**, opposite in
-sign and a fifth the magnitude. Checking one molecule licenses nothing about
-another.
+sign and a fifth the magnitude, and moves V<sub>max</sub> of decanoic acid, BDSF and a C18
+pheromone acetate by +2.65 to +2.82. Checking one molecule licenses nothing
+about another.
+
+**Conformation moves shape more than extrema, until the molecule folds.**
+Across eight extended conformers of the C18 acetate, V<sub>min</sub>/V<sub>max</sub> varied by
+~1.1 kcal/mol while the dipole varied 43 % and the negative surface area 13 %.
+The two folded conformers moved V<sub>min</sub> by up to 5.2 kcal/mol and the negative
+area by 60 % (`bench/conformers.jsonl`, `bench/f9_recheck.jsonl`). For a
+flexible molecule, sample folded shapes before quoting an extremum.
 
 Two consequences for anyone quoting a number from this:
 
@@ -165,11 +215,16 @@ Two consequences for anyone quoting a number from this:
 - Fluorine deliberately reports no σ-hole, because it does not form one.
 - Only closed-shell and simple open-shell (`--spin`) species; no excited
   states, no periodic systems, no transition metals validated.
+- `--gpu` is validated only for closed-shell, gas-phase, density-fitted runs;
+  solvent and open-shell runs on the GPU are untested.
+- A folded molecule can give a closed surface with handles (genus > 0). That
+  is accepted with a note; an *open* (clipped) surface is still refused.
 
 ## Tests
 
 ```bash
-pytest                      # 28 fast tests, ~1 s, no SCF
+pip install -e ".[test]"
+pytest                      # 37 fast tests, ~2 s, no SCF
 pytest --runslow -m slow    # 11 tests with real DFT, ~4 min
 ```
 

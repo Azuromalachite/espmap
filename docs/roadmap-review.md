@@ -4,13 +4,14 @@ Reviewer 3. Subject: the 10-item roadmap (comparison mode → Colab → annotati
 
 Labels: `[V]` verified in the repo · `[M]` measured or computed by me · `[I]` inferred · `[U]` not verifiable here.
 
-**Revision 2 (2026-10-22).** The measurements this review asked for have been run (`bench/`). This revision replaces estimates with them, retracts three of my claims, adds F9, and adds a reactivity-descriptors direction.
+**Revision 2 (2026-10-22).** The measurements this review asked for have been run (`bench/`). This revision replaces estimates with them, retracts four of my claims, adds F9 (fixed and verified), and adds a reactivity-descriptors direction.
 
 ## Retractions — read these first
 
 1. **F1's cost table was 10–20× too pessimistic.** I extrapolated one-core aromatic timings to the C18 targets, with a scaling exponent fitted on two points, and projected 4–5 h for the acetate. On the author's 16-thread laptop it took **875 s** `[M]`, and decanoic acid took 211 s, not ~30 min. The recommendation "measure first" stands. The conclusion I drew from the estimate does not: a fast mode is **not** a prerequisite for C18 work.
 2. **F1 and F8 called def2-SVP + density fitting the "cheapest" preview.** At 898 basis functions, density fitting was **slower** than exact integrals on this machine (1,175 s vs 875 s) `[M]`. It is still faster up to 566 basis functions. Preview means SVP; density fitting is a separate, size-dependent choice.
 3. **F3 said the lowest-energy MMFF conformer of a long chain "tends to be folded".** For the C18 acetate it is one of the most **extended**: 87 of 100 embedded conformers are more compact `[M]`. A seconds-long RDKit check would have caught this before I wrote it.
+4. **An earlier draft of this revision said "the glycerol figure transfers to the C18 extrema".** That was measured only on the 8 conformers the χ = 2 check let through. The 2 it refused were the folded ones, and once recovered (F9) they widened the V_min spread from 1.1 to **5.2 kcal/mol** `[M]`. The check was removing exactly the cases that contradict the claim.
 
 ## The one thing to do first
 
@@ -62,25 +63,25 @@ Labels: `[V]` verified in the repo · `[M]` measured or computed by me · `[I]` 
 
 ### F3 · The ensemble case rested on glycerol · MEDIUM → partly confirmed by measurement
 
-**Measured** `[M]` (`bench/conformers.jsonl`). C18 acetate: 100 conformers embedded; the lowest-energy one plus 9 spanning the range of radius of gyration were sent to B3LYP/def2-SVP with density fitting. Eight finished; two were refused by the surface check (F9).
+**Measured** `[M]` (`bench/conformers.jsonl`, `bench/f9_recheck.jsonl`). C18 acetate: 100 conformers embedded; the lowest-energy one plus 9 spanning the range of radius of gyration were sent to B3LYP/def2-SVP with density fitting. The old surface check refused the 2 most compact; they were recomputed after the F9 fix.
 
-| descriptor | spread over 8 conformers | relative to mean |
+| descriptor | 8 extended conformers | all 10 (adds the 2 folded) |
 | --- | --- | --- |
-| V_min | 1.10 kcal/mol | 3 % |
-| V_max | 1.18 kcal/mol | 6 % |
-| dipole | 0.77 D | **43 %** |
-| negative surface area | 9.8 Å² | **13 %** |
-| total surface area | 10.6 Å² | 2.5 % |
+| V_min | 1.10 kcal/mol | **5.20** |
+| V_max | 1.18 kcal/mol | **2.48** |
+| dipole | 0.77 D (43 % of mean) | 0.77 D |
+| negative surface area | 68.8–78.5 Å² | **68.8–117.5 Å²** (60 % of mean) |
+| total surface area | 413–424 Å² | 401–424 Å² |
 
-- **The glycerol figure transfers to the extrema.** The C18 spread of ~1.1 kcal/mol matches glycerol's ~1, so the error budget's conformer row holds for this molecule. It is untested for other chains.
-- **Shape descriptors vary far more than extrema**, as this finding predicted. An ensemble report should lead with dipole and the positive and negative surface areas, with extrema as a secondary output.
-- **The spread is probably understated** `[I]`. The two most compact conformers, which differ most in shape, are missing (F9).
-- **Retracted:** "lowest-MMFF conformer tends to be folded" (see the retractions above).
+- **Among extended conformers, the glycerol figure holds:** extrema move ~1.1 kcal/mol, while shape descriptors move far more.
+- **Folding breaks it.** The folded conformer with genus 3 has V_min −35.70 against −39.8 to −40.9 for the rest, and twice the negative area. Intramolecular contact changes the local environment, so extrema are not conformer-robust for a chain that can fold. The error budget's ~1 kcal/mol conformer row must not be quoted for flexible molecules.
+- **The folded conformers are 4.8 and 6.4 kcal/mol above the minimum in MMFF, gas phase** `[M]`. Whether they matter depends on the environment (solvent, receptor). That is an argument for reporting the spread, not for discarding them.
+- **Retracted:** "lowest-MMFF conformer tends to be folded", and the earlier "glycerol figure transfers" (see the retractions above).
 
 **Correction.**
-- Report shape descriptors across the ensemble; extrema second.
+- Report shape descriptors and extrema across the ensemble, with the spread, and flag folded members explicitly (genus > 0 is a cheap folding marker).
 - Scale `nconfs` with the rotatable-bond count.
-- Fix F9 before building any ensemble mode.
+- Sample by shape (radius of gyration), not only by energy, or folded shapes are never seen.
 
 ### F4 · `--svg` cannot mean what the roadmap implies · MEDIUM
 
@@ -142,7 +143,14 @@ Labels: `[V]` verified in the repo · `[M]` measured or computed by me · `[I]` 
 - a closed surface of genus > 0 passes, with a note;
 - more than one closed piece passes, with a warning.
 
-**Validation.** Recompute the two refused conformers and confirm that both are closed surfaces with no open edges. A clipped surface must still be refused.
+**Validation — done** `[M]`. Recomputed with the same geometry (`bench/recheck_refused_conformers.py`):
+
+| conformer | χ | pieces | open edges | non-manifold edges | genus | max ρ on box face |
+| --- | --- | --- | --- | --- | --- | --- |
+| 40 | −2 | 1 | 0 | 0 | 2 | 7.5×10⁻⁶ |
+| 72 | −4 | 1 | 0 | 0 | 3 | 7.3×10⁻⁶ |
+
+Both are single closed surfaces far inside the box (isovalue 2×10⁻³): valid, and wrongly refused before. The fix is on `bench/timing` (`mesh_topology`, `surface_problems`), with 6 fast tests covering a torus, two separate pieces, an open mesh, box-face density on a closed mesh, a sphere-like mesh and a non-manifold edge. The existing slow test that a clipped surface is refused is unchanged.
 
 ## Direction: reactivity descriptors (after comparison mode)
 
@@ -173,7 +181,7 @@ These are the hard calls, checked:
 - **Protonation stays advisory.** No automatic pKa prediction is proposed.
 - **The gate stays visible in any UI.** The notebook kept it (`[V]`, the structure check runs before any SCF).
 - **3D surfaces are not averaged across conformers.**
-- **Local chemistry vs global shape.** The roadmap's split is supported by the measured spreads (F3).
+- **Local chemistry vs global shape.** The roadmap's split holds for extended conformers; folding moves the extrema too (F3).
 
 ## Summary
 
@@ -181,18 +189,18 @@ These are the hard calls, checked:
 | --- | --- | --- | --- |
 | F1 | cost unpriced | HIGH | **measured**; estimates retracted; C18 TZVP ≈ 15 min (CPU) |
 | F2 | shared scale vs invariant 7 | HIGH | rule enforced in notebook; `compare` to implement |
-| F3 | ensemble evidence from glycerol | MEDIUM | **measured**: extrema transfer, shape varies; one claim retracted |
+| F3 | ensemble evidence from glycerol | MEDIUM | **measured**: holds for extended conformers (1.1); folding widens V_min to 5.2; two claims retracted |
 | F4 | SVG of a raster render | MEDIUM | open; `--html` covers on-screen use |
 | F5 | JSON ranked below its dependant | MEDIUM | partial; add shape descriptors |
 | F6 | alignment of flexible chains | LOW–MED | open; plus default orientation |
 | F7 | batch gating order | LOW | open (with `compare`) |
 | F8 | xTB ≠ cheap DFT | LOW | **measured**: SVP preview; density fitting ≤ 0.02, size-dependent speed |
-| F9 | χ = 2 refuses folded surfaces | MEDIUM | new; fix in progress |
+| F9 | χ = 2 refuses folded surfaces | MEDIUM | **fixed and verified** on both refused conformers |
 
 **Revised order:**
 1. extend `--json` with shape descriptors (F5)
 2. comparison mode with the F2 rule, F7 gating and head-group alignment (F6)
-3. fix the surface check (F9)
+3. ~~fix the surface check (F9)~~ done
 4. ensembles reporting shape descriptors (F3)
 5. protonation advisory
 6. reactivity descriptors: ALIE → HOMO/LUMO → Fukui
