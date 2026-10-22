@@ -171,16 +171,33 @@ def _site_means(name, prefix):
             for s in _rec(name)["sites"]["reaction_sites"] if s["label"].startswith(prefix)}
 
 
+def _noise_tolerance(molecule):
+    """1.5x the largest symmetric-site spread mesh noise produced over 10
+    random rigid rotations at the fixtures' own settings (review 5 R7:
+    bench/symmetry_noise.py). A rotation changes nothing physical, so a
+    spread beyond the noise means the partition broke symmetry."""
+    rows = [json.loads(l) for l in (ROOT / "bench" / "symmetry_noise.jsonl").read_text()
+            .splitlines() if l.strip()]
+    spreads = [r["site_mean_spread"] for r in rows if r["molecule"] == molecule]
+    assert len(spreads) == 10, molecule
+    return 1.5 * max(spreads)
+
+
+def test_symmetry_tolerances_come_from_the_noise_bench():
+    # nitrite O sites 0.010-0.043, benzene C sites 0.041-0.081 kcal/mol
+    assert _noise_tolerance("nitrite") == pytest.approx(0.0645, abs=1e-3)
+    assert _noise_tolerance("benzene") == pytest.approx(0.1215, abs=1e-3)
+
+
 def test_benzene_six_carbon_sites_agree():
-    """Equivalent by symmetry; the independent check on the partition (N12).
-    The bench rows spread 0.19 kcal/mol at 0.26 bohr in the gas phase."""
+    """Equivalent by symmetry; the independent check on the partition (N12)."""
     m = _site_means("benzene", "C")
-    assert len(m) == 6 and max(m.values()) - min(m.values()) < 0.5
+    assert len(m) == 6 and max(m.values()) - min(m.values()) < _noise_tolerance("benzene")
 
 
 def test_nitrite_two_oxygen_sites_agree():
     a, b = _site_means("nitrite", "O").values()      # labels come from the maps (R5)
-    assert abs(a - b) < 0.1
+    assert abs(a - b) < _noise_tolerance("nitrite")
 
 
 @pytest.mark.parametrize("name", [n for n in NAMES if n not in C18])
