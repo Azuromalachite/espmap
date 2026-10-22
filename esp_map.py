@@ -779,6 +779,19 @@ def total_dm(mf):
     return dm[0] + dm[1] if dm.ndim == 3 else dm
 
 
+def gpu_untested(spin=0, solvent=None, density_fit=False):
+    """The parts of a --gpu run outside what bench/gpu_l4.json validated
+    (closed shell, gas phase, density fitting). Empty means validated."""
+    out = []
+    if spin:
+        out.append(f"an open shell (spin={spin}, UKS)")
+    if solvent not in (None, "vacuum"):
+        out.append(f"a PCM solvent ({solvent})")
+    if not density_fit:
+        out.append("exact integrals (no --density-fit)")
+    return out
+
+
 def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
             solvent=None, density_fit=False, gpu=False):
     """Restricted for a closed shell, UNRESTRICTED when spin != 0.
@@ -794,11 +807,17 @@ def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
 
     gpu runs the SCF ONLY on GPU4PySCF and hands back a CPU object, so
     total_dm and everything downstream are unchanged. Validated once
-    (bench/gpu_l4.json): RKS + density_fit, gas phase, decanoic acid, where
-    V_min/V_max matched the CPU to <0.001 kcal/mol. UKS, PCM and runs
-    without density fitting are untested on the GPU.
+    (bench/gpu_l4.json, at commits 2313965 and 183ccd7): RKS + density_fit,
+    gas phase, decanoic acid, where V_min/V_max matched the CPU to <0.001
+    kcal/mol. UKS, PCM and runs without density fitting are untested on the
+    GPU, and say so (review 3 H9: the contract was written and not enforced).
     """
     if gpu:
+        for why in gpu_untested(spin, solvent, density_fit):
+            print(f"WARNING: --gpu with {why} is untested; validated only for "
+                  f"closed-shell, gas-phase, density-fitted runs (bench/gpu_l4.json). "
+                  f"Check one result against a CPU run before relying on it.",
+                  file=sys.stderr)
         try:
             import gpu4pyscf  # noqa: F401
         except ImportError:
@@ -1900,6 +1919,10 @@ def main():
     if a.optimize:
         from pyscf.geomopt.berny_solver import optimize as _opt
         print("optimising geometry...", flush=True)
+        if a.gpu:
+            # run_scf hands back a CPU object, so berny's gradients are CPU
+            print("note: --optimize --gpu: each SCF runs on the GPU, but the "
+                  "geometry gradients run on the CPU.", file=sys.stderr)
         mol = _opt(mf, maxsteps=50)
         spec = "; ".join(
             f"{mol.atom_symbol(i)} "
@@ -2010,7 +2033,10 @@ def main():
             settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
                           solvent_esp=a_fields["solvent_esp"],
                           include_reaction_field=rf_added,
-                          density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
+                          density_fit=a.density_fit, gpu=a.gpu,
+                          gpu_validated=(not gpu_untested(spin, solv, a.density_fit)
+                                         if a.gpu else None),
+                          iso=a.iso,
                           spacing_bohr=a.spacing, margin_bohr=a.margin,
                           grids_level=int(mf.grids.level), conv_tol=float(mf.conv_tol),
                           seed=a.seed, nconfs=a.nconfs,

@@ -71,8 +71,10 @@ time only (`bench/`):
 - **`--gpu`** runs the SCF on an NVIDIA GPU via
   [GPU4PySCF](https://github.com/pyscf/gpu4pyscf). On a Colab L4 it matched the
   CPU to < 0.001 kcal/mol and was 4.3× faster than the laptop above
-  (`bench/gpu_l4.json`). Validated for closed-shell, gas-phase, density-fitted
-  runs only.
+  (`bench/gpu_l4.json`, commits 2313965 and 183ccd7). Validated for
+  closed-shell, gas-phase, density-fitted runs only; any other combination
+  prints a warning naming what is untested, and the JSON records
+  `settings.gpu_validated`. With `--optimize`, the gradients run on the CPU.
 
 ## Outputs
 
@@ -256,7 +258,8 @@ Two consequences for anyone quoting a number from this:
 - Only closed-shell and simple open-shell (`--spin`) species; no excited
   states, no periodic systems, no transition metals validated.
 - `--gpu` is validated only for closed-shell, gas-phase, density-fitted runs;
-  solvent and open-shell runs on the GPU are untested.
+  solvent, open-shell and exact-integral runs on the GPU are untested, and
+  warned as such.
 - A folded molecule can give a closed surface with handles (genus > 0). That
   is accepted with a note; an *open* (clipped) surface is still refused.
 
