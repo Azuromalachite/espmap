@@ -22,7 +22,7 @@ does not. Do not add a compatibility shim for a signature you changed.
 ```bash
 pip install -e ".[test]"
 python esp_map.py --selftest           # physics + all 11 colormap orientations
-pytest                                 # 28 fast tests, ~1.5 s, no SCF
+pytest                                 # 37 fast tests, ~2 s, no SCF
 pytest --runslow -m slow               # 11 tests with real DFT, ~4 min
 python esp_map.py --smiles "Clc1ccccc1" --lim 25 --out esp.png
 ```
@@ -79,9 +79,13 @@ stop and re-read this paragraph.
    surface never does, and centring on zero collapses its entire range into
    one colour. `--lim` is the diverging range; `--vmin`/`--vmax` are the
    sequential ones.
-8. **The isosurface must be closed and interior to its box** (χ = 2, and no
-   density above the isovalue on a box face). A clipped surface changed a
-   measured V_max by 26 % with every other number in the run still plausible.
+8. **The isosurface must be closed and interior to its box**: no edge used by
+   only one triangle, and no density above the isovalue on a box face. A
+   clipped surface changed a measured V_max by 26 % with every other number in
+   the run still plausible. Do **not** go back to requiring χ = 2: a folded
+   chain can give a closed surface of higher genus (two compact C18 acetate
+   conformers had χ = −2 and −4 with nothing clipped). `mesh_topology` tells the
+   two apart; genus > 0 passes with a note.
 
 ## Measured error budget — chlorobenzene σ-hole V_max
 
@@ -97,6 +101,8 @@ Do not re-derive these; do not quote a number against a smaller margin.
 | stereochemistry, diastereomers | ~0.9 (0.4 noise floor) |
 | geometry source, MMFF / idealised / DFT | 0.35 |
 | grid spacing, 0.26 → 0.16 bohr | 0.04 |
+| density fitting (`--density-fit`), 7 pairs up to 898 nao | ≤ 0.02, always upward on V_max |
+| GPU4PySCF (`--gpu`) vs CPU, decanoic acid, both RI | < 0.001 |
 | σ-hole region definition | 0.00 |
 
 **The basis error is molecule-specific.** The same change moves bromobenzene
@@ -107,6 +113,14 @@ Two counterintuitive results, both measured, both load-bearing in the warning
 text: **extrema are robust, shape is not.** Conformation and stereochemistry
 move V_max by ~1 kcal/mol because extrema are set by local chemistry, while
 the spatial arrangement of the features changes a great deal.
+
+**This holds only while the molecule does not fold onto itself.** Across 8
+extended conformers of a C18 acetate the extrema moved ~1.1 kcal/mol; adding
+the 2 folded ones (genus 2 and 3 surfaces) widened V_min to 5.2 and V_max to
+2.5 kcal/mol, and the negative surface area from 69–79 to 69–118 Å²
+(`bench/conformers.jsonl`, `bench/f9_recheck.jsonl`). Intramolecular contact
+is local chemistry too. Do not quote the ~1 kcal/mol conformer row for a
+flexible molecule without sampling folded shapes.
 
 ## Deliberately absent
 
@@ -139,14 +153,31 @@ file and `README.md` — the numbers appear in both and in the module docstring.
 defect found so far, with the reproduction for each. If a test fails in a way
 that looks familiar, it is probably in there.
 
+## Around the module
+
+- **`--gpu`** lives inside `run_scf`: `to_gpu()` before the kernel and
+  `to_cpu()` after it, so `total_dm` never sees a CuPy array. Keep the switch
+  there; a notebook that sets up its own GPU SCF crashed on exactly this.
+- **`bench/`** holds the measurements behind the speed and error-budget
+  numbers: `timing.py` (one process per row, resumable), `conformers.py`,
+  `env.json` (the environment they were taken in), `gpu_l4.json`. Quote from
+  these files, not from memory; add a row rather than overwrite one.
+- **`notebooks/`**: edit `build_notebook.py`, then regenerate
+  `espmap_colab.ipynb`. Never hand-edit the `.ipynb`. Every code cell is plain
+  Python so the notebook can be executed locally before anyone opens Colab.
+- **`docs/roadmap-review.md`** is the current priority order, with measured
+  status per roadmap item.
+
 ## Good first tasks
+
+See `docs/roadmap-review.md` (revised order) for the main line of work. Smaller
+ones:
 
 - Close ωB97X-D by swapping in a PySCF build that has it, or by using a
   different range-separated functional and saying which.
 - Exercise `--optimize` on three more molecules and report the spread.
-- A conformer-ensemble mode: Boltzmann-weight the surface rather than picking
-  the lowest-energy conformer. The measurement says extrema barely move, so
-  the value is in the *shape*, which is exactly what a single conformer gets
-  wrong.
+- Raise PySCF's `max_memory` for `--density-fit` runs and re-time the C18
+  acetate: at 898 nao density fitting was slower than exact (1,175 s vs
+  875 s) with peak memory under the default 4 GB cap.
 - Reduce the slow suite's runtime; 4 minutes is near the limit of what anyone
   runs locally before pushing.

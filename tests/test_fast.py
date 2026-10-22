@@ -226,6 +226,65 @@ def test_euler_characteristic_detects_an_open_surface():
     assert em.euler_characteristic(faces) != 2
 
 
+def _torus_faces(nu=12, nv=8):
+    """A closed triangulated torus: genus 1, chi = 0."""
+    idx = lambda i, j: (i % nu) * nv + (j % nv)
+    f = []
+    for i in range(nu):
+        for j in range(nv):
+            a, b, c, d = idx(i, j), idx(i + 1, j), idx(i + 1, j + 1), idx(i, j + 1)
+            f += [[a, b, c], [a, c, d]]
+    return np.array(f)
+
+
+_TET = np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]])
+
+
+def test_closed_higher_genus_surface_passes_with_a_note():
+    """F9: two compact C18 conformers were refused at chi = -2 / -4 with
+    nothing clipped. A closed surface with handles is valid."""
+    topo = em.mesh_topology(_torus_faces())
+    assert topo == dict(chi=0, components=1, open_edges=0, nonmanifold_edges=0,
+                        closed=True, genus=1)
+    problems, notes = em.surface_problems(topo, 1e-6, em.ISO_BADER)
+    assert problems == [] and "genus 1" in notes[0]
+
+
+def test_two_closed_pieces_pass_with_a_warning():
+    """Genus is summed over pieces (chi = 2C - 2g): two separate tori give
+    C = 2, g = 2. Closed, so not refused, but the extra piece is flagged."""
+    t = _torus_faces()
+    topo = em.mesh_topology(np.vstack([t, t + t.max() + 1]))
+    assert (topo["components"], topo["chi"], topo["genus"]) == (2, 0, 2)
+    problems, notes = em.surface_problems(topo, 1e-6, em.ISO_BADER)
+    assert problems == [] and any("2 separate closed surfaces" in n for n in notes)
+
+
+def test_open_mesh_is_still_refused():
+    """The reason the check exists: a clipped surface is open."""
+    topo = em.mesh_topology(_TET[:3])
+    assert topo["open_edges"] == 3 and not topo["closed"] and topo["genus"] is None
+    problems, _ = em.surface_problems(topo, 1e-6, em.ISO_BADER)
+    assert any("OPEN" in p and "not a single closed" in p for p in problems)
+
+
+def test_density_on_the_box_face_is_refused_even_if_closed():
+    problems, _ = em.surface_problems(em.mesh_topology(_TET), 5e-3, em.ISO_BADER)
+    assert any("CLIPPED" in p for p in problems)
+
+
+def test_sphere_like_surface_passes_silently():
+    topo = em.mesh_topology(_TET)
+    assert (topo["closed"], topo["genus"], topo["components"]) == (True, 0, 1)
+    assert em.surface_problems(topo, 1e-6, em.ISO_BADER) == ([], [])
+
+
+def test_nonmanifold_edge_is_refused():
+    fan = np.array([[0, 1, 2], [0, 1, 3], [0, 1, 4]])     # one edge, three triangles
+    problems, _ = em.surface_problems(em.mesh_topology(fan), 1e-6, em.ISO_BADER)
+    assert any("more than two" in p for p in problems)
+
+
 # ------------------------------------------------------------------- cost
 def test_cost_estimate_needs_no_scf_and_knows_the_spin():
     """Review 2, G8: estimate_cost omitted spin, so the guard meant to prevent
@@ -233,3 +292,48 @@ def test_cost_estimate_needs_no_scf_and_knows_the_spin():
     spec, info = em.from_smiles("C[CH2]")
     natm, nao = em.estimate_cost(spec, "def2-svp", charge=0, spin=1)
     assert natm == 7 and nao > 0
+
+
+def test_gpu_without_gpu4pyscf_fails_before_any_work():
+    """--gpu on a machine without GPU4PySCF must say what is missing, not
+    build a molecule and die inside to_gpu() with an opaque error."""
+    pytest.importorskip("pyscf")
+    try:
+        import gpu4pyscf  # noqa: F401
+        pytest.skip("gpu4pyscf is installed here")
+    except ImportError:
+        pass
+    with pytest.raises(RuntimeError, match="gpu4pyscf"):
+        em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True)
+
+
+def _rgb(s):
+    return np.array([int(x) for x in s[4:-1].split(",")]) / 255.0
+
+
+def test_3d_view_colours_run_the_same_way_as_the_image():
+    """The interactive view must not re-derive colour orientation: the same
+    trap as the three maps that shipped inverted (review 1)."""
+    for name, cmap in sorted(em.build_maps().items()):
+        cs = em.plotly_colorscale(cmap)
+        ts = [t for t, _ in cs]
+        assert ts[0] == 0.0 and ts[-1] == 1.0 and ts == sorted(ts), name
+        lo, hi = _rgb(cs[0][1]), _rgb(cs[-1][1])
+        assert np.allclose(lo, cmap(0.0)[:3], atol=1 / 255), name
+        assert np.allclose(hi, cmap(1.0)[:3], atol=1 / 255), name
+        if name not in em.SEQUENTIAL:
+            assert lo[0] > lo[2] and hi[2] > hi[0], f"{name}: warm must be negative"
+
+
+def test_3d_view_maps_vlim_and_has_no_specular_highlight():
+    pytest.importorskip("plotly")
+    verts = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], float)
+    faces = np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]])
+    V = np.array([-30.0, -5.0, 10.0, 40.0])
+    fig = em.esp_figure(verts, faces, V, ["O", "H"], np.array([[0, 0, 0], [0, 0, 1.8]]),
+                        em.build_maps()["vik"], (-40.0, 40.0))
+    surf = fig.data[0]
+    assert (surf.cmin, surf.cmax) == (-40.0, 40.0)    # V_min side gets t=0, warm
+    assert list(surf.intensity) == list(V)
+    assert surf.lighting.specular == 0.0
+    assert len(fig.data[1].x) == 3                     # one O-H bond: 2 points + gap

@@ -134,6 +134,7 @@ WHAT THIS IS AND IS NOT
     than the convergence tests reported in the review.
 """
 import argparse
+import os
 import sys
 
 import numpy as np
@@ -570,18 +571,35 @@ def total_dm(mf):
 
 
 def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
-            solvent=None):
+            solvent=None, density_fit=False, gpu=False):
     """Restricted for a closed shell, UNRESTRICTED when spin != 0.
 
     v3 built an RKS object whatever the spin. PySCF does not refuse: on
     O with spin=2 (nelec 5,3) RKS returned -74.998688 Ha against UKS
     -75.000759, i.e. a converged, plausible, physically meaningless number
     from a restricted wavefunction describing an open shell.
+
+    density_fit is OFF by default and the error budget was measured without
+    it. Its effect on the ESP is unmeasured until bench/timing.py says so.
+
+    gpu runs the SCF ONLY on GPU4PySCF and hands back a CPU object, so
+    total_dm and everything downstream are unchanged. Validated once
+    (bench/gpu_l4.json): RKS + density_fit, gas phase, decanoic acid, where
+    V_min/V_max matched the CPU to <0.001 kcal/mol. UKS, PCM and runs
+    without density fitting are untested on the GPU.
     """
+    if gpu:
+        try:
+            import gpu4pyscf  # noqa: F401
+        except ImportError:
+            raise RuntimeError("gpu=True needs gpu4pyscf (pip install "
+                               "gpu4pyscf-cuda12x) and an NVIDIA GPU") from None
     from pyscf import dft, gto
     mol = gto.M(atom=atom, basis=basis, charge=charge, spin=spin,
                 unit="Angstrom", verbose=verbose)
     mf = dft.UKS(mol) if spin else dft.RKS(mol)
+    if density_fit:
+        mf = mf.density_fit()
     mf.xc = xc
     if solvent is not None:
         eps = SOLVENTS[solvent] if isinstance(solvent, str) else float(solvent)
@@ -589,10 +607,14 @@ def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
             mf = mf.PCM()                 # polarises the solute density
             mf.with_solvent.eps = eps
     mf.grids.level = 3
+    if gpu:
+        mf = mf.to_gpu()
     mf.kernel()
     if not mf.converged:
         raise RuntimeError(f"SCF did not converge ({basis}/{xc}"
                            f"{', spin=%d' % spin if spin else ''})")
+    if gpu:
+        mf = mf.to_cpu()    # np.asarray in total_dm refuses CuPy arrays
     if basis.lower() in SMALL_BASIS:
         print(f"WARNING: {basis} is double-zeta or smaller. Measured error on "
               f"the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to "
@@ -646,13 +668,70 @@ def euler_characteristic(faces):
     return len(np.unique(faces)) - n_edges + len(faces)
 
 
+def mesh_topology(faces):
+    """What the mesh IS, measured directly, rather than inferred from chi alone.
+
+    chi = 2 was the clipping detector, but chi conflates two things: an OPEN
+    mesh (clipped by the box: edges used by one triangle) and a CLOSED mesh of
+    higher genus (a handle, e.g. a folded chain touching itself at the
+    isovalue). Two of ten C18 acetate conformers (bench/conformers.jsonl, the
+    two most compact) were refused at chi = -2 and -4 although nothing was
+    clipped. Counting edge use separates the cases: every edge of a closed
+    manifold is shared by exactly two triangles.
+    """
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+    e = np.sort(np.vstack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [0, 2]]]), axis=1)
+    _, use = np.unique(e, axis=0, return_counts=True)
+    used = np.unique(faces)
+    remap = np.full(faces.max() + 1, -1)
+    remap[used] = np.arange(len(used))
+    f = remap[faces]
+    a = np.concatenate([f[:, 0], f[:, 1], f[:, 0]])
+    b = np.concatenate([f[:, 1], f[:, 2], f[:, 2]])
+    adj = coo_matrix((np.ones(len(a)), (a, b)), shape=(len(used),) * 2)
+    n_comp = int(connected_components(adj, directed=False)[0])
+    chi = int(len(used) - len(use) + len(faces))
+    open_e, nonman = int((use == 1).sum()), int((use > 2).sum())
+    closed = open_e == 0 and nonman == 0
+    # closed orientable surfaces: chi = 2 * components - 2 * total genus
+    genus = (2 * n_comp - chi) // 2 if closed else None
+    return dict(chi=chi, components=n_comp, open_edges=open_e,
+                nonmanifold_edges=nonman, closed=closed, genus=genus)
+
+
+def surface_problems(topo, face_max_rho, iso):
+    """(problems, notes): problems refuse the surface, notes only inform."""
+    problems, notes = [], []
+    if face_max_rho > iso:
+        problems.append(f"density on a grid-box face is {face_max_rho:.2e} > iso={iso}; "
+                        f"the isosurface is CLIPPED (raise --margin)")
+    if topo["open_edges"]:
+        problems.append(f"the mesh is OPEN ({topo['open_edges']} edges belong to one "
+                        f"triangle only): not a single closed surface")
+    if topo["nonmanifold_edges"]:
+        problems.append(f"{topo['nonmanifold_edges']} edges are shared by more than two "
+                        f"triangles: not a single closed surface")
+    if topo["closed"] and topo["genus"]:
+        notes.append(f"closed surface of genus {topo['genus']} (chi = {topo['chi']}): the "
+                     f"molecule folds back on itself at the isovalue. Valid; the surface "
+                     f"has {topo['genus']} handle(s), so the 3D view may show a tunnel.")
+    if topo["closed"] and topo["components"] > 1:
+        notes.append(f"WARNING: {topo['components']} separate closed surfaces (an enclosed "
+                     f"void, or fragments the gate should have caught). Areas and extrema "
+                     f"include all of them.")
+    return problems, notes
+
+
 def extract_surface(mol, dm, spacing, iso=ISO_BADER, margin=5.0, strict=True):
     """F4: a clipped isosurface is the silent failure of this pipeline.
 
     At margin 3.5 bohr the review measured the chlorobenzene sigma-hole at
     +4.69 instead of +6.35 kcal/mol -- a 26% error -- while every other number
     in the run stayed plausible. Two cheap, independent detectors: density on
-    the grid-box faces, and the Euler characteristic of the mesh.
+    the grid-box faces, and the topology of the mesh (open edges). chi = 2 is
+    no longer required: a folded molecule can give a closed surface of higher
+    genus, which is valid (see mesh_topology).
     """
     from skimage import measure
     co = mol.atom_coords()
@@ -665,20 +744,16 @@ def extract_surface(mol, dm, spacing, iso=ISO_BADER, margin=5.0, strict=True):
     verts_i, faces, _, _ = measure.marching_cubes(rho, level=iso)
     verts = lo + verts_i * spacing
     faces = faces.astype(int)
-    chi = euler_characteristic(faces)
+    topo = mesh_topology(faces)
 
     diag = dict(grid=tuple(int(x) for x in n), n_verts=len(verts),
-                face_max_rho=float(face_max), chi=int(chi),
+                face_max_rho=float(face_max), **topo,
                 rho_integral=float(rho.sum() * spacing ** 3),
                 nelec=int(mol.nelectron), margin=margin, spacing=spacing)
 
-    problems = []
-    if face_max > iso:
-        problems.append(f"density on a grid-box face is {face_max:.2e} > iso={iso}; "
-                        f"the isosurface is CLIPPED (raise --margin)")
-    if chi != 2:
-        problems.append(f"Euler characteristic is {chi}, not 2; the mesh is not a "
-                        f"single closed surface")
+    problems, notes = surface_problems(topo, face_max, iso)
+    for n_ in notes:
+        print(("" if n_.startswith("WARNING") else "note: ") + n_, file=sys.stderr)
     if problems:
         msg = "isosurface integrity failed:\n  - " + "\n  - ".join(problems)
         if strict:
@@ -871,7 +946,79 @@ MOLECULES = {"bromobenzene": ("Br", 1.890), "chlorobenzene": ("Cl", 1.740),
              "benzene": ("H", 1.080)}
 
 
-def monosubstituted_benzene(sub, c_sub, rcc=1.390, rch=1.080):
+def plotly_colorscale(cmap, n=33):
+    """matplotlib colormap -> plotly colorscale, sampled t = 0 .. 1 in order.
+
+    Built from the SAME cmap object render() uses, so the orientation that
+    --selftest asserts (warm = negative on diverging maps, V_min darkest on
+    sequential ones) carries over instead of being re-derived for plotly.
+    """
+    out = []
+    for t in np.linspace(0.0, 1.0, n):
+        r, g, b = (int(round(255 * c)) for c in cmap(float(t))[:3])
+        out.append([float(t), f"rgb({r},{g},{b})"])
+    return out
+
+
+# covalent radii (A) for drawing bonds in the 3D view; TESTED_ELEMENTS only
+_RCOV = {"H": .31, "B": .84, "C": .76, "N": .71, "O": .66, "F": .57, "Si": 1.11,
+         "P": 1.07, "S": 1.05, "Cl": 1.02, "Br": 1.20, "I": 1.39, "Se": 1.20}
+_ATOM_RGB = {"H": "#f2f2f2", "C": "#555555", "N": "#3050f8", "O": "#ff0d0d",
+             "F": "#90e050", "Cl": "#1ff01f", "Br": "#a62929", "I": "#940094",
+             "S": "#d9c21f", "P": "#ff8000"}
+
+
+def esp_figure(verts, faces, V, symbols, coords, cmap, vlim, title=""):
+    """Interactive 3D surface (plotly): rotate, zoom, hover to read V.
+
+    verts and coords in BOHR (as computed); shown in Angstrom. Lighting has
+    no specular term for the same reason render() has none: a white
+    highlight at an arbitrary place reads as a potential extremum. The
+    surface starts opaque so its colours are exact; a button makes it
+    see-through to show which atom a feature sits on.
+    """
+    import plotly.graph_objects as go
+    P, X = np.asarray(verts) * BOHR, np.asarray(coords) * BOHR
+    surf = go.Mesh3d(
+        x=P[:, 0], y=P[:, 1], z=P[:, 2],
+        i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
+        intensity=V, intensitymode="vertex",
+        colorscale=plotly_colorscale(cmap), cmin=vlim[0], cmax=vlim[1],
+        colorbar=dict(title="V (kcal/mol)<br>warm = negative", len=0.75),
+        lighting=dict(ambient=0.62, diffuse=0.38, specular=0.0,
+                      roughness=1.0, fresnel=0.0),
+        hovertemplate="V = %{intensity:+.1f} kcal/mol<extra></extra>",
+        name="ESP surface", opacity=1.0)
+    bx, by, bz = [], [], []
+    for a in range(len(symbols)):
+        for b in range(a + 1, len(symbols)):
+            cut = 1.15 * (_RCOV.get(symbols[a], .8) + _RCOV.get(symbols[b], .8))
+            if np.linalg.norm(X[a] - X[b]) < cut:
+                for u in (X[a], X[b]):
+                    bx.append(u[0]); by.append(u[1]); bz.append(u[2])
+                bx.append(None); by.append(None); bz.append(None)
+    bonds = go.Scatter3d(x=bx, y=by, z=bz, mode="lines", hoverinfo="skip",
+                         line=dict(color="#444444", width=5), name="bonds")
+    atoms = go.Scatter3d(
+        x=X[:, 0], y=X[:, 1], z=X[:, 2], mode="markers", name="atoms",
+        text=symbols, hovertemplate="%{text}<extra></extra>",
+        marker=dict(size=[3 if s == "H" else 5 for s in symbols],
+                    color=[_ATOM_RGB.get(s, "#ff1493") for s in symbols],
+                    line=dict(color="#222222", width=1)))
+    fig = go.Figure([surf, bonds, atoms])
+    fig.update_layout(
+        title=title, showlegend=False, margin=dict(l=0, r=0, t=40, b=0),
+        scene=dict(aspectmode="data", xaxis_visible=False,
+                   yaxis_visible=False, zaxis_visible=False),
+        updatemenus=[dict(type="buttons", direction="right", x=0.0, y=1.0,
+                          xanchor="left", yanchor="top", buttons=[
+            dict(label="opaque", method="restyle", args=[{"opacity": 1.0}, [0]]),
+            dict(label="see-through", method="restyle",
+                 args=[{"opacity": 0.45}, [0]])])])
+    return fig
+
+
+def monosubstituted_benzene(sub,c_sub, rcc=1.390, rch=1.080):
     """Idealised planar C6H5X. NOT an optimised geometry.
 
     Measured dV_max/dR ~ -14 kcal/mol per Angstrom for the chlorobenzene
@@ -1010,6 +1157,10 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="compute even if the structure check rejects")
     ap.add_argument("--basis", default="def2-tzvp")
+    ap.add_argument("--density-fit", action="store_true",
+                    help="RI-J/K: much faster SCF; ESP effect not yet measured")
+    ap.add_argument("--gpu", action="store_true",
+                    help="SCF on GPU4PySCF (NVIDIA only); validated with --density-fit")
     ap.add_argument("--xc", default="b3lyp")
     ap.add_argument("--solvent", default="vacuum",
                     choices=sorted(SOLVENTS),
@@ -1038,10 +1189,19 @@ def main():
     ap.add_argument("--size", type=int, default=700)
     ap.add_argument("--ambient", type=float, default=0.62)
     ap.add_argument("--out", default="esp.png")
+    ap.add_argument("--html", help="also write an interactive 3D view (needs plotly)")
+    ap.add_argument("--npz", help="also save the surface (verts, faces, V, atoms) "
+                                  "so it can be re-rendered without an SCF")
+    ap.add_argument("--json", help="also write the settings and results")
     a = ap.parse_args()
 
     if a.selftest:
         raise SystemExit(selftest())
+    if a.html:
+        try:                        # fail before the SCF, not after it
+            import plotly  # noqa: F401
+        except ImportError:
+            raise SystemExit("--html needs plotly: pip install plotly") from None
 
     charge, spin, i_sub = a.charge or 0, a.spin, 6
     gi = None
@@ -1144,6 +1304,7 @@ def main():
 
     solv = None if a.solvent == "vacuum" else a.solvent
     mol, mf = run_scf(spec, basis=a.basis, xc=a.xc, charge=charge, spin=spin,
+                      density_fit=a.density_fit, gpu=a.gpu,
                       solvent=solv)
     if a.optimize:
         from pyscf.geomopt.berny_solver import optimize as _opt
@@ -1154,6 +1315,7 @@ def main():
             f"{mol.atom_coord(i)[0] * BOHR:.6f} {mol.atom_coord(i)[1] * BOHR:.6f} "
             f"{mol.atom_coord(i)[2] * BOHR:.6f}" for i in range(mol.natm))
         mol, mf = run_scf(spec, basis=a.basis, xc=a.xc, charge=charge,
+                          density_fit=a.density_fit, gpu=a.gpu,
                           spin=spin, solvent=solv)
     dm = total_dm(mf)
     print(f"SCF {mf.e_tot:.6f} Ha, {mol.nao} basis functions, {a.xc}/{a.basis}, "
@@ -1163,8 +1325,9 @@ def main():
 
     verts, faces, diag = extract_surface(mol, dm, a.spacing, iso=a.iso,
                                          margin=a.margin, strict=not a.no_strict)
-    print(f"grid {diag['grid']}, {diag['n_verts']:,} vertices, chi={diag['chi']}, "
-          f"max rho on a box face {diag['face_max_rho']:.1e}")
+    print(f"grid {diag['grid']}, {diag['n_verts']:,} vertices, chi={diag['chi']} "
+          f"({'closed' if diag['closed'] else 'OPEN'}, genus {diag['genus']}, "
+          f"{diag['components']} piece(s)), max rho on a box face {diag['face_max_rho']:.1e}")
     # F3: diagnostic only. This number moves -5%..+7% with grid spacing while
     # V_max moves 0.5%, and is IDENTICAL between def2-SVP and def2-TZVP where
     # V_max moves 3.5 kcal/mol. It cannot validate the quantity of interest.
@@ -1203,6 +1366,50 @@ def main():
     plt.imsave(a.out, img)
     print(f"wrote {a.out}  ({kind} scale {vlim[0]:+.1f} to {vlim[1]:+.1f} "
           f"kcal/mol, cmap {a.cmap})")
+
+    symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
+    label = (gi or {}).get("formula") or a.smiles or a.file or a.molecule
+    if a.html:
+        esp_figure(verts, faces, V, symbols, mol.atom_coords(), cmaps[a.cmap],
+                   vlim, title=f"{label} · {a.xc}/{a.basis}").write_html(
+            a.html, include_plotlyjs=True)
+        print(f"wrote {a.html}  (interactive 3D)")
+    if a.npz:
+        np.savez_compressed(a.npz, verts=verts, faces=faces, V=V,
+                            symbols=np.array(symbols), coords=mol.atom_coords(),
+                            vlim=np.array(vlim), kind=kind, cmap=a.cmap)
+        print(f"wrote {a.npz}  (surface, bohr; V in kcal/mol)")
+    if a.json:
+        import json
+        import subprocess
+        import pyscf
+        import rdkit
+        commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                                text=True, cwd=os.path.dirname(os.path.abspath(
+                                    __file__))).stdout.strip() or None
+        rec = dict(
+            input=dict(smiles=a.smiles, file=a.file, approved_smiles=approved,
+                       formula=(gi or {}).get("formula"), charge=charge, spin=spin),
+            settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
+                          density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
+                          spacing_bohr=a.spacing, seed=a.seed, nconfs=a.nconfs,
+                          optimize=a.optimize, geometry=(gi or {}).get("source")),
+            results=dict(e_tot_Ha=float(mf.e_tot), nao=int(mol.nao),
+                         dipole_D=float(np.linalg.norm(mf.dip_moment(
+                             unit="Debye", verbose=0))),
+                         V_min=float(V.min()), V_max=float(V.max()),
+                         n_verts=int(diag["n_verts"]), chi=int(diag["chi"])),
+            scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
+                       cmap=a.cmap, comparable=a.lim is not None or kind != "diverging"),
+            versions=dict(pyscf=pyscf.__version__, rdkit=rdkit.__version__,
+                          espmap_commit=commit),
+            caveat=("Measured error budget (README): basis def2-SVP -> "
+                    "def2-TZVPP moves the chlorobenzene sigma-hole by +3.55 "
+                    "kcal/mol; solvent gas -> water by -3.61. Quote numbers only "
+                    "against those margins."))
+        with open(a.json, "w") as f:
+            json.dump(rec, f, indent=2)
+        print(f"wrote {a.json}")
 
 
 if __name__ == "__main__":

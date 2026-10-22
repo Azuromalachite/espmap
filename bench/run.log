@@ -1,0 +1,57 @@
+start chlorobenzene|def2-tzvp|exact|1t  10:30:57
+done  chlorobenzene|def2-tzvp|exact|1t  158 s  nao=253 scf=150s V=-11.88..+24.22
+start chlorobenzene|def2-tzvp|exact|16t  10:33:35
+done  chlorobenzene|def2-tzvp|exact|16t  43 s  nao=253 scf=39s V=-11.88..+24.22
+start chlorobenzene|def2-tzvp|df|16t  10:34:18
+done  chlorobenzene|def2-tzvp|df|16t  24 s  nao=253 scf=21s V=-11.88..+24.23
+start decanoic_acid|def2-svp|df|16t  10:34:43
+done  decanoic_acid|def2-svp|df|16t  56 s  nao=268 scf=48s V=-38.46..+57.26
+start decanoic_acid|def2-svp|exact|16t  10:35:39
+done  decanoic_acid|def2-svp|exact|16t  75 s  nao=268 scf=66s V=-38.46..+57.25
+start decanoic_acid|def2-tzvp|df|16t  10:36:54
+done  decanoic_acid|def2-tzvp|df|16t  121 s  nao=492 scf=97s V=-37.28..+60.08
+start decanoic_acid|def2-tzvp|exact|16t  10:38:55
+done  decanoic_acid|def2-tzvp|exact|16t  233 s  nao=492 scf=211s V=-37.28..+60.06
+start BDSF|def2-svp|df|16t  10:42:48
+done  BDSF|def2-svp|df|16t  71 s  nao=306 scf=59s V=-37.49..+55.91
+start BDSF|def2-svp|exact|16t  10:43:59
+done  BDSF|def2-svp|exact|16t  87 s  nao=306 scf=76s V=-37.49..+55.91
+start BDSF|def2-tzvp|df|16t  10:45:25
+done  BDSF|def2-tzvp|df|16t  162 s  nao=566 scf=129s V=-36.48..+58.62
+start BDSF|def2-tzvp|exact|16t  10:48:08
+done  BDSF|def2-tzvp|exact|16t  317 s  nao=566 scf=286s V=-36.48..+58.60
+start Z3Z13-18OH|def2-svp|df|16t  10:53:25
+done  Z3Z13-18OH|def2-svp|df|16t  133 s  nao=436 scf=103s V=-42.43..+39.43
+start Z3Z13-18OAc|def2-svp|df|16t  10:55:38
+done  Z3Z13-18OAc|def2-svp|df|16t  185 s  nao=488 scf=146s V=-40.74..+19.87
+start Z3Z13-18OH|def2-tzvp|df|16t  10:58:43
+done  Z3Z13-18OH|def2-tzvp|df|16t  33 s  ERROR OSError(28, "Can't synchronously write data (file write failed: time = Thu Oct 22 10:59:13 2026\n, filename = '/tmp/tmpkwiejhdh', file descriptor = 5, errno = 28, error message = 'No space left on dev
+start Z3Z13-18OAc|def2-tzvp|df|16t  10:59:15
+done  Z3Z13-18OAc|def2-tzvp|df|16t  34 s  ERROR OSError(28, "Can't synchronously write data (file write failed: time = Thu Oct 22 10:59:48 2026\n, filename = '/tmp/tmp2frun712', file descriptor = 5, errno = 28, error message = 'No space left on dev
+start Z3Z13-18OAc|def2-svp|exact|16t  10:59:49
+done  Z3Z13-18OAc|def2-svp|exact|16t  221 s  nao=488 scf=182s V=-40.74..+19.87
+start Z3Z13-18OAc|def2-tzvp|exact|16t  11:03:30
+done  Z3Z13-18OAc|def2-tzvp|exact|16t  1004 s  nao=898 scf=875s V=-40.44..+22.52
+timing finished 11:20:21, starting conformers
+ENSEMBLE {"molecule": "Z3Z13-18OAc", "smiles": "CC(=O)OCC/C=C\\CCCCCCCC/C=C\\CCCC", "n_rot": 15, "n_embedded": 100, "seed": 12648430, "t_embed": 5.865833494000071, "mmff_dE_range": 10.5216254428641, "rg_min": 3.894403870108953, "rg_max": 6.4246667416479415, "extent_min": 9.29938214931674, "extent_max": 20.127018135944255, "lowest_E_rg": 6.162175254874509, "lowest_E_extent": 18.893584289078067, "lowest_E_rg_rank": "87 of 100 are more compact"}
+conf   4  dE= 0.00  rg=6.16  V=-40.74..+19.87  mu=1.95 D  199s
+conf  40  dE= 6.40  rg=3.89  ERROR RuntimeError('isosurface integrity failed:\n  - Euler characteristic is -2, not 2; the mesh is not a single closed surfa
+conf  57  dE= 4.18  rg=5.08  V=-40.77..+19.73  mu=2.35 D  209s
+conf  28  dE= 3.02  rg=5.39  V=-40.61..+19.91  mu=1.77 D  198s
+conf  34  dE= 2.47  rg=5.61  V=-40.29..+20.10  mu=1.58 D  195s
+conf  54  dE= 0.49  rg=5.74  V=-40.04..+20.47  mu=1.62 D  218s
+conf  53  dE= 4.32  rg=5.90  V=-40.45..+20.15  mu=1.66 D  217s
+conf  67  dE= 1.59  rg=6.03  V=-39.81..+20.90  mu=1.59 D  225s
+conf  82  dE= 3.27  rg=6.42  V=-40.91..+19.74  mu=2.01 D  241s
+conf  72  dE= 4.85  rg=3.93  ERROR RuntimeError('isosurface integrity failed:\n  - Euler characteristic is -4, not 2; the mesh is not a single closed surfa
+conformers finished 11:56:57, retrying failed timing rows (PYSCF_TMPDIR=~/pyscf_tmp)
+skip  Z3Z13-18OH|def2-svp|df|16t
+skip  Z3Z13-18OAc|def2-svp|df|16t
+start Z3Z13-18OH|def2-tzvp|df|16t  11:56:57
+done  Z3Z13-18OH|def2-tzvp|df|16t  921 s  nao=793 scf=813s V=-40.07..+40.96
+start Z3Z13-18OAc|def2-tzvp|df|16t  12:12:18
+done  Z3Z13-18OAc|def2-tzvp|df|16t  1765 s  nao=898 scf=1613s V=-40.44..+22.52
+skip  Z3Z13-18OAc|def2-svp|exact|16t
+skip  Z3Z13-18OAc|def2-tzvp|exact|16t
+clean re-run start 12:52:27, idle machine, PYSCF_TMPDIR=~/pyscf_tmp
+clean re-run end 13:14:28
