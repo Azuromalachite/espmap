@@ -1,0 +1,162 @@
+
+=== benzene_charge2: --smiles c1ccccc1 --charge 2
+    exit 0, 7.2 s, peak 363 MB
+    stderr WARNING lines: ["WARNING: --charge 2 overrides the structure's formal charge +0", 'WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.']
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate INFO forced False; approved 'c1ccccc1' computed 'c1ccccc1' verified True charge 2 spin 0
+    identity {'chemical_smiles': 'c1ccccc1', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+    budget ids ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'partition small anions', 'partition C18', 'grid mean']
+    sites [('C0', 'default'), ('C1', 'default'), ('C2', 'default'), ('C3', 'default'), ('C4', 'default'), ('C5', 'default')]
+    geometry_method etkdg_mmff94s  analysis_key 7dd2ab84f1  optimised_from None
+    V +213.18 .. +294.65; gipf nu None; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== benzene_spin2: --smiles c1ccccc1 --spin 2
+    exit 0, 8.8 s, peak 357 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', "WARNING: no --lim given, auto-scaling to this molecule's own extremum (-14.4 to +14.4 kcal/mol)."]
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate INFO forced False; approved 'c1ccccc1' computed 'c1ccccc1' verified True charge 0 spin 2
+    identity {'chemical_smiles': 'c1ccccc1', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+    budget ids ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'partition small anions', 'partition C18', 'grid mean']
+    sites [('C0', 'default'), ('C1', 'default'), ('C2', 'default'), ('C3', 'default'), ('C4', 'default'), ('C5', 'default')]
+    geometry_method etkdg_mmff94s  analysis_key 7dd2ab84f1  optimised_from None
+    V -10.45 .. +14.43; gipf nu 0.2276701997877818; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== water_open: --smiles O --margin 2.0 --no-strict
+    exit 0, 2.0 s, peak 216 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', 'WARNING: isosurface integrity failed:', "WARNING: no --lim given, auto-scaling to this molecule's own extremum (-43.8 to +43.8 kcal/mol)."]
+    schema problems: ['record.results.surface.genus: null, expected int']
+    validity {'input': True, 'surface': False, 'sites': False}  sites_reason 'surface not valid (see results.surface.problems)'
+    gate INFO forced False; approved 'O' computed 'O' verified True charge 0 spin 0
+    geometry_method etkdg_mmff94s  analysis_key 7dd2ab84f1  optimised_from None
+    V -43.83 .. +37.39; gipf nu 0.24852012815468558; surface genus None
+    npz validity {'input': True, 'surface': False, 'sites': False}  tri_atom arrays []
+    npz files differing from schema['npz']: ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== methyl_uks: --smiles [CH3] --spin 1
+    exit 0, 2.9 s, peak 225 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', "WARNING: no --lim given, auto-scaling to this molecule's own extremum (-13.7 to +13.7 kcal/mol)."]
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate INFO forced False; approved '[CH3]' computed '[CH3]' verified True charge 0 spin 1
+    identity {'chemical_smiles': '[CH3]', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+    budget ids ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'partition small anions', 'partition C18', 'grid mean']
+    sites [('C0', 'default')]
+    geometry_method etkdg_mmff94s  analysis_key 7dd2ab84f1  optimised_from None
+    V -4.63 .. +13.65; gipf nu 0.09652264769136253; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== forced_salt: --smiles [Na+].[O-]C=O --force
+    exit 0, 3.4 s, peak 287 MB
+    stderr WARNING lines: ["WARNING: before the SCF: the structure that passed the check is not the one about to be computed: the connectivity perceived from the coordinates is not the approved structure's", 'WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', "WARNING: no --lim given, auto-scaling to this molecule's own extremum (-60.8 to +60.8 kcal/mol)."]
+    schema problems: none
+    validity {'input': False, 'surface': True, 'sites': False}  sites_reason 'input not valid (forced past the gate, or structure not verified)'
+    gate BLOCK forced True; approved None computed None verified False charge 0 spin 0
+    geometry_method etkdg_mmff94s  analysis_key 7dd2ab84f1  optimised_from None
+    V -43.74 .. +60.82; gipf nu 0.22651172541199213; surface genus 0
+    npz validity {'input': False, 'surface': True, 'sites': False}  tri_atom arrays []
+    npz files differing from schema['npz']: ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== nitrite_xyz: --file /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/review5-work/fx/nitrite_mmff.xyz --charge -1
+    exit 0, 2.7 s, peak 229 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', 'WARNING: gas-phase anion with HOMO +7.15 eV: the outer electron is unbound and held only by the basis, so the map tracks the basis set, not the molecule. Compute it in a continuum (--solvent water) or as the neutral/protonated form.']
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate INFO forced False; approved 'O=N[O-]' computed 'O=N[O-]' verified True charge -1 spin 0
+    identity {'chemical_smiles': 'O=N[O-]', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+    budget ids ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'anion geometry', 'partition small anions', 'partition C18', 'grid mean']
+    sites [('N0', 'default'), ('O1', 'default'), ('O2', 'default')]
+    geometry_method file_frozen  analysis_key b8b0018df8  optimised_from None
+    V -197.40 .. -153.55; gipf nu None; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== formate_rf: --smiles [O-]C=O --solvent water --include-reaction-field
+    exit 0, 4.0 s, peak 359 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.']
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate INFO forced False; approved 'O=C[O-]' computed 'O=C[O-]' verified True charge -1 spin 0
+    identity {'chemical_smiles': 'O=C[O-]', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+    budget ids ['basis', 'functional', 'grid', 'anion geometry', 'partition small anions', 'partition C18', 'grid mean']
+    sites [('O0', 'default'), ('C1', 'default'), ('O2', 'default')]
+    geometry_method etkdg_mmff94s  analysis_key 889faf1f5f  optimised_from None
+    V -34.34 .. -2.82; gipf nu None; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== cco_sites: --smiles CCO --sites /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/review5-work/fx/cco_index.sites.json
+    exit 0, 2.8 s, peak 280 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', "WARNING: no --lim given, auto-scaling to this molecule's own extremum (-43.8 to +43.8 kcal/mol)."]
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate INFO forced False; approved 'CCO' computed 'CCO' verified True charge 0 spin 0
+    identity {'chemical_smiles': 'CCO', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+    budget ids ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'partition small anions', 'partition C18', 'conformer C18', 'grid mean']
+    sites [('hydroxyl', 'caller:index'), ('CH2', 'caller:index')]
+    geometry_method etkdg_mmff94s  analysis_key 7dd2ab84f1  optimised_from None
+    V -43.83 .. +36.04; gipf nu 0.19310127689903173; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== alh4: --smiles [AlH4-] --solvent water
+    exit 0, 3.0 s, peak 312 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.']
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate WARN forced False; approved '[AlH4-]' computed '[AlH4-]' verified True charge -1 spin 0
+    identity {'chemical_smiles': '[AlH4-]', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': None, 'unit': 'triangle', 'radii': None}
+    budget ids ['basis', 'functional', 'grid', 'anion geometry', 'partition small anions', 'partition C18', 'grid mean']
+    sites [('Al0', 'default')]
+    geometry_method etkdg_uff  analysis_key d4f9e06c14  optimised_from None
+    V -144.60 .. -126.09; gipf nu None; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== water_opt: --smiles O --optimize
+    exit 0, 3.2 s, peak 252 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', 'WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', "WARNING: no --lim given, auto-scaling to this molecule's own extremum (-41.5 to +41.5 kcal/mol)."]
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate INFO forced False; approved 'O' computed 'O' verified True charge 0 spin 0
+    identity {'chemical_smiles': 'O', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+    budget ids ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'partition small anions', 'partition C18', 'grid mean']
+    sites [('O0', 'default')]
+    geometry_method dft_opt:b3lyp/sto3g  analysis_key 677f8d21b5  optimised_from 8557ddd0772d77fdf551ad8aab83dacc49b3ff3d
+    V -41.51 .. +36.40; gipf nu 0.24060442384526926; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== fluoride_gas: --smiles [F-]
+    exit 0, 2.1 s, peak 204 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', 'WARNING: gas-phase anion with HOMO +18.26 eV: the outer electron is unbound and held only by the basis, so the map tracks the basis set, not the molecule. Compute it in a continuum (--solvent water) or as the neutral/protonated form.']
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate INFO forced False; approved '[F-]' computed '[F-]' verified True charge -1 spin 0
+    identity {'chemical_smiles': '[F-]', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+    budget ids ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'anion geometry', 'partition small anions', 'partition C18', 'grid mean']
+    sites [('F0', 'default')]
+    geometry_method etkdg_mmff94s  analysis_key 7dd2ab84f1  optimised_from None
+    V -251.94 .. -248.64; gipf nu None; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== h2: --smiles [H][H]
+    exit 0, 1.6 s, peak 204 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', "WARNING: no --lim given, auto-scaling to this molecule's own extremum (-11.3 to +11.3 kcal/mol)."]
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': False}  sites_reason 'no heavy atom: sites are heavy atoms with their hydrogens, and this molecule has none'
+    gate INFO forced False; approved '[H][H]' computed '[H][H]' verified True charge 0 spin 0
+    geometry_method etkdg_uff  analysis_key 8d55263b23  optimised_from None
+    V -1.61 .. +11.34; gipf nu 0.018598206925984212; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': False}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+
+=== cco: --smiles CCO
+    exit 0, 3.4 s, peak 280 MB
+    stderr WARNING lines: ['WARNING: sto-3g is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.', "WARNING: no --lim given, auto-scaling to this molecule's own extremum (-43.8 to +43.8 kcal/mol)."]
+    schema problems: none
+    validity {'input': True, 'surface': True, 'sites': True}  sites_reason None
+    gate INFO forced False; approved 'CCO' computed 'CCO' verified True charge 0 spin 0
+    identity {'chemical_smiles': 'CCO', 'mapped_smiles': None, 'chemical_match': True, 'mapped_match': True}  partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+    budget ids ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'partition small anions', 'partition C18', 'conformer C18', 'grid mean']
+    sites [('C0', 'default'), ('C1', 'default'), ('O2', 'default')]
+    geometry_method etkdg_mmff94s  analysis_key 7dd2ab84f1  optimised_from None
+    V -43.83 .. +36.04; gipf nu 0.19310127689902506; surface genus 0
+    npz validity {'input': True, 'surface': True, 'sites': True}  tri_atom arrays ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']

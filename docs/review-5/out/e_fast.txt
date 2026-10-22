@@ -1,0 +1,72 @@
+
+=== xc spellings -> analysis_key, and what PySCF computes for each
+pyscf 2.14.0 B3LYP_WITH_VWN5 = (unset)
+  'b3lyp'                                              key 3f69c2285e  hyb=0.2  terms=((402, 1.0),)
+  'B3LYP'                                              key 3f69c2285e  hyb=0.2  terms=((402, 1.0),)
+  'b3lypg'                                             key fd65a6e294  hyb=0.2  terms=((402, 1.0),)
+  'B3LYP-G'                                            key 781d9316e2  hyb=None  terms=ERR "LibXCFunctional: name 'G' not found."
+  'b3lyp5'                                             key fbd02b7f15  hyb=0.2  terms=((1, 0.08), (106, 0.72), (131, 0.81), (7, 0.19))
+  'b3lyp/vwn5'                                         key 66587348cc  hyb=None  terms=ERR "LibXCFunctional: name 'B3LYP/VWN5' not found."
+  'HYB_GGA_XC_B3LYP'                                   key cb05c012d2  hyb=0.2  terms=((402, 1.0),)
+  '.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN'    key d843515f6a  hyb=0.2  terms=((1, 0.08), (106, 0.72), (131, 0.81), (7, 0.19))
+  energies (sto-3g water), to show which spellings are one functional:
+    b3lyp                E = -75.31258732
+    b3lypg               E = -75.31258732
+    b3lyp5               E = -75.27530371
+    HYB_GGA_XC_B3LYP     E = -75.31258732
+
+=== geometry_method: one calculation, two keys / two methods, one key
+  --molecule chlorobenzene -> idealised_builtin  key bea2abd4e4
+  same coordinates via --atoms -> atoms_string  key 0ac0163392
+  identical atom strings: C 1.3900 0.0000 0.0000; C 0.6950 1.2038 ...
+  --smiles CCO -> etkdg_mmff94s key 3f69c2285e; its geometry via --atoms -> key 0ac0163392
+  P3 nitrite.sdf (B3LYP/def2-TZVP/PCM geometry)    -> file_frozen    key 85d0b5cbef
+  nitrite_mmff.xyz (MMFF94s geometry)              -> file_frozen    key 85d0b5cbef
+  the SDF itself declares: geometry = 'B3LYP/def2-TZVP, PCM water, Cartesian BFGS gtol 3e-4 Ha/A' (ignored by espmap)
+  N-O lengths DFT file 1.2550 1.2548; MMFF 1.4239 1.4239
+
+=== budget_rows for the P3 nitrite fixture (DFT geometry, PCM water, def2-TZVP)
+   ['basis', 'functional', 'grid', 'anion geometry', 'partition small anions', 'partition C18', 'grid mean']
+   'anion geometry' (MMFF -> DFT, 6.5) attached to a DFT geometry: True
+   same row after --optimize (budget_rows has no geometry argument): True
+   cation, MMFF geometry (charge +1): anion-geometry row present: False
+
+=== double-zeta recognition and basis aliases
+  cc-pVDZ      basis_key ccpvdz     in SMALL_BASIS False nao(water) 24  key 4f10b3bc58
+  aug-cc-pVDZ  basis_key augccpvdz  in SMALL_BASIS False nao(water) 41  key afef8da9f2
+  6-31G(d)     basis_key 631g(d)    in SMALL_BASIS False nao(water) 18  key 8d0c696ec9
+  6-31+G*      basis_key 631+g*     in SMALL_BASIS False nao(water) 22  key 662ae93aab
+  6-31G**      basis_key 631g**     in SMALL_BASIS False nao(water) 24  key 0e71388c1e
+  def2-SVPD    basis_key def2svpd   in SMALL_BASIS False nao(water) 39  key 990120daf1
+  pcseg-1      basis_key pcseg1     in SMALL_BASIS False nao(water) 24  key efba4a6771
+  6-31g*       basis_key 631g*      in SMALL_BASIS True  nao(water) 18  key 40ce87a7bc
+
+=== planar 3D-header MOL files with z = 0: what the reader decides
+  CO2                    BLOCK DIMENSION_AMBIGUOUS
+  azide                  BLOCK DIMENSION_AMBIGUOUS
+  BF3                    BLOCK DIMENSION_AMBIGUOUS
+  nitrate                BLOCK DIMENSION_AMBIGUOUS
+  ozone                  BLOCK DIMENSION_AMBIGUOUS
+  C6F6 (real geometry)   read as 'drawing'  -> coordinates DISCARDED, ETKDG conformer computed instead
+  C2F4 (real geometry)   read as 'drawing'  -> coordinates DISCARDED, ETKDG conformer computed instead
+  remedy text names 'give any atom a non-zero z (or save as .xyz)'; --atoms never reaches coordinate_kind:
+  --atoms CO2 (z = 0): REACHED COMPUTE
+
+=== --charge / --spin overrides after the gate approved a different species
+  --smiles c1ccccc1 --charge 2                     gate ['verdict: ACCEPTED'] findings [] -> REACHED COMPUTE
+      stderr: ["WARNING: --charge 2 overrides the structure's formal charge +0"]
+  --smiles CC(=O)[O-] --charge 0 --spin 1          gate ['verdict: ACCEPTED'] findings ['[note ] TAUTOMERS', '[note ] CHARGED'] -> REACHED COMPUTE
+      stderr: ["WARNING: --charge 0 overrides the structure's formal charge -1"]
+  --smiles c1ccccc1 --spin 2                       gate ['verdict: ACCEPTED'] findings [] -> REACHED COMPUTE
+  --smiles c1ccccc1 --charge 2 --check             gate ['verdict: ACCEPTED'] findings [] -> SystemExit('0')
+
+=== H3+ via --atoms
+  --charge 1: SystemExit('structure rejected; fix the drawing, or pass --force to compute anyway')
+
+=== gipf nu: no positive triangle vs one tiny positive triangle
+  all negative: nu=None  sigma2_pos=None
+  one triangle at +0.01 (0.00e+00 of the area): nu=None  sigma2_pos=None  V_pos_mean=None
+
+=== overlapping caller sites (P3 C18 'carbonyl O' and 'acetyl' share map 32)
+  atoms in more than one group: {'32': ['carbonyl O', 'acetyl']}
+  does any record field say the sites overlap / tile the surface?  True

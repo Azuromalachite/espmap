@@ -1,0 +1,7 @@
+baseline: (0, '314 passed, 1 skipped, 61 warnings in 9.68s')
+N6 hydrogen named as a site atom                        -> GUARDED (a test fails)             | tests/test_fast.py -m not slow | 1 failed, 205 passed, 59 warnings in 5.02s
+N6 by:map on unmapped input                             -> GUARDED (a test fails)             | tests/test_fast.py -m not slow | 1 failed, 204 passed, 59 warnings in 4.76s
+N13 CLAUDE.md per-site protocol (2.69 -> 2.96)          -> NOT GUARDED (selected tests pass)  | tests/test_claims.py -k claude_md or per_site | 16 passed, 50 deselected in 0.30s
+N12 symmetry rows (bench docstring 2.378 -> 2.278)      -> GUARDED (a test fails)             | tests/test_claims.py | 1 failed, 51 passed in 0.50s
+N13b full claims file (2.69 -> 2.96 in CLAUDE.md)       -> NOT GUARDED (selected tests pass)  | tests/test_claims.py | 66 passed in 0.51s
+N13c CLAUDE.md conformer median 5.1 -> 5.7              -> NOT GUARDED (selected tests pass)  | tests/test_claims.py | 66 passed in 0.60s

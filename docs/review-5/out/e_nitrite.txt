@@ -1,0 +1,8 @@
+sto-3g   planar (bench frame)   spacing 0.26: |O1-O2| mean 0.070 kcal/mol, areas 17.998/17.930 A2, V_min -189.398
+sto-3g   planar (bench frame)   spacing 0.16: |O1-O2| mean 0.097 kcal/mol, areas 17.938/17.842 A2, V_min -189.631
+sto-3g   tilted (P3 input)      spacing 0.26: |O1-O2| mean 0.084 kcal/mol, areas 17.983/17.941 A2, V_min -189.652
+sto-3g   tilted (P3 input)      spacing 0.16: |O1-O2| mean 0.012 kcal/mol, areas 17.897/17.897 A2, V_min -189.800
+def2-svp planar (bench frame)   spacing 0.26: |O1-O2| mean 0.083 kcal/mol, areas 22.305/22.237 A2, V_min -175.147
+def2-svp planar (bench frame)   spacing 0.16: |O1-O2| mean 0.119 kcal/mol, areas 22.279/22.126 A2, V_min -175.150
+def2-svp tilted (P3 input)      spacing 0.26: |O1-O2| mean 0.058 kcal/mol, areas 22.264/22.213 A2, V_min -174.900
+def2-svp tilted (P3 input)      spacing 0.16: |O1-O2| mean 0.026 kcal/mol, areas 22.225/22.212 A2, V_min -175.276

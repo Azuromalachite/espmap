@@ -1,0 +1,14 @@
+wrote /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/review5-work/out/forced_mapping.png  (diverging scale -43.8 to +43.8 kcal/mol, cmap vik)
+wrote /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/review5-work/out/forced_mapping.json
+
+RECORD mapping
+  validity {'input': False, 'surface': True, 'sites': False}
+  sites_reason input not valid (forced past the gate, or structure not verified)
+  gate INFO forced False
+  approved_smiles CCO | computed_smiles CCO | structure_verified True
+  geometry_method etkdg_mmff94s | optimised_from None
+  any field recording the mapping result: []
+  V -43.82727484554513 36.036266966506346
+peak 281356 kB, 9.04 s
+WARNING: before the SCF: atom order of the computed geometry is not the input's: INJECTED: atom 1 swapped; continuing because of --force
+peak 281356 kB, 9.04 s

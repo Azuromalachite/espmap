@@ -1,0 +1,37 @@
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+CC(=O)[O-]   gas       def2-SVP nao  71 HOMO  +0.17 eV  warning: YES
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+CC(=O)[O-]   PCM water def2-SVP nao  71 HOMO  -5.37 eV  warning: no
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+N(=O)[O-]    gas       def2-SVP nao  42 HOMO  +0.40 eV  warning: YES
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+N(=O)[O-]    PCM water def2-SVP nao  42 HOMO  -5.60 eV  warning: no
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+[S-]C#N      gas       def2-SVP nao  46 HOMO  -0.12 eV  warning: no
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+[S-]C#N      PCM water def2-SVP nao  46 HOMO  -5.43 eV  warning: no
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+C=C[O-]      gas       def2-SVP nao  57 HOMO  +1.38 eV  warning: YES
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+C=C[O-]      PCM water def2-SVP nao  57 HOMO  -4.06 eV  warning: no
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+[F-]         gas       def2-SVP nao  14 HOMO  +4.25 eV  warning: YES
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+[F-]         PCM water def2-SVP nao  14 HOMO  -3.80 eV  warning: no
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+[OH-]        gas       def2-SVP nao  19 HOMO  +4.48 eV  warning: YES
+WARNING: def2-svp is double-zeta or smaller. Measured error on the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to def2-TZVPP.
+         Adequate for a picture; do not quote a number from it.
+[OH-]        PCM water def2-SVP nao  19 HOMO  -2.99 eV  warning: no
+peak 492252 kB, 23.51 s
