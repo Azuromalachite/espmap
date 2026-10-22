@@ -381,7 +381,7 @@ method *and* the colour settings. That would make two identical calculations
 
 | key | hashes | answers |
 | --- | --- | --- |
-| `analysis_key` | `xc`, `basis`, `solvent`, `solvent_esp` (H7), `iso`, `spacing`, `density_fit`, surface definition; names normalised first (lower-case, `vacuum` → null) | are these numbers methodologically comparable? |
+| `analysis_key` | `xc`, `basis`, `solvent`, `solvent_esp` (H7), `iso`, `spacing`, `density_fit`, `geometry_method` (N2), surface definition; names normalised first: `xc` is the functional PySCF resolves (a display name such as `b3lyp`, else its libxc terms), `basis` folds case, separators and `(d)`/`(d,p)` → `*`/`**`, `vacuum` → null (review 5 R6, R13) | are these numbers methodologically comparable? |
 | `render_key` | `cmap`, `vmin`/`vmax` (or `lim`), scale kind, camera, image size, lighting | do these pictures share one visual scale? |
 
 **Schema versions are not in `analysis_key`.** Revision 3 put the partition

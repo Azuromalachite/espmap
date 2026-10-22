@@ -873,7 +873,7 @@ def test_one_calculation_gets_one_analysis_key(change):
 @pytest.mark.parametrize("change", [
     {"solvent": "water"}, {"iso": 0.001}, {"spacing": 0.16}, {"density_fit": True},
     {"xc": "pbe0"}, {"geometry_method": "dft:b3lyp/def2svp"},
-    {"geometry_method": "file_frozen:undeclared"},
+    {"geometry_method": "undeclared"},
 ])
 def test_every_method_axis_changes_the_analysis_key(change):
     assert _keys(a=change)[0] != _keys()[0]
@@ -884,8 +884,8 @@ _EX = __import__("pathlib").Path(__file__).resolve().parents[1] / "examples"
 
 @pytest.mark.parametrize("make, expect", [
     (lambda: em.from_smiles("CCO")[1], "etkdg_mmff94s"),
-    (lambda: em.from_file(str(_EX / "real_3d.mol"))[1], "file_frozen:undeclared"),
-    (lambda: em.from_file(str(_EX / "real_3d_noH.mol"))[1], "file_frozen:undeclared+mmff94s_h"),
+    (lambda: em.from_file(str(_EX / "real_3d.mol"))[1], "undeclared"),
+    (lambda: em.from_file(str(_EX / "real_3d_noH.mol"))[1], "undeclared+mmff94s_h"),
     (lambda: em.from_file(str(_EX / "drawn_2d.mol"))[1], "etkdg_mmff94s"),
 ])
 def test_geometry_method_names_how_the_coordinates_were_made(make, expect):
@@ -896,8 +896,8 @@ def test_geometry_method_names_how_the_coordinates_were_made(make, expect):
 
 
 def test_geometry_method_for_cli_only_sources():
-    assert em.geometry_method(atoms=True) == "atoms_string:undeclared"
-    assert em.geometry_method(molecule="chlorobenzene") == "idealised_builtin"
+    assert em.geometry_method(atoms=True) == "undeclared"
+    assert em.geometry_method(molecule="chlorobenzene") == "idealised"
     opt = ("B3LYP", "def2-TZVP", "Water")
     assert em.geometry_method("3D generated from SMILES by ETKDGv3",
                               optimize=opt) == "dft:b3lyp/def2tzvp/water"
@@ -1355,7 +1355,7 @@ def test_budget_rows_follow_the_run_settings():
     assert "basis" not in _budget_ids(basis="DEF2_TZVPP", solvent=None, charge=0, n_rot=0, geometry_method="etkdg_mmff94s")
     assert {"conformer C18", "anion geometry"} <= set(wet)
     # --atoms: the rotatable-bond count is unknown, so the conformer row stays
-    assert "conformer C18" in _budget_ids(basis="sto-3g", solvent=None, charge=0, n_rot=None, geometry_method="atoms_string:undeclared")
+    assert "conformer C18" in _budget_ids(basis="sto-3g", solvent=None, charge=0, n_rot=None, geometry_method="undeclared")
 
 
 def test_every_budget_row_names_a_bench_source():
@@ -1378,7 +1378,7 @@ def test_the_site_block_matches_the_committed_schema():
         relaxation="none", n_rot=None, surface=dict(genus=0, components=1),
         identity=dict(chemical_smiles="C=O", mapped_smiles="[CH2:1]=[O:2]",
                       chemical_match=True, mapped_match=True),
-        budget=em.budget_rows(basis="sto-3g", solvent=None, charge=0, n_rot=None, geometry_method="atoms_string:undeclared")))
+        budget=em.budget_rows(basis="sto-3g", solvent=None, charge=0, n_rot=None, geometry_method="undeclared")))
     assert tree_problems(load_schema()["record"]["sites"], block, "sites") == []
 
 
@@ -2098,6 +2098,94 @@ def test_double_zeta_is_recognised_however_it_is_spelled(name):
     assert em.basis_key("def2-tzvp") not in em.SMALL_BASIS
 
 
+@pytest.mark.parametrize("name", ["cc-pVDZ", "aug-cc-pVDZ", "6-31G(d)", "6-31+G*",
+                                  "6-31G**", "6-31G(d,p)", "def2-SVPD", "pcseg-1"])
+def test_review5_double_zeta_names_warn(name):
+    """Review 5 R13: none of these warned."""
+    assert em.basis_key(name) in em.SMALL_BASIS
+
+
+@pytest.mark.parametrize("name", ["def2-tzvp", "cc-pVTZ", "6-311G**", "pcseg-2"])
+def test_triple_zeta_does_not_warn(name):
+    assert em.basis_key(name) not in em.SMALL_BASIS
+
+
+def test_every_double_zeta_name_is_a_basis_pyscf_runs():
+    from pyscf import gto
+    for b in em.SMALL_BASIS_NAMES:
+        assert gto.M(atom="O 0 0 0; H 0 0.76 0.5; H 0 -0.76 0.5", basis=b).nao > 0, b
+
+
+@pytest.mark.parametrize("a, b", [("6-31G(d)", "6-31g*"), ("6-31G(d,p)", "6-31G**"),
+                                  ("6-31+G(d,p)", "6-31+g**")])
+def test_pople_polarisation_spellings_share_a_key(a, b):
+    """Review 5 R13: 6-31G(d) and 6-31g* are one basis (same nao), two keys."""
+    from pyscf import gto
+    water = "O 0 0 0; H 0 0.76 0.5; H 0 -0.76 0.5"
+    assert gto.M(atom=water, basis=a).nao == gto.M(atom=water, basis=b).nao
+    assert _keys(a={"basis": a})[0] == _keys(a={"basis": b})[0]
+
+
+@pytest.mark.parametrize("xc", ["b3lyp", "B3LYP", "b3lypg", "HYB_GGA_XC_B3LYP"])
+def test_one_functional_gets_one_key_however_it_is_spelled(xc):
+    """Review 5 R6: these resolve to one functional (one energy to 1e-8 Ha)
+    and got three keys; the key now hashes what PySCF resolves."""
+    assert em.analysis_fields(**{**_A, "xc": xc})["xc"] == "b3lyp"
+    assert _keys(a={"xc": xc})[0] == _keys()[0]
+
+
+def test_b3lyp_with_vwn5_is_a_different_key():
+    assert _keys(a={"xc": "b3lyp5"})[0] != _keys()[0]
+    assert em.xc_key("M06-2X") == em.xc_key("m062x") == "m062x"
+
+
+def test_an_unnamed_functional_is_keyed_by_its_terms():
+    k = em.xc_key("0.5*HF + 0.5*B88, LYP")
+    assert k.startswith("libxc:hyb(0.5,") and k == em.xc_key("0.5*HF+0.5*B88,LYP")
+
+
+@pytest.mark.parametrize("label", [
+    "etkdg_mmff94s", "etkdg_uff", "mmff94s", "mmff94", "uff", "idealised", "undeclared",
+    "undeclared+mmff94s_h", "undeclared+added_h", "dft:b3lyp/def2tzvp/water",
+    "dft:b3lyp/def2tzvp/water+mmff94s_h", "dft:pbe0/631g*", "dft:b3lyp5/sto3g",
+])
+def test_every_geometry_method_label_can_be_declared(label):
+    """Review 5 R6: a record re-run through --atoms must be able to say how its
+    coordinates were made, or it is keyed "undeclared" and the key changes."""
+    assert em.declared_geometry_method(label) == label
+    assert em.geometry_method(atoms=True, declared=label) == label
+
+
+def test_spellings_in_a_declared_dft_label_are_normalised():
+    assert em.declared_geometry_method("dft:B3LYPG/6-31G(d)/Water") == "dft:b3lyp/631g*/water"
+    assert em.declared_geometry_method("dft:nonsense/sto-3g") is None
+
+
+def test_molecule_and_the_same_atoms_declared_idealised_share_a_label():
+    """Review 5 R6: --molecule and its own atom string through --atoms had
+    two keys (idealised_builtin / atoms_string)."""
+    assert em.geometry_method(molecule="chlorobenzene") == \
+        em.geometry_method(atoms=True, declared="idealised")
+
+
+def test_reproduce_argv_reaches_compute_with_the_records_method(monkeypatch):
+    rec = dict(geometry=dict(symbols=["O", "H", "H"],
+                             xyz_angstrom=[[0, 0, 0.1173], [0, 0.7572, -0.4692],
+                                           [0, -0.7572, -0.4692]]),
+               input=dict(charge=0, spin=0),
+               settings=dict(xc="b3lyp", basis="sto-3g", solvent="water", iso=0.002,
+                             spacing_bohr=0.26, margin_bohr=5.0, density_fit=True,
+                             include_reaction_field=True),
+               key_fields=dict(analysis=dict(geometry_method="etkdg_mmff94s")))
+    argv = em.reproduce_argv(rec)
+    assert argv[argv.index("--geometry-origin") + 1] == "etkdg_mmff94s"
+    assert "--density-fit" in argv and "--include-reaction-field" in argv
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", *argv])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
 # --------------------------------------- declared geometry origin (review 5 R1)
 @pytest.mark.parametrize("text, label", [
     ("dft:b3lyp/def2-tzvp/water", "dft:b3lyp/def2tzvp/water"),
@@ -2142,7 +2230,7 @@ def test_a_declared_dft_file_and_an_undeclared_file_get_different_keys(tmp_path)
         info = em.from_file(str(f), charge=-1)[1]
         labels.append(em.geometry_method(info["source"], info["forcefield"],
                                          declared=info["declared_geometry"]))
-    assert labels == ["dft:b3lyp/def2tzvp/water", "file_frozen:undeclared"]
+    assert labels == ["dft:b3lyp/def2tzvp/water", "undeclared"]
     keys = {em.record_key(em.analysis_fields(**{**_A, "geometry_method": g})) for g in labels}
     assert len(keys) == 2
 
@@ -2154,8 +2242,8 @@ def test_a_dft_file_and_optimize_at_that_level_share_a_label():
 
 
 @pytest.mark.parametrize("method, has_anion_row", [
-    ("etkdg_mmff94s", True), ("file_frozen:undeclared", True), ("mmff94s", True),
-    ("atoms_string:undeclared", True), ("dft:b3lyp/def2tzvp/water", False),
+    ("etkdg_mmff94s", True), ("undeclared", True), ("mmff94s", True),
+    ("undeclared", True), ("dft:b3lyp/def2tzvp/water", False),
     ("dft:b3lyp/def2tzvp/water+mmff94s_h", False),
 ])
 def test_the_anion_geometry_row_follows_the_geometry_method(method, has_anion_row):
