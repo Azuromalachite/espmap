@@ -11,6 +11,11 @@ them is quoted, three things have to be measured, and this script records them:
              bug gives plausible numbers but cannot give equal numbers to
              equivalent atoms by accident (the role far-field decay plays for
              the kernel sign).
+  atoms      The grid cases at 0.26 bohr again, with every atom's own share
+             (hydrogens NOT folded into their parents): the record's `atoms`
+             level, which review 4 N4 found unbudgeted. Each row's `sites`
+             equals the matching grid row's, so both levels are one surface.
+             `c18atoms` does the same for the C18 conformers.
   c18        How large is the partition sensitivity (nearest-nucleus vs
              radius-scaled) on a flexible molecule, against the conformer
              spread of the same site? Same conformers as bench/conformers.py
@@ -42,6 +47,8 @@ c18 part resumed across a WSL restart). New rows use em.code_identity().
 
     python bench/site_partition.py grid symmetry   # ~15 min
     python bench/site_partition.py c18             # ~1 h (12 SCFs, def2-SVP + RI)
+    python bench/site_partition.py atoms           # ~5 min (4 SCFs)
+    python bench/site_partition.py c18atoms        # ~1 h, as c18
 
 Appends to bench/site_partition.jsonl; rows already present are skipped.
 """
@@ -147,6 +154,15 @@ def sites(spec, verts_bohr, faces, V):
     return out
 
 
+def atom_sites(spec, verts_bohr, faces, V):
+    """{rule: {atom_label: stats}} for every atom, hydrogens NOT folded: the
+    record's `atoms` level, which review 4 N4 found unbudgeted."""
+    symbols, X = parse_spec(spec)
+    P = verts_bohr * BOHR
+    return {rule: {f"{s}{i}": stats(P, faces, V, owners(P, faces, X, symbols, rule) == i)
+                   for i, s in enumerate(symbols)} for rule in RULES}
+
+
 # --------------------------------------------------------------------- rows
 def provenance():
     import pyscf
@@ -192,6 +208,15 @@ def run_grid_and_symmetry(parts, prov):
         cases.append(("symmetry", "benzene", "c1ccccc1", 0,
                       em.monosubstituted_benzene(*em.MOLECULES["benzene"]),
                       "def2-tzvp", None, SPACINGS))
+    if "atoms" in parts:
+        # the grid cases at 0.26 bohr again, now also per atom; their `sites`
+        # must equal the grid rows', which ties the two levels to one surface
+        for name, (smi, q, spec) in DFT_GEOMETRIES.items():
+            cases.append(("atoms", name, smi, q, spec, "def2-tzvp", "water", (0.26,)))
+        cases.append(("atoms", "nitrite", "N(=O)[O-]", -1, c2v_nitrite(), "def2-tzvp", "water", (0.26,)))
+        cases.append(("atoms", "chlorobenzene", "Clc1ccccc1", 0,
+                      em.monosubstituted_benzene(*em.MOLECULES["chlorobenzene"]),
+                      "def2-tzvp", None, (0.26,)))
     for part, name, smi, q, spec, basis, solvent, spacings in cases:
         todo = [h for h in spacings if f"{part}|{name}|{h}" not in done]
         if not todo:
@@ -203,13 +228,15 @@ def run_grid_and_symmetry(parts, prov):
                        V_min=float(V.min()), V_max=float(V.max()),
                        sites=sites(spec, verts, faces, V), atoms=spec,
                        t_surface=dt, **prov)
+            if part == "atoms":
+                row["atom_sites"] = atom_sites(spec, verts, faces, V)
             write(row)
             print(f"{part:8s} {name:13s} h={h:.2f}  n_verts={row['n_verts']:6d}  "
                   f"conservation={max(abs(v) for v in row['sites']['conservation'].values()):.1e}",
                   flush=True)
 
 
-def run_c18(prov):
+def run_c18(prov, atoms=False):
     sys.argv = sys.argv[:1]
     from conformers import MOLECULES, select
     from rdkit.Chem import AllChem, Descriptors3D
@@ -225,19 +252,22 @@ def run_c18(prov):
     picks += [c for c in (40, 72) if c not in picks]   # the folded pair (f9_recheck)
     done = done_keys()
     for cid in picks:
-        key = f"c18|Z3Z13-18OAc|{cid}"
+        key = f"{'c18atoms' if atoms else 'c18'}|Z3Z13-18OAc|{cid}"
         if key in done:
             continue
         spec = em._mol_to_spec(mol, cid)
         for h, verts, faces, V, diag, dt in surfaces_at(spec, 0, "def2-svp", None, (0.26,),
                                                         density_fit=True):
             i = cids.index(cid)
-            row = dict(key=key, part="c18", molecule="Z3Z13-18OAc", smiles=smi, conf_id=cid,
+            row = dict(key=key, part="c18atoms" if atoms else "c18", molecule="Z3Z13-18OAc",
+                       smiles=smi, conf_id=cid,
                        charge=0, xc="b3lyp", basis="def2-svp", density_fit=True, solvent="gas",
                        spacing_bohr=h, mmff_dE=float(energy[i] - energy.min()), rg=float(rg[i]),
                        n_verts=int(diag["n_verts"]), genus=diag["genus"],
                        V_min=float(V.min()), V_max=float(V.max()),
                        sites=sites(spec, verts, faces, V), atoms=spec, t_surface=dt, **prov)
+            if atoms:
+                row["atom_sites"] = atom_sites(spec, verts, faces, V)
             write(row)
             print(f"c18 conf {cid:3d}  genus={row['genus']}  rg={row['rg']:.2f}  "
                   f"V={row['V_min']:+.1f}..{row['V_max']:+.1f}", flush=True)
@@ -249,3 +279,5 @@ if __name__ == "__main__":
     run_grid_and_symmetry(parts, prov)
     if "c18" in parts:
         run_c18(prov)
+    if "c18atoms" in parts:
+        run_c18(prov, atoms=True)

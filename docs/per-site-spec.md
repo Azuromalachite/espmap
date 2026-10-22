@@ -113,9 +113,22 @@ Two levels, and only the first is a partition:
 | `atoms` | every atom, hydrogens included, with its own share of the surface | the partition rule (§2) |
 | `reaction_sites` | a named group of atoms; its values are aggregated from its atoms' triangles | the caller, or the default below |
 
+**`reaction_sites` is the quotable level; `atoms` is diagnostic** `[M]`.
+Measured on the same surfaces (`bench/site_partition.jsonl`, `atoms` rows,
+0.26 bohr), switching the partition rule moves an atom's mean by up to
+**11.9 kcal/mol** (enolate H). It moves an atom's area by up to a factor of
+**5.2** (enolate C0, 3.9 → 20.0 Å²): the two rules mostly trade surface
+between a heavy atom and its own hydrogens. The same switch moves a
+heavy-atom-plus-hydrogens group by ≤ 3.0, because that trade cancels inside
+the group. Atoms that carry no hydrogens (SCN⁻, NO₂⁻, Cl, the carbonyl-like O)
+move ≤ 0.85. Quote site values; read atom values only to see where inside a
+site the surface sits. Review 4 (N4) measured the same on ethanol at
+STO-3G: both sp³ carbons have zero area under the primary rule and 8–11 Å²
+under the other.
+
 **Why groups are needed.** Over an sp³ carbon almost all of the ρ = 0.002
-surface lies outside the hydrogens `[I]`, so a chain carbon such as C3 gets
-nearly zero area of its own. A C–H oxidation or desaturation question is about
+surface lies outside the hydrogens `[M]`, as above, so a chain carbon such as
+C3 gets little or no area of its own. A C–H oxidation or desaturation question is about
 C3 + H3a + H3b, not about the carbon nucleus. But "carbon plus its hydrogens"
 is not the right unit for everything: a carbonyl O, an enolate C, or an
 O–C=O group are sites too. So espmap does not fix one chemistry-shaped
