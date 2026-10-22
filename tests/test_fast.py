@@ -470,6 +470,19 @@ def test_main_refuses_coordinates_that_are_not_the_approved_structure(monkeypatc
         em.main()
 
 
+def test_main_refuses_a_contradicting_cmap_before_the_scf(tmp_path, monkeypatch):
+    """--scale fixes the kind up front, so --cmap vik on it is refused before
+    any compute (cmap_preflight wired into main), with no image written."""
+    out = tmp_path / "ac.png"
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-]",
+                                      "--scale", "sequential", "--cmap", "vik",
+                                      "--out", str(out)])
+    with pytest.raises(SystemExit, match="does not fit"):
+        em.main()
+    assert not out.exists()
+
+
 def test_main_lets_a_healthy_structure_through_to_the_scf(monkeypatch):
     _stop_before_scf(monkeypatch)
     monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-]"])
