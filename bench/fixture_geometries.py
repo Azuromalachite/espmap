@@ -18,6 +18,10 @@ real files to test against.
 
 Every heavy atom carries an atom-map number, 1..n in SMILES order; hydrogens
 carry none (spec section 1). RDKit writes the maps to the V2000 mapping column.
+The P3 records do not use these files as they stand. fixtures/make_records.py
+renumbers the C18 maps along the chain (map n = Cn, not map 1 = acetyl CH3). It
+also rotates nitrite out of z = 0, which the gate refuses as
+DIMENSION_AMBIGUOUS. The coordinates here stay the source either way.
 
     python bench/fixture_geometries.py      # writes bench/fixtures/*.sdf + geometries.json
 """
