@@ -97,10 +97,20 @@ python esp_map.py --file structure.mol --check              # gate only, no comp
 ```
 
 `--file` reads `.mol .sdf .cdxml .xyz .pdb`. A structure **drawn** in an editor
-and exported as MOL/SDF/CDXML is a flat picture — every *z* is zero — so its
-coordinates are discarded, a conformer is generated, and the run says so
-loudly. A file carrying real 3D coordinates is used as-is, with any missing
-hydrogens added and relaxed against frozen heavy atoms.
+and exported as MOL/SDF/CDXML is a picture, so its coordinates are discarded,
+a conformer is generated, and the run says so loudly. A file is treated as a
+drawing when its header says 2D, or when it says 3D but every *z* is zero and
+every bond has the same length across two or more element pairs. A planar
+*geometry* — benzene optimised in the *xy* plane, water from an `.xyz` — is
+kept; `.xyz` and `.pdb` are never drawings. A flat file with a 3D header and
+one element pair (nitrite, nitrate, CO₂) cannot be told apart from a drawing
+and is refused with `DIMENSION_AMBIGUOUS`. A file carrying real 3D
+coordinates is used as-is, with any missing hydrogens added and relaxed
+against frozen heavy atoms.
+
+A file with more than one record (an SDF of docking poses) is refused; pass
+`--record N` to compute record *N*. The JSON records which one under
+`input.record`.
 
 ## The structure gate
 
