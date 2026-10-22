@@ -1,0 +1,27 @@
+
+     RDKit          3D
+
+  3  2  0  0  0  0  0  0  0  0999 V2000
+    1.4922   -0.1354   -0.0000 S   0  0  0  0  0  0  0  0  0  1  0  0
+   -0.1599   -0.1304    0.0000 C   0  0  0  0  0  0  0  0  0  2  0  0
+   -1.3324   -0.1268   -0.0000 N   0  0  0  0  0  0  0  0  0  3  0  0
+  1  2  1  0
+  2  3  3  0
+M  CHG  1   1  -1
+M  END
+>  <espmap_fixture>  (1) 
+thiocyanate
+
+>  <smiles>  (1) 
+[S-]C#N
+
+>  <geometry>  (1) 
+B3LYP/def2-TZVP, PCM water, Cartesian BFGS gtol 3e-4 Ha/A
+
+>  <converged>  (1) 
+True
+
+>  <iterations>  (1) 
+5
+
+$$$$
