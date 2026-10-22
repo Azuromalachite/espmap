@@ -55,6 +55,8 @@ def test_conformer_spreads_match_the_data():
     ("CLAUDE.md", TEXT["CLAUDE.md"]),
     ("module docstring", DOC),
     ("runtime conformer note", NOTE),
+    # review 3 H10: the notebook said extrema "move little with conformation"
+    ("notebook", (ROOT / "notebooks" / "build_notebook.py").read_text(encoding="utf-8")),
 ], ids=lambda v: v if len(str(v)) < 40 else "")
 def test_folded_conformer_spread_is_quoted_everywhere(where, text):
     assert "5.2" in text, f"{where} does not quote the folded-conformer V_min spread"
