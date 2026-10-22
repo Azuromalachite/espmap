@@ -88,7 +88,12 @@ python esp_map.py --smiles "CCO" --out esp.png \
 - `--json`: settings, energy, V range (`V_min_kcal_mol`, `V_max_kcal_mol`),
   the σ-hole (or `null` with the reason), the dipole as a vector about the
   centre of nuclear charge (an ion's dipole depends on the origin, so it is
-  stated), package versions, git commit and the error-budget caveat. Read
+  stated), the error-budget caveat, the **geometry actually computed**
+  (`geometry.xyz_angstrom` in atom order, with a sha1 of the nuclei; pass it
+  back with `--atoms` to recompute the run) and `provenance`: espmap version,
+  `git describe --dirty` (or "unknown", never a guessed commit), the versions
+  of Python, NumPy, SciPy, scikit-image, PySCF, RDKit and Matplotlib, and the
+  thread count. Read
   `validity` before anything else. Compare **numbers** only between records
   whose `analysis_key` matches (method, solvent convention, surface), and
   **pictures** only when `render_key` matches as well (colormap, limits,

@@ -1445,6 +1445,96 @@ def record_key(fields):
     return hashlib.sha1(json.dumps(fields, sort_keys=True).encode()).hexdigest()
 
 
+def geometry_record(mol, charge, spin):
+    """The coordinates actually computed, in PySCF atom order (review 3 H14:
+    the JSON had none, and ETKDG output depends on the RDKit version, so a
+    seed is not a substitute). Full float precision, so feeding the record
+    back through --atoms reproduces V; the sha1 is taken at %.8f so it does
+    not depend on how a float happens to be printed.
+
+    The sha1 covers the nuclei only (symbols and positions), not charge or
+    spin: an anion and a radical on the same nuclei share it, and differ in
+    the calculation. No atom maps here; the site block carries those."""
+    syms = [mol.atom_symbol(i) for i in range(mol.natm)]
+    xyz = mol.atom_coords() * BOHR
+    canon = "\n".join(f"{s} {x:.8f} {y:.8f} {z:.8f}" for s, (x, y, z) in zip(syms, xyz))
+    return dict(symbols=syms, xyz_angstrom=[[float(c) for c in r] for r in xyz],
+                sha1=_sha1(canon), sha1_covers=GEOMETRY_SHA1_COVERS,
+                charge=int(charge), spin=int(spin))
+
+
+GEOMETRY_SHA1_COVERS = ("symbols and xyz_angstrom at %.8f, one 'Sym x y z' line "
+                        "per atom, newline-joined; not charge or spin")
+
+
+def atoms_from_geometry(geom):
+    """--atoms string for a JSON geometry block: the way to recompute a record."""
+    return "; ".join(f"{s} {x!r} {y!r} {z!r}"
+                     for s, (x, y, z) in zip(geom["symbols"], geom["xyz_angstrom"]))
+
+
+def _sha1(text):
+    import hashlib
+    return hashlib.sha1(text.encode()).hexdigest()
+
+
+def code_identity():
+    """Which espmap produced a number. Review 3 H14: `git rev-parse HEAD` was
+    null outside git, reported a clean HEAD for an edited tree, and inside
+    someone else's repository would report THEIR commit. Now the commit is
+    taken only if this very file is tracked there, with --dirty, and
+    "unknown" otherwise -- never a clean commit by default.
+
+    espmap_version is the INSTALLED metadata: an editable install keeps the
+    version it was installed at until it is reinstalled, so for a checkout
+    `code` is the identity to trust."""
+    import subprocess
+    from importlib import metadata
+    try:
+        version = metadata.version("espmap")
+    except metadata.PackageNotFoundError:
+        version = "unknown"
+    here = os.path.dirname(os.path.abspath(__file__))
+    code = "unknown"
+    try:
+        tracked = subprocess.run(["git", "ls-files", "--error-unmatch",
+                                  os.path.basename(__file__)], cwd=here,
+                                 capture_output=True, text=True, timeout=10)
+        if tracked.returncode == 0:
+            d = subprocess.run(["git", "describe", "--always", "--dirty", "--abbrev=12"],
+                               cwd=here, capture_output=True, text=True, timeout=10)
+            code = d.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return dict(espmap_version=version, code=code)
+
+
+def provenance():
+    """Versions and threads that move results, for --json (review 3 H14)."""
+    import platform
+    from importlib import metadata
+
+    def ver(dist):
+        try:
+            return metadata.version(dist)
+        except metadata.PackageNotFoundError:
+            return None
+    from pyscf import lib
+    blas = None
+    try:
+        from threadpoolctl import threadpool_info
+        blas = [dict(api=p.get("internal_api"), version=p.get("version"),
+                     threads=p.get("num_threads")) for p in threadpool_info()
+                if p.get("user_api") == "blas"]
+    except ImportError:
+        pass
+    return dict(**code_identity(), python=platform.python_version(),
+                numpy=np.__version__, scipy=ver("scipy"),
+                scikit_image=ver("scikit-image"), pyscf=ver("pyscf"),
+                rdkit=ver("rdkit"), matplotlib=ver("matplotlib"),
+                threads=int(lib.num_threads()), blas=blas)
+
+
 def analysis_fields(xc, basis, solvent, iso, spacing, density_fit,
                     reaction_field=False):
     """What makes two records' NUMBERS comparable (spec section 5). Colour
@@ -1880,17 +1970,12 @@ def main():
         print(f"wrote {a.npz}  (surface, bohr; V in kcal/mol)")
     if a.json:
         import json
-        import subprocess
-        import pyscf
-        import rdkit
-        commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                                text=True, cwd=os.path.dirname(os.path.abspath(
-                                    __file__))).stdout.strip() or None
         surface = surface_report(diag, a.iso)
         rec = dict(
             validity=validity(gate, verified, surface),
             analysis_key=record_key(a_fields), render_key=record_key(r_fields),
             key_fields=dict(analysis=a_fields, render=r_fields),
+            geometry=geometry_record(mol, charge, spin),
             input=dict(smiles=a.smiles, file=a.file,
                        record=(gi or {}).get("record"),
                        # the structure the gate saw; "approved" only if it passed
@@ -1903,7 +1988,9 @@ def main():
                           solvent_esp=a_fields["solvent_esp"],
                           include_reaction_field=rf_added,
                           density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
-                          spacing_bohr=a.spacing, seed=a.seed, nconfs=a.nconfs,
+                          spacing_bohr=a.spacing, margin_bohr=a.margin,
+                          grids_level=int(mf.grids.level), conv_tol=float(mf.conv_tol),
+                          seed=a.seed, nconfs=a.nconfs,
                           optimize=a.optimize, geometry=(gi or {}).get("source")),
             results=dict(e_tot_Ha=float(mf.e_tot), nao=int(mol.nao),
                          dipole=dipole_about_nuclear_centre(mol, dm),
@@ -1915,8 +2002,7 @@ def main():
                        cmap_substituted=bool(cmap_warning),
                        cmap_forced=bool(a.cmap and a.force_cmap),
                        **scale_provenance(kind, a.lim, a.vmin, a.vmax)),
-            versions=dict(pyscf=pyscf.__version__, rdkit=rdkit.__version__,
-                          espmap_commit=commit),
+            provenance=provenance(),
             caveat=("Measured error budget (README): basis def2-SVP -> "
                     "def2-TZVPP moves the chlorobenzene sigma-hole by +3.55 "
                     "kcal/mol; solvent gas -> water by -3.61. Quote numbers only "

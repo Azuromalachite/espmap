@@ -217,3 +217,25 @@ def test_reaction_field_reads_pyscf_charges_correctly():
     assert q.sum() == pytest.approx((eps - 1) / eps, abs=0.02)
     verts, _, _ = em.extract_surface(mol, em.total_dm(mf), 0.4, margin=5.0)
     assert em.reaction_field_at_points(mf, verts).min() > 0
+
+
+def test_json_geometry_reproduces_the_run_through_atoms(tmp_path, monkeypatch):
+    """Review 3 H14 validation: re-running a JSON's recorded geometry through
+    --atoms reproduces V_min/V_max to 1e-6."""
+    import json
+    import sys
+    recs = []
+    for i, src in enumerate([["--smiles", "CCO"], None]):
+        js = tmp_path / f"r{i}.json"
+        if src is None:
+            src = ["--atoms", em.atoms_from_geometry(recs[0]["geometry"])]
+        monkeypatch.setattr(sys, "argv", ["esp_map.py", *src, "--basis", "sto-3g",
+                                          "--size", "80", "--out", str(tmp_path / f"r{i}.png"),
+                                          "--json", str(js)])
+        em.main()
+        recs.append(json.loads(js.read_text()))
+    a, b = (r["results"] for r in recs)
+    assert abs(a["V_min_kcal_mol"] - b["V_min_kcal_mol"]) < 1e-6
+    assert abs(a["V_max_kcal_mol"] - b["V_max_kcal_mol"]) < 1e-6
+    assert recs[0]["geometry"]["sha1"] == recs[1]["geometry"]["sha1"]
+    assert recs[0]["provenance"]["code"]

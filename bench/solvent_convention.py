@@ -44,6 +44,7 @@ def main():
             V = em.esp_at_points(mol, dm, v) * em.HA2KCAL
             row = dict(molecule="chlorobenzene (idealised, C-Cl 1.740 A)", xc="b3lyp",
                        basis=basis, solvent=solvent, spacing_bohr=0.26,
+                       code=em.code_identity()["code"],
                        e_tot_Ha=float(mf.e_tot), n_verts=int(len(v)),
                        solute_only=dict(sigma_hole=em.sigma_hole(v, V, mol, i_sub=6)[0],
                                         V_min=float(V.min()), V_max=float(V.max())))
