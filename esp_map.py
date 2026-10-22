@@ -823,6 +823,43 @@ def verify_computed(spec, approved, max_stereo=1024):
     return True, computed, ""
 
 
+def check_identity(spec, probe, approved, kept, force, stage):
+    """Run both identity checks on `spec` and refuse on a mismatch.
+
+    Returns (verified, computed_smiles, mapped_ok). With force a mismatch
+    warns instead, and the caller records it (validity.input false). Called
+    before the SCF and again after --optimize: review 4 N1 found the
+    optimiser replacing the coordinates after the only check had run, so a
+    gas-phase glycine zwitterion was computed as neutral glycine under a
+    record that said structure_verified: true.
+    """
+    verified, computed, why = verify_computed(spec, _rdkit_chem().RemoveHs(probe))
+    if not verified:
+        msg = (f"{stage}: the structure that passed the check is not the one "
+               f"about to be computed: {why}\n  approved:  {approved}\n  "
+               f"computing: {computed or '(no match)'}")
+        if not force:
+            raise SystemExit(msg + "\nrefusing to continue (--force computes it anyway)")
+        print(f"WARNING: {msg}\nthe computed structure could not be verified; "
+              f"continuing because of --force", file=sys.stderr)
+    elif why:
+        print(f"note: {why}", file=sys.stderr)
+    # Index by index, so per-site rows and atom maps point at the atoms the
+    # input named; against the file's own coordinates when they were kept.
+    mapped_ok, why_m = verify_mapping(spec, probe, reference=kept)
+    if not mapped_ok and verified:
+        msg = f"{stage}: atom order of the computed geometry is not the input's: {why_m}"
+        if not force:
+            raise SystemExit(msg + "\nrefusing to continue (--force computes it anyway)")
+        print(f"WARNING: {msg}; continuing because of --force", file=sys.stderr)
+    return verified, computed, mapped_ok
+
+
+def _rdkit_chem():
+    from rdkit import Chem
+    return Chem
+
+
 def verify_mapping(spec, probe, reference=False, tol=1e-3):
     """Is spec atom i the approval's atom i? Returns (ok, reason).
 
@@ -2123,6 +2160,7 @@ def main():
 
     charge, spin, i_sub = a.charge or 0, a.spin, 6
     sh_reason = None
+    pre_opt_sha1 = None
     gi = None
     if a.smiles and a.file:
         raise SystemExit("--smiles and --file are mutually exclusive")
@@ -2181,30 +2219,17 @@ def main():
         # otherwise the gate is a seal over a copy. Comparing gi["smiles"]
         # did not do this: it is the input string, or the reader's own output
         # (review 3, H2).
+        kept = gi["source"].startswith("file 3D coordinates used as-is")
+        if kept and a.optimize and not a.force:
+            # checked before any compute: optimising a supplied pose discards
+            # exactly what the pose was for (its placement in an environment)
+            raise SystemExit("--optimize would move the coordinates this file "
+                             "supplied (a pose or reference geometry). Drop "
+                             "--optimize to compute the file's geometry, or "
+                             "pass --force to optimise it anyway")
         if approved is not None:
-            verified, computed, why = verify_computed(spec, _C.RemoveHs(probe))
-            if not verified:
-                msg = (f"the structure that passed the check is not the one about "
-                       f"to be computed: {why}\n  approved:  {approved}\n  "
-                       f"computing: {computed or '(no match)'}")
-                if not a.force:
-                    raise SystemExit(msg + "\nrefusing to continue (--force "
-                                     "computes it anyway)")
-                print(f"WARNING: {msg}\nthe computed structure could not be "
-                      f"verified; continuing because of --force", file=sys.stderr)
-            elif why:
-                print(f"note: {why}", file=sys.stderr)
-            # Index by index, so per-site rows and atom maps point at the
-            # atoms the input named; against the file's own coordinates when
-            # they were kept (a pose).
-            kept = gi["source"].startswith("file 3D coordinates used as-is")
-            mapped_ok, why_m = verify_mapping(spec, probe, reference=kept)
-            if not mapped_ok and verified:
-                msg = f"atom order of the computed geometry is not the input's: {why_m}"
-                if not a.force:
-                    raise SystemExit(msg + "\nrefusing to continue (--force "
-                                     "computes it anyway)")
-                print(f"WARNING: {msg}; continuing because of --force", file=sys.stderr)
+            verified, computed, mapped_ok = check_identity(
+                spec, probe, approved, kept, a.force, "before the SCF")
         if a.charge is None:
             charge = gi["charge"]
         elif a.charge != gi["charge"]:
@@ -2264,11 +2289,18 @@ def main():
             # run_scf hands back a CPU object, so berny's gradients are CPU
             print("note: --optimize --gpu: each SCF runs on the GPU, but the "
                   "geometry gradients run on the CPU.", file=sys.stderr)
+        pre_opt_sha1 = geometry_record(mol, charge, spin)["sha1"]
         mol = _opt(mf, maxsteps=50)
         spec = "; ".join(
             f"{mol.atom_symbol(i)} "
             f"{mol.atom_coord(i)[0] * BOHR:.6f} {mol.atom_coord(i)[1] * BOHR:.6f} "
             f"{mol.atom_coord(i)[2] * BOHR:.6f}" for i in range(mol.natm))
+        if gi is not None and approved is not None:
+            # the coordinates PySCF now receives are not the ones checked
+            # (invariant 3): a proton can move, e.g. a gas-phase zwitterion.
+            # reference=False: optimisation legitimately moves a file's atoms
+            verified, computed, mapped_ok = check_identity(
+                spec, probe, approved, False, a.force, "after --optimize")
         mol, mf = run_scf(spec, basis=a.basis, xc=a.xc, charge=charge,
                           density_fit=a.density_fit, gpu=a.gpu,
                           spin=spin, solvent=solv)
@@ -2344,14 +2376,23 @@ def main():
     surface = surface_report(diag, a.iso)
     # an atom order forced past verify_mapping invalidates the input too
     valid = validity(gate, False if mapped_ok is False else verified, surface)
+    # what the coordinates are; settings.geometry said "generated by ETKDGv3"
+    # even after --optimize had replaced them (review 4 N1)
+    geom_source = (gi["source"] if gi is not None else
+                   "supplied with --atoms" if a.atoms else
+                   f"built-in idealised geometry ({a.molecule})")
+    if a.optimize:
+        geom_source += (f"; then optimised with {a.xc}/{a.basis}"
+                        f"{', PCM ' + a.solvent if solv else ''} (pyberny)")
+    # Atom maps survive --optimize: berny does not reorder atoms, and the
+    # post-optimisation verify_mapping has just confirmed the order (N1).
+    atom_maps = ({x.GetIdx(): x.GetAtomMapNum() for x in gi["mol"].GetAtoms()
+                  if x.GetAtomMapNum()} if gi is not None else None)
     if gi is not None and not a.optimize:
         h_source = gi["h_source"]
-        atom_maps = {x.GetIdx(): x.GetAtomMapNum() for x in gi["mol"].GetAtoms()
-                     if x.GetAtomMapNum()}
-    else:                           # --atoms / --molecule: every atom was given
+    else:                           # optimised, or --atoms / --molecule
         h_source = [("optimised" if a.optimize else "supplied") if s == "H" else None
                     for s in symbols]
-        atom_maps = None
     sites, sites_reason = sites_block(valid, P_A, faces, V, coords_A, symbols,
                                       atom_maps=atom_maps, h_source=h_source,
                                       groups=site_groups)
@@ -2402,7 +2443,8 @@ def main():
             validity=valid,
             analysis_key=record_key(a_fields), render_key=record_key(r_fields),
             key_fields=dict(analysis=a_fields, render=r_fields),
-            geometry=geometry_record(mol, charge, spin),
+            geometry=dict(geometry_record(mol, charge, spin),
+                          optimised_from_sha1=pre_opt_sha1),
             input=dict(smiles=a.smiles, file=a.file,
                        record=(gi or {}).get("record"),
                        # the structure the gate saw; "approved" only if it passed
@@ -2421,7 +2463,7 @@ def main():
                           spacing_bohr=a.spacing, margin_bohr=a.margin,
                           grids_level=int(mf.grids.level), conv_tol=float(mf.conv_tol),
                           seed=a.seed, nconfs=a.nconfs,
-                          optimize=a.optimize, geometry=(gi or {}).get("source")),
+                          optimize=a.optimize, geometry=geom_source),
             results=dict(e_tot_Ha=float(mf.e_tot), nao=int(mol.nao),
                          dipole=dipole_about_nuclear_centre(mol, dm),
                          V_min_kcal_mol=float(V.min()), V_max_kcal_mol=float(V.max()),

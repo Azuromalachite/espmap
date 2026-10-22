@@ -1552,3 +1552,89 @@ def test_an_all_ion_series_gets_a_shared_sequential_scale():
 def test_notebook_drops_review_3_stale_claims(phrase):
     text = (_NB_DIR / "build_notebook.py").read_text(encoding="utf-8")
     assert phrase not in text
+
+
+# ------------------------------------------------- --optimize identity (review 4 N1)
+class _SCFStop(Exception):
+    pass
+
+
+def _optimize_harness(monkeypatch, optimised_geometry, stop_on_second_scf=True):
+    """Run main() with --optimize and no real SCF: run_scf builds the Mole
+    only, and berny's optimize returns `optimised_geometry` (or the input)."""
+    import types
+    from pyscf import gto
+    calls = []
+
+    def fake_run_scf(spec, basis="sto-3g", charge=0, spin=0, **k):
+        calls.append(spec)
+        if len(calls) > 1 and stop_on_second_scf:
+            raise _SCFStop
+        mol = gto.M(atom=spec, basis="sto-3g", charge=charge, spin=spin, verbose=0)
+        return mol, types.SimpleNamespace(mol=mol)
+
+    def fake_optimize(mf, maxsteps=50):
+        if optimised_geometry is None:
+            return mf.mol
+        return gto.M(atom=em.atoms_from_geometry(optimised_geometry), basis="sto-3g",
+                     charge=mf.mol.charge, verbose=0)
+
+    # stand in for pyscf's berny_solver itself, so neither pyberny nor a real
+    # optimisation is needed (CI's [test] extra does not install pyberny)
+    monkeypatch.setitem(sys.modules, "berny", types.ModuleType("berny"))
+    monkeypatch.setitem(sys.modules, "pyscf.geomopt.berny_solver",
+                        types.SimpleNamespace(optimize=fake_optimize))
+    monkeypatch.setattr(em, "run_scf", fake_run_scf)
+    return calls
+
+
+def _neutral_glycine():
+    import json
+    from pathlib import Path
+    p = Path(__file__).resolve().parents[1] / "docs" / "review-4" / "out" / "r8.json"
+    return json.loads(p.read_text())["geometry"]
+
+
+def test_optimisation_that_moves_a_proton_is_refused(monkeypatch):
+    """Review 4 N1: the zwitterion's proton moves in a gas-phase optimisation,
+    and the run computed neutral glycine under structure_verified: true."""
+    _optimize_harness(monkeypatch, _neutral_glycine())
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[NH3+]CC(=O)[O-]",
+                                      "--optimize", "--basis", "sto-3g"])
+    with pytest.raises(SystemExit, match="after --optimize"):
+        em.main()
+
+
+def test_forced_past_a_failed_reverification_it_warns(monkeypatch, capsys):
+    calls = _optimize_harness(monkeypatch, _neutral_glycine())
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[NH3+]CC(=O)[O-]",
+                                      "--optimize", "--basis", "sto-3g", "--force"])
+    with pytest.raises(_SCFStop):
+        em.main()
+    assert len(calls) == 2
+    assert "after --optimize" in capsys.readouterr().err
+
+
+def test_an_optimisation_that_keeps_the_structure_proceeds(monkeypatch):
+    calls = _optimize_harness(monkeypatch, None)       # optimizer returns the input
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][OH:2]",
+                                      "--optimize", "--basis", "sto-3g"])
+    with pytest.raises(_SCFStop):                       # reached the second SCF
+        em.main()
+    assert len(calls) == 2
+
+
+def test_optimizing_a_supplied_pose_is_refused_before_compute(monkeypatch):
+    """Optimising a kept file geometry discards exactly what it was for."""
+    import types
+    from pathlib import Path
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setitem(sys.modules, "berny", types.ModuleType("berny"))
+    f = Path(__file__).resolve().parents[1] / "examples" / "real_3d.mol"
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--file", str(f), "--optimize"])
+    with pytest.raises(SystemExit, match="would move the coordinates"):
+        em.main()
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--file", str(f), "--optimize",
+                                      "--force"])
+    with pytest.raises(_ReachedCompute):
+        em.main()

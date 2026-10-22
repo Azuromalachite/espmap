@@ -73,7 +73,10 @@ when a feature builds on published methods.
    ethanol approval. Bond orders are deliberately not compared: the SCF never
    sees them, and comparing them refused valid resonance forms (`[N-]=C=S`,
    DMSO). A mismatch refuses; with `--force` it warns and the JSON records
-   `structure_verified: false`.
+   `structure_verified: false`. **Anything that replaces `spec` re-runs the
+   check** (`check_identity`): `--optimize` once computed a gas-phase glycine
+   zwitterion as neutral glycine under `structure_verified: true`, because
+   the only check ran before the optimiser moved a proton (review 4, N1).
 4. **`int1e_grids` returns the positive Coulomb kernel**, so the electronic
    term is **subtracted**. A sign flip gives a smooth, structured, publishable,
    entirely wrong map. The far-field decay is the detector — a flipped kernel
