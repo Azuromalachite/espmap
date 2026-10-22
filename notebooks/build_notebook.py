@@ -97,8 +97,9 @@ t0 = time.time()
 if not os.path.isfile(os.path.join(WORK, "ESPMAP_READY")):
     if not os.path.isdir(REPO):
         _sh(f"git clone -q --depth 1 -b {{BRANCH}} https://github.com/Azuromalachite/espmap.git {{REPO}}")
-    # PySCF pinned: the measured error budget was taken with this version
-    _sh(f"pip install -q -e '{{REPO}}[viz]' 'pyscf==2.14.0'")
+    # PySCF and RDKit pinned to bench/env.json: the error budget was measured
+    # with these, and ETKDG geometries (so geometry hashes) depend on RDKit
+    _sh(f"pip install -q -e '{{REPO}}[viz]' 'pyscf==2.14.0' 'rdkit==2026.9.1'")
     out = _sh(f"cd {{REPO}} && {{sys.executable}} esp_map.py --selftest")
     if "selftest: PASS" not in out:
         raise RuntimeError("self-test FAILED; do not trust results from this install:\\n" + out)
@@ -135,6 +136,11 @@ heavy = mol0.GetNumHeavyAtoms()
 untested = sorted({a.GetSymbol() for a in mol0.GetAtoms()} - em.TESTED_ELEMENTS)
 if untested:
     print(f"WARNING: {', '.join(untested)} outside the validated element set; results untested.")
+if USE_GPU:
+    # GPU = auto puts every GPU runtime on --gpu; say when that leaves the validated path
+    for why in em.gpu_untested(SPIN, SOLVENT, DENSITY_FIT):
+        print(f"WARNING: GPU with {why} is untested (validated: closed shell, gas phase, "
+              f"density fitting). Set GPU = off to stay on the CPU path.")
 if heavy > 14 and not USE_GPU:
     print(f"note: {heavy} heavy atoms on a CPU runtime; expect several minutes "
           f"({'tens of minutes' if BASIS == 'def2-tzvp' else 'a few minutes'}).")
@@ -277,7 +283,8 @@ if RUN_SERIES:
         zz = np.load(f"{out}/surface.npz")
         surfs.append((name, zz))
         print(f"{name:15s} V = {zz['V'].min():+.1f} … {zz['V'].max():+.1f} kcal/mol")
-    one_sign = [n for n, zz in surfs if not (zz["V"].min() < 0 < zz["V"].max())]
+    # the same rule as the CLI's scale choice: one place decides "changes sign"
+    one_sign = [n for n, zz in surfs if em.sign_change_ratio(zz["V"]) <= em.SIGN_CHANGE_MIN]
     if one_sign and len(one_sign) < len(surfs):
         raise RuntimeError(f"{', '.join(one_sign)} {'does' if len(one_sign) == 1 else 'do'} not change sign (ion?) while the others do. "
                            "One shared symmetric scale would misrepresent one group; compare "
@@ -318,6 +325,12 @@ if RUN_GPU_CHECK:
                V_min=-37.277894106462526, V_max=60.079848397342694, t_scf=97.4)
     spec, _ = em.from_smiles("CCCCCCCCCC(=O)O")
     sha = hashlib.sha1(spec.encode()).hexdigest()[:10]
+    if sha != REF["geom_sha"]:
+        # a different geometry makes every comparison below meaningless
+        raise RuntimeError(f"geometry hash {sha} != reference {REF['geom_sha']}: this "
+                           f"RDKit embeds a different decanoic acid, so GPU and CPU "
+                           f"would be compared on different molecules. Check the "
+                           f"rdkit pin in cell 3.")
     t = time.perf_counter()
     m, mf = em.run_scf(spec, basis="def2-tzvp", density_fit=True, gpu=True)
     t_scf = time.perf_counter() - t

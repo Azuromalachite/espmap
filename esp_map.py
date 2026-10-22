@@ -885,6 +885,19 @@ def total_dm(mf):
     return dm[0] + dm[1] if dm.ndim == 3 else dm
 
 
+def gpu_untested(spin=0, solvent=None, density_fit=False):
+    """The parts of a --gpu run outside what bench/gpu_l4.json validated
+    (closed shell, gas phase, density fitting). Empty means validated."""
+    out = []
+    if spin:
+        out.append(f"an open shell (spin={spin}, UKS)")
+    if solvent not in (None, "vacuum"):
+        out.append(f"a PCM solvent ({solvent})")
+    if not density_fit:
+        out.append("exact integrals (no --density-fit)")
+    return out
+
+
 def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
             solvent=None, density_fit=False, gpu=False):
     """Restricted for a closed shell, UNRESTRICTED when spin != 0.
@@ -900,11 +913,17 @@ def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
 
     gpu runs the SCF ONLY on GPU4PySCF and hands back a CPU object, so
     total_dm and everything downstream are unchanged. Validated once
-    (bench/gpu_l4.json): RKS + density_fit, gas phase, decanoic acid, where
-    V_min/V_max matched the CPU to <0.001 kcal/mol. UKS, PCM and runs
-    without density fitting are untested on the GPU.
+    (bench/gpu_l4.json, at commits 2313965 and 183ccd7): RKS + density_fit,
+    gas phase, decanoic acid, where V_min/V_max matched the CPU to <0.001
+    kcal/mol. UKS, PCM and runs without density fitting are untested on the
+    GPU, and say so (review 3 H9: the contract was written and not enforced).
     """
     if gpu:
+        for why in gpu_untested(spin, solvent, density_fit):
+            print(f"WARNING: --gpu with {why} is untested; validated only for "
+                  f"closed-shell, gas-phase, density-fitted runs (bench/gpu_l4.json). "
+                  f"Check one result against a CPU run before relying on it.",
+                  file=sys.stderr)
         try:
             import gpu4pyscf  # noqa: F401
         except ImportError:
@@ -1248,31 +1267,54 @@ def build_maps():
 SEQUENTIAL = {"lajolla", "batlow", "viridis"}
 
 
+# The minority sign must reach this fraction of the larger extremum before a
+# surface counts as changing sign (review 3 H11).
+SIGN_CHANGE_MIN = 0.05
+
+
+def sign_change_ratio(V):
+    """min(|V_min|, |V_max|) / max(...) if V spans zero, else 0.
+
+    Review 3 H11: `V.min() < 0 < V.max()` was a knife-edge. A cation surface
+    from -0.01 to +120 got a diverging +-120 scale using half the ramp, and
+    from +0.01 to +120 a sequential one using all of it: 0.02 kcal/mol, far
+    below the 3.5 kcal/mol basis error, decided the picture.
+    """
+    lo, hi = float(np.min(V)), float(np.max(V))
+    if not lo < 0.0 < hi:
+        return 0.0
+    return min(-lo, hi) / max(-lo, hi)
+
+
 def choose_scale(V, lim=None, kind="auto", vmin=None, vmax=None):
     """Decide the colour scale from the data, not from habit.
 
     A diverging scale symmetric about zero is right only if the surface
     actually CHANGES SIGN. For an ion it does not: benzoate runs -158.7 to
     -40.7 kcal/mol, so centring on zero maps the whole molecule to one end
-    and hides 118 kcal/mol of structure.
+    and hides 118 kcal/mol of structure. "Changes sign" means the minority
+    sign reaches SIGN_CHANGE_MIN of the larger extremum (sign_change_ratio).
 
     Returns (vlim, kind, notes).
     """
     data_min, data_max = float(V.min()), float(V.max())
-    spans_zero = data_min < 0.0 < data_max
+    ratio = sign_change_ratio(V)
+    spans_zero = ratio > SIGN_CHANGE_MIN
+    sign_txt = (f"minority sign {ratio:.3f} of the larger extremum, threshold "
+                f"{SIGN_CHANGE_MIN}")
     notes = []
     if kind == "auto":
         kind = "diverging" if spans_zero else "sequential"
         if not spans_zero:
-            notes.append(f"surface does not change sign ({data_min:+.1f} to {data_max:+.1f} "
-                         f"kcal/mol): using a SEQUENTIAL scale over the actual "
-                         f"range. A diverging scale centred on zero would put the "
-                         f"whole molecule at one end of the ramp.")
+            notes.append(f"surface does not change sign appreciably ({data_min:+.1f} to "
+                         f"{data_max:+.1f} kcal/mol; {sign_txt}): using a SEQUENTIAL "
+                         f"scale over the actual range. A diverging scale centred on "
+                         f"zero would put the whole molecule at one end of the ramp.")
     if kind == "diverging":
         if not spans_zero:
-            notes.append(f"WARNING: diverging scale requested but V never changes "
-                         f"sign ({data_min:+.1f} to {data_max:+.1f}); every vertex falls on "
-                         f"one side of the midpoint colour.")
+            notes.append(f"WARNING: diverging scale requested but V barely or never "
+                         f"changes sign ({data_min:+.1f} to {data_max:+.1f}; {sign_txt}); "
+                         f"nearly every vertex falls on one side of the midpoint colour.")
         hi = abs(lim) if lim else max(abs(data_min), abs(data_max))
         vlim = (-hi, hi)
         asym = (max(abs(data_min), abs(data_max))
@@ -1549,6 +1591,96 @@ def record_key(fields):
     import hashlib
     import json
     return hashlib.sha1(json.dumps(fields, sort_keys=True).encode()).hexdigest()
+
+
+def geometry_record(mol, charge, spin):
+    """The coordinates actually computed, in PySCF atom order (review 3 H14:
+    the JSON had none, and ETKDG output depends on the RDKit version, so a
+    seed is not a substitute). Full float precision, so feeding the record
+    back through --atoms reproduces V; the sha1 is taken at %.8f so it does
+    not depend on how a float happens to be printed.
+
+    The sha1 covers the nuclei only (symbols and positions), not charge or
+    spin: an anion and a radical on the same nuclei share it, and differ in
+    the calculation. No atom maps here; the site block carries those."""
+    syms = [mol.atom_symbol(i) for i in range(mol.natm)]
+    xyz = mol.atom_coords() * BOHR
+    canon = "\n".join(f"{s} {x:.8f} {y:.8f} {z:.8f}" for s, (x, y, z) in zip(syms, xyz))
+    return dict(symbols=syms, xyz_angstrom=[[float(c) for c in r] for r in xyz],
+                sha1=_sha1(canon), sha1_covers=GEOMETRY_SHA1_COVERS,
+                charge=int(charge), spin=int(spin))
+
+
+GEOMETRY_SHA1_COVERS = ("symbols and xyz_angstrom at %.8f, one 'Sym x y z' line "
+                        "per atom, newline-joined; not charge or spin")
+
+
+def atoms_from_geometry(geom):
+    """--atoms string for a JSON geometry block: the way to recompute a record."""
+    return "; ".join(f"{s} {x!r} {y!r} {z!r}"
+                     for s, (x, y, z) in zip(geom["symbols"], geom["xyz_angstrom"]))
+
+
+def _sha1(text):
+    import hashlib
+    return hashlib.sha1(text.encode()).hexdigest()
+
+
+def code_identity():
+    """Which espmap produced a number. Review 3 H14: `git rev-parse HEAD` was
+    null outside git, reported a clean HEAD for an edited tree, and inside
+    someone else's repository would report THEIR commit. Now the commit is
+    taken only if this very file is tracked there, with --dirty, and
+    "unknown" otherwise -- never a clean commit by default.
+
+    espmap_version is the INSTALLED metadata: an editable install keeps the
+    version it was installed at until it is reinstalled, so for a checkout
+    `code` is the identity to trust."""
+    import subprocess
+    from importlib import metadata
+    try:
+        version = metadata.version("espmap")
+    except metadata.PackageNotFoundError:
+        version = "unknown"
+    here = os.path.dirname(os.path.abspath(__file__))
+    code = "unknown"
+    try:
+        tracked = subprocess.run(["git", "ls-files", "--error-unmatch",
+                                  os.path.basename(__file__)], cwd=here,
+                                 capture_output=True, text=True, timeout=10)
+        if tracked.returncode == 0:
+            d = subprocess.run(["git", "describe", "--always", "--dirty", "--abbrev=12"],
+                               cwd=here, capture_output=True, text=True, timeout=10)
+            code = d.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return dict(espmap_version=version, code=code)
+
+
+def provenance():
+    """Versions and threads that move results, for --json (review 3 H14)."""
+    import platform
+    from importlib import metadata
+
+    def ver(dist):
+        try:
+            return metadata.version(dist)
+        except metadata.PackageNotFoundError:
+            return None
+    from pyscf import lib
+    blas = None
+    try:
+        from threadpoolctl import threadpool_info
+        blas = [dict(api=p.get("internal_api"), version=p.get("version"),
+                     threads=p.get("num_threads")) for p in threadpool_info()
+                if p.get("user_api") == "blas"]
+    except ImportError:
+        pass
+    return dict(**code_identity(), python=platform.python_version(),
+                numpy=np.__version__, scipy=ver("scipy"),
+                scikit_image=ver("scikit-image"), pyscf=ver("pyscf"),
+                rdkit=ver("rdkit"), matplotlib=ver("matplotlib"),
+                threads=int(lib.num_threads()), blas=blas)
 
 
 def analysis_fields(xc, basis, solvent, iso, spacing, density_fit,
@@ -2115,6 +2247,10 @@ def main():
     if a.optimize:
         from pyscf.geomopt.berny_solver import optimize as _opt
         print("optimising geometry...", flush=True)
+        if a.gpu:
+            # run_scf hands back a CPU object, so berny's gradients are CPU
+            print("note: --optimize --gpu: each SCF runs on the GPU, but the "
+                  "geometry gradients run on the CPU.", file=sys.stderr)
         mol = _opt(mf, maxsteps=50)
         spec = "; ".join(
             f"{mol.atom_symbol(i)} "
@@ -2249,16 +2385,11 @@ def main():
         print(f"wrote {a.npz}  (surface, bohr; V in kcal/mol)")
     if a.json:
         import json
-        import subprocess
-        import pyscf
-        import rdkit
-        commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                                text=True, cwd=os.path.dirname(os.path.abspath(
-                                    __file__))).stdout.strip() or None
         rec = dict(
             validity=valid,
             analysis_key=record_key(a_fields), render_key=record_key(r_fields),
             key_fields=dict(analysis=a_fields, render=r_fields),
+            geometry=geometry_record(mol, charge, spin),
             input=dict(smiles=a.smiles, file=a.file,
                        record=(gi or {}).get("record"),
                        # the structure the gate saw; "approved" only if it passed
@@ -2270,8 +2401,13 @@ def main():
             settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
                           solvent_esp=a_fields["solvent_esp"],
                           include_reaction_field=rf_added,
-                          density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
-                          spacing_bohr=a.spacing, seed=a.seed, nconfs=a.nconfs,
+                          density_fit=a.density_fit, gpu=a.gpu,
+                          gpu_validated=(not gpu_untested(spin, solv, a.density_fit)
+                                         if a.gpu else None),
+                          iso=a.iso,
+                          spacing_bohr=a.spacing, margin_bohr=a.margin,
+                          grids_level=int(mf.grids.level), conv_tol=float(mf.conv_tol),
+                          seed=a.seed, nconfs=a.nconfs,
                           optimize=a.optimize, geometry=(gi or {}).get("source")),
             results=dict(e_tot_Ha=float(mf.e_tot), nao=int(mol.nao),
                          dipole=dipole_about_nuclear_centre(mol, dm),
@@ -2281,12 +2417,13 @@ def main():
                          surface_stats=area_stats(P_A, faces, V)),
             sites=sites, sites_reason=sites_reason,
             scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
+                       sign_change_ratio=sign_change_ratio(V),
+                       sign_change_threshold=SIGN_CHANGE_MIN,
                        cmap=cmap_name, cmap_requested=a.cmap,
                        cmap_substituted=bool(cmap_warning),
                        cmap_forced=bool(a.cmap and a.force_cmap),
                        **scale_provenance(kind, a.lim, a.vmin, a.vmax)),
-            versions=dict(pyscf=pyscf.__version__, rdkit=rdkit.__version__,
-                          espmap_commit=commit),
+            provenance=provenance(),
             caveat=("Measured error budget (README): basis def2-SVP -> "
                     "def2-TZVPP moves the chlorobenzene sigma-hole by +3.55 "
                     "kcal/mol; solvent gas -> water by -3.61. Quote numbers only "

@@ -71,8 +71,10 @@ time only (`bench/`):
 - **`--gpu`** runs the SCF on an NVIDIA GPU via
   [GPU4PySCF](https://github.com/pyscf/gpu4pyscf). On a Colab L4 it matched the
   CPU to < 0.001 kcal/mol and was 4.3× faster than the laptop above
-  (`bench/gpu_l4.json`). Validated for closed-shell, gas-phase, density-fitted
-  runs only.
+  (`bench/gpu_l4.json`, commits 2313965 and 183ccd7). Validated for
+  closed-shell, gas-phase, density-fitted runs only; any other combination
+  prints a warning naming what is untested, and the JSON records
+  `settings.gpu_validated`. With `--optimize`, the gradients run on the CPU.
 
 ## Outputs
 
@@ -88,7 +90,12 @@ python esp_map.py --smiles "CCO" --out esp.png \
 - `--json`: settings, energy, V range (`V_min_kcal_mol`, `V_max_kcal_mol`),
   the σ-hole (or `null` with the reason), the dipole as a vector about the
   centre of nuclear charge (an ion's dipole depends on the origin, so it is
-  stated), package versions, git commit and the error-budget caveat. Read
+  stated), the error-budget caveat, the **geometry actually computed**
+  (`geometry.xyz_angstrom` in atom order, with a sha1 of the nuclei; pass it
+  back with `--atoms` to recompute the run) and `provenance`: espmap version,
+  `git describe --dirty` (or "unknown", never a guessed commit), the versions
+  of Python, NumPy, SciPy, scikit-image, PySCF, RDKit and Matplotlib, and the
+  thread count. Read
   `validity` before anything else. Compare **numbers** only between records
   whose `analysis_key` matches (method, solvent convention, surface), and
   **pictures** only when `render_key` matches as well (colormap, limits,
@@ -166,7 +173,10 @@ Three rules the tool enforces:
 - **Symmetric about zero — only if the field changes sign.** An ion's surface
   never does. Benzoate runs −158.7 to −40.7 kcal/mol; a diverging map centred
   on zero collapses 117 kcal/mol of structure into one flat colour. `espmap`
-  detects this and switches to a sequential scale.
+  detects this and switches to a sequential scale. "Changes sign" means the
+  minority sign reaches more than 5 % of the larger extremum: a cation at
+  −0.01 to +120 is sequential, as it would be at +0.01. The ratio is printed
+  and written to the JSON (`scale.sign_change_ratio`).
 - **No specular highlight.** A white patch at a position set by the camera
   reads as a potential extremum. Shading is held to a narrow 0.62–1.0 span so
   the colormap's own lightness carries the data.
@@ -248,7 +258,8 @@ Two consequences for anyone quoting a number from this:
 - Only closed-shell and simple open-shell (`--spin`) species; no excited
   states, no periodic systems, no transition metals validated.
 - `--gpu` is validated only for closed-shell, gas-phase, density-fitted runs;
-  solvent and open-shell runs on the GPU are untested.
+  solvent, open-shell and exact-integral runs on the GPU are untested, and
+  warned as such.
 - A folded molecule can give a closed surface with handles (genus > 0). That
   is accepted with a note; an *open* (clipped) surface is still refused.
 
