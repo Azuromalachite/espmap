@@ -64,6 +64,28 @@ def test_ion_switches_to_a_sequential_scale():
     assert any("does not change sign" in n for n in notes)
 
 
+@pytest.mark.parametrize("ratio, expect", [
+    (0.01, "sequential"), (0.04, "sequential"), (0.05, "sequential"),
+    (0.06, "diverging"), (0.5, "diverging"),
+])
+@pytest.mark.parametrize("sign", [+1, -1])      # cation with a negative patch, and the mirror
+def test_a_sliver_of_the_other_sign_does_not_make_a_diverging_scale(ratio, expect, sign):
+    """Review 3 H11: -0.01..+120 was diverging and +0.01..+120 sequential, so
+    0.02 kcal/mol decided the picture. Now the minority sign must exceed 5 %
+    of the larger extremum, and the notes print the ratio."""
+    V = sign * np.array([-ratio * 120.0, 3.0, 120.0])
+    assert em.sign_change_ratio(V) == pytest.approx(ratio)
+    _, kind, notes = em.choose_scale(V, kind="auto")
+    assert kind == expect
+    if expect == "sequential":
+        assert any(f"{ratio:.3f}" in n for n in notes)
+
+
+def test_sign_change_ratio_is_zero_when_the_field_has_one_sign():
+    assert em.sign_change_ratio(_anion()) == 0.0
+    assert em.sign_change_ratio(np.array([0.0, 5.0, 120.0])) == 0.0
+
+
 def test_default_colormap_follows_the_scale_kind():
     """Review 3, H3: --cmap defaulted to vik on every scale, so an anion's
     sequential scale was drawn diverging and its -80 kcal/mol end came out
