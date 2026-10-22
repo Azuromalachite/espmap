@@ -1104,6 +1104,13 @@ def resolve_cmap(kind, requested=None, force=False):
     return requested
 
 
+def scale_caption(kind):
+    """How to read the colours resolve_cmap allows, in the orientation
+    --selftest asserts: warm = negative on diverging maps, V_min darkest on
+    sequential ones. One wording for the PNG log, the 3D view and the notebook."""
+    return "warm = negative" if kind == "diverging" else "darker = more negative"
+
+
 # ------------------------------------------------------------------ molecules
 MOLECULES = {"bromobenzene": ("Br", 1.890), "chlorobenzene": ("Cl", 1.740),
              "iodobenzene": ("I", 2.095), "fluorobenzene": ("F", 1.354),
@@ -1189,9 +1196,7 @@ def esp_figure(verts, faces, V, symbols, coords, cmap, vlim, title="",
         i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
         intensity=V, intensitymode="vertex",
         colorscale=plotly_colorscale(cmap), cmin=vlim[0], cmax=vlim[1],
-        colorbar=dict(title="V (kcal/mol)<br>" + ("warm = negative" if kind == "diverging"
-                                                  else "darker = more negative"),
-                      len=0.75),
+        colorbar=dict(title="V (kcal/mol)<br>" + scale_caption(kind), len=0.75),
         lighting=dict(ambient=0.62, diffuse=0.38, specular=0.0,
                       roughness=1.0, fresnel=0.0),
         hovertemplate="V = %{intensity:+.1f} kcal/mol<extra></extra>",
@@ -1413,6 +1418,14 @@ def main():
             import plotly  # noqa: F401
         except ImportError:
             raise SystemExit("--html needs plotly: pip install plotly") from None
+    if a.cmap is not None:          # a colour flag must not cost a DFT run
+        if a.cmap not in build_maps():
+            raise SystemExit(f"--cmap must be one of {sorted(build_maps())}")
+        if a.scale != "auto":       # the kind is known now; with auto, only after V
+            try:
+                resolve_cmap(a.scale, a.cmap, a.force_cmap)
+            except ValueError as e:
+                raise SystemExit(str(e)) from None
 
     charge, spin, i_sub = a.charge or 0, a.spin, 6
     gi = None
@@ -1560,10 +1573,14 @@ def main():
         raise SystemExit("--lim 0 is not a range")
     vlim, kind, notes = choose_scale(V, lim=a.lim, kind=a.scale,
                                      vmin=a.vmin, vmax=a.vmax)
+    cmap_refused = None
     try:
         cmap_name = resolve_cmap(kind, a.cmap, a.force_cmap)
     except ValueError as e:
-        raise SystemExit(str(e)) from None
+        # --scale auto: the kind was unknown until V existed. The numbers do
+        # not depend on the colours, so the data are written below and only
+        # the picture is refused, at the end.
+        cmap_name, cmap_refused = None, str(e)
     for n in notes:
         print(("WARNING: " if n.startswith("WARNING") else "note: ")
               + n.removeprefix("WARNING: "), file=sys.stderr)
@@ -1578,18 +1595,17 @@ def main():
               f"scale and are clamped to the end colours")
 
     cmaps = build_maps()
-    if cmap_name not in cmaps:
-        raise SystemExit(f"--cmap must be one of {sorted(cmaps)}")
-    img = render(verts, faces, V, cmaps[cmap_name], vlim, size=a.size,
-                 elev=a.elev, azim=a.azim, ambient=a.ambient,
-                 diffuse=1.0 - a.ambient)
-    plt.imsave(a.out, img)
-    print(f"wrote {a.out}  ({kind} scale {vlim[0]:+.1f} to {vlim[1]:+.1f} "
-          f"kcal/mol, cmap {cmap_name})")
+    if cmap_name:
+        img = render(verts, faces, V, cmaps[cmap_name], vlim, size=a.size,
+                     elev=a.elev, azim=a.azim, ambient=a.ambient,
+                     diffuse=1.0 - a.ambient)
+        plt.imsave(a.out, img)
+        print(f"wrote {a.out}  ({kind} scale {vlim[0]:+.1f} to {vlim[1]:+.1f} "
+              f"kcal/mol, cmap {cmap_name}, {scale_caption(kind)})")
 
     symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
     label = (gi or {}).get("formula") or a.smiles or a.file or a.molecule
-    if a.html:
+    if a.html and cmap_name:
         esp_figure(verts, faces, V, symbols, mol.atom_coords(), cmaps[cmap_name],
                    vlim, title=f"{label} · {a.xc}/{a.basis}", kind=kind).write_html(
             a.html, include_plotlyjs=True)
@@ -1597,7 +1613,7 @@ def main():
     if a.npz:
         np.savez_compressed(a.npz, verts=verts, faces=faces, V=V,
                             symbols=np.array(symbols), coords=mol.atom_coords(),
-                            vlim=np.array(vlim), kind=kind, cmap=cmap_name)
+                            vlim=np.array(vlim), kind=kind, cmap=cmap_name or "")
         print(f"wrote {a.npz}  (surface, bohr; V in kcal/mol)")
     if a.json:
         import json
@@ -1626,6 +1642,7 @@ def main():
                          n_verts=int(diag["n_verts"]), surface=surface_report(diag)),
             scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
                        cmap=cmap_name, cmap_forced=bool(a.cmap and a.force_cmap),
+                       cmap_refused=cmap_refused,
                        **scale_provenance(kind, a.lim, a.vmin, a.vmax)),
             versions=dict(pyscf=pyscf.__version__, rdkit=rdkit.__version__,
                           espmap_commit=commit),
@@ -1636,6 +1653,15 @@ def main():
         with open(a.json, "w") as f:
             json.dump(rec, f, indent=2)
         print(f"wrote {a.json}")
+    if cmap_refused:
+        kept = [p for p in (a.npz, a.json) if p]
+        raise SystemExit(
+            f"{cmap_refused}.\nNo image was written"
+            + (f"; the data were ({', '.join(kept)})." if kept else
+               ", and no --json/--npz was asked for, so this run's numbers are "
+               "only in the log above.")
+            + f" The surface needs a {kind} scale: pass --scale {kind} with a "
+              f"matching --cmap next time, so a mismatch is caught before the SCF.")
 
 
 if __name__ == "__main__":

@@ -152,3 +152,24 @@ def test_render_writes_an_image(tmp_path):
     assert img.shape == (80, 80, 3)
     assert 0.0 <= img.min() and img.max() <= 1.0
     assert img.std() > 0.01, "a flat image means the surface was not painted"
+
+
+def test_a_late_colormap_refusal_still_writes_the_data(tmp_path, monkeypatch):
+    """With --scale auto the kind is known only after the SCF. A mismatched
+    --cmap still refuses the picture, but the JSON and NPZ hold valid numbers
+    and must be written first, so the compute is not thrown away."""
+    import json
+    import sys
+    out, js, npz = tmp_path / "ac.png", tmp_path / "ac.json", tmp_path / "ac.npz"
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-]",
+                                      "--basis", "sto-3g", "--cmap", "vik",
+                                      "--out", str(out), "--json", str(js),
+                                      "--npz", str(npz)])
+    with pytest.raises(SystemExit, match="does not fit"):
+        em.main()
+    assert not out.exists(), "no image in a colormap the scale contradicts"
+    rec = json.loads(js.read_text())
+    assert rec["scale"]["kind"] == "sequential"
+    assert rec["scale"]["cmap"] is None and "does not fit" in rec["scale"]["cmap_refused"]
+    assert rec["results"]["V_max"] < 0
+    assert np.load(npz)["V"].max() < 0

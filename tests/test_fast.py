@@ -452,6 +452,48 @@ def test_a_forced_unverifiable_structure_warns_instead_of_refusing(monkeypatch, 
     assert "could not be verified" in capsys.readouterr().err
 
 
+# A colour flag must not cost a DFT run: PR #11 refused a mismatched or
+# unknown --cmap only after the SCF, with nothing written.
+@pytest.mark.parametrize("argv", [
+    ["--scale", "sequential", "--cmap", "vik"],     # kind known up front: mismatch
+    ["--scale", "diverging", "--cmap", "lajolla"],
+    ["--cmap", "jet"],                              # not a map this program has
+])
+def test_a_colour_flag_that_cannot_work_is_refused_before_the_scf(monkeypatch, argv):
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO", *argv])
+    with pytest.raises(SystemExit, match="does not fit|must be one of"):
+        em.main()
+
+
+@pytest.mark.parametrize("argv", [
+    ["--cmap", "vik"],                              # auto scale: kind not known yet
+    ["--scale", "diverging", "--cmap", "broc"],
+    ["--scale", "sequential", "--cmap", "vik", "--force-cmap"],
+])
+def test_a_colour_flag_that_may_work_reaches_the_scf(monkeypatch, argv):
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO", *argv])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
+def test_scale_caption_matches_the_selftest_orientation():
+    assert em.scale_caption("diverging") == "warm = negative"
+    assert em.scale_caption("sequential") == "darker = more negative"
+
+
+def test_notebook_image_caption_follows_the_scale_kind():
+    """H3's caption half, in the notebook: the static image was titled 'warm =
+    negative' on sequential scales too. A source check, because the notebook
+    cell runs only after a real SCF."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8")
+    title = next(line for line in src.splitlines() if "plt.title(f\"{NAME}" in line)
+    assert "warm = negative" not in title and "em.scale_caption(kind)" in title
+
+
 def test_smiles_geometry_is_deterministic():
     assert em.from_smiles("CCO")[0] == em.from_smiles("CCO")[0]
 
