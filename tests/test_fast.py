@@ -840,7 +840,7 @@ def test_scale_is_comparable_only_when_the_user_fixed_it(kind, lim, vmin, vmax,
 
 
 _A = dict(xc="b3lyp", basis="def2-svp", solvent="vacuum", iso=0.002,
-          spacing=0.2, density_fit=False)
+          spacing=0.2, density_fit=False, geometry_method="etkdg_mmff94s")
 _R = dict(cmap="vik", kind="diverging", vlim=(-25.0, 25.0), elev=20.0, azim=-60.0,
           size=900, ambient=0.35)
 
@@ -871,10 +871,62 @@ def test_one_calculation_gets_one_analysis_key(change):
 
 @pytest.mark.parametrize("change", [
     {"solvent": "water"}, {"iso": 0.001}, {"spacing": 0.16}, {"density_fit": True},
-    {"xc": "pbe0"},
+    {"xc": "pbe0"}, {"geometry_method": "dft_opt:b3lyp/def2-svp"},
+    {"geometry_method": "file_frozen"},
 ])
 def test_every_method_axis_changes_the_analysis_key(change):
     assert _keys(a=change)[0] != _keys()[0]
+
+
+_EX = __import__("pathlib").Path(__file__).resolve().parents[1] / "examples"
+
+
+@pytest.mark.parametrize("make, expect", [
+    (lambda: em.from_smiles("CCO")[1], "etkdg_mmff94s"),
+    (lambda: em.from_file(str(_EX / "real_3d.mol"))[1], "file_frozen"),
+    (lambda: em.from_file(str(_EX / "real_3d_noH.mol"))[1], "file_frozen+mmff94s_h"),
+    (lambda: em.from_file(str(_EX / "drawn_2d.mol"))[1], "etkdg_mmff94s"),
+])
+def test_geometry_method_names_how_the_coordinates_were_made(make, expect):
+    """Review 4 N2: the key omitted the geometry source, the largest measured
+    axis on small anions (MMFF vs DFT up to 6.5 kcal/mol)."""
+    info = make()
+    assert em.geometry_method(info["source"], info["forcefield"]) == expect
+
+
+def test_geometry_method_for_cli_only_sources():
+    assert em.geometry_method(atoms=True) == "atoms_string"
+    assert em.geometry_method(molecule="chlorobenzene") == "idealised_builtin"
+    opt = ("B3LYP", "def2-TZVP", "Water")
+    assert em.geometry_method("3D generated from SMILES by ETKDGv3",
+                              optimize=opt) == "dft_opt:b3lyp/def2-tzvp/water"
+    assert em.geometry_method(atoms=True, optimize=("b3lyp", "sto-3g", "vacuum")) \
+        == "dft_opt:b3lyp/sto-3g"
+    with pytest.raises(ValueError):
+        em.geometry_method("from a source nobody wrote down")
+
+
+def test_review_glycine_pair_no_longer_shares_a_key():
+    """r8 (--optimize) and r9 (no --optimize) shared analysis_key 62f86d4d6b
+    across a 25-29 kcal/mol difference in V_min/V_max."""
+    import json
+    out = __import__("pathlib").Path(__file__).resolve().parents[1] / "docs" / "review-4" / "out"
+    keys = []
+    for name in ("r8.json", "r9.json"):
+        r = json.loads((out / name).read_text())
+        s = r["settings"]
+        f = dict(r["key_fields"]["analysis"], geometry_method=em.geometry_method(
+            "3D generated from SMILES by ETKDGv3", "MMFF94s",
+            optimize=(s["xc"], s["basis"], s["solvent"]) if s["optimize"] else None))
+        keys.append(em.record_key(f))
+    assert keys[0] != keys[1]
+
+
+def test_different_molecules_made_the_same_way_share_a_key():
+    a = em.from_smiles("CCO")[1]
+    b = em.from_smiles("c1ccccc1Cl")[1]
+    assert em.geometry_method(a["source"], a["forcefield"]) == \
+        em.geometry_method(b["source"], b["forcefield"])
 
 
 def test_auto_scaled_panels_get_different_render_keys():
