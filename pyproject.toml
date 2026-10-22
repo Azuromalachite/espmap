@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "espmap"
-version = "0.1.1"
+version = "0.1.2"
 description = "Electrostatic-potential maps for organic molecules, with a colormap that is not a dataviz disaster"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,6 +34,7 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=7.0", "plotly>=5"]
 viz = ["plotly>=5"]
+opt = ["pyberny>=0.6"]
 
 [project.urls]
 Homepage = "https://github.com/Azuromalachite/espmap"

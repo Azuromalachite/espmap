@@ -10,7 +10,7 @@ A single-module tool: SMILES or a structure file → DFT → electrostatic
 potential on the ρ = 0.002 e·bohr⁻³ isosurface → a rendered image with a
 colour scale chosen from the data.
 
-`esp_map.py` (~1200 lines) is the whole program. There is no package layout
+`esp_map.py` (~1700 lines) is the whole program. There is no package layout
 and that is intentional — it stays readable end to end, and `pyproject.toml`
 exposes it as a `py-modules` entry plus an `espmap` console script.
 
@@ -22,8 +22,8 @@ does not. Do not add a compatibility shim for a signature you changed.
 ```bash
 pip install -e ".[test]"
 python esp_map.py --selftest           # physics + all 11 colormap orientations
-pytest                                 # 37 fast tests, ~2 s, no SCF
-pytest --runslow -m slow               # 11 tests with real DFT, ~4 min
+pytest                                 # 100 fast tests, ~5 s, no SCF
+pytest --runslow -m slow               # 13 tests with real DFT, ~3 min
 python esp_map.py --smiles "Clc1ccccc1" --lim 25 --out esp.png
 ```
 
@@ -38,9 +38,9 @@ before and after any change to `esp_at_points`, `run_scf`, `total_dm` or
 | read | `read_structure`, `parse_for_check`, `from_smiles`, `from_file` | **one** reader, **one** embedder — see Invariants |
 | gate | `check_structure`, `print_check` | runs **before** geometry or SCF |
 | electronic | `run_scf`, `total_dm`, `density_on_grid`, `esp_at_points` | RKS, or UKS when `spin != 0` |
-| surface | `extract_surface`, `euler_characteristic` | integrity-checked, raises by default |
+| surface | `extract_surface`, `mesh_topology`, `surface_problems` | integrity-checked, raises by default |
 | property | `sigma_hole` | axis from the bond, not from a ring |
-| scale | `choose_scale`, `SEQUENTIAL` | diverging only if the field changes sign |
+| scale | `choose_scale`, `resolve_cmap`, `cmap_preflight`, `cmap_after_scf` | diverging only if the field changes sign; the map follows the scale |
 | render | `look_at`, `render`, `build_maps` | own z-buffer rasteriser, no VTK |
 
 ### The one idea worth preserving
@@ -103,7 +103,7 @@ Do not re-derive these; do not quote a number against a smaller margin.
 | solvent, gas → PCM water | **−3.61** |
 | solvent, gas → chloroform | −2.69 |
 | functional, B3LYP / PBE0 / M06-2X / HF | 0.69 spread |
-| conformer, lowest vs highest MMFF | ~1 |
+| conformer, lowest vs highest MMFF | ~1 (extended; 5.2 on V_min with folded C18 conformers, see below) |
 | stereochemistry, diastereomers | ~0.9 (0.4 noise floor) |
 | geometry source, MMFF / idealised / DFT | 0.35 |
 | grid spacing, 0.26 → 0.16 bohr | 0.04 |
@@ -155,7 +155,7 @@ Any change to basis, functional, grid, surface definition or solvent handling
 invalidates the table above. Re-measure the affected axis and update both this
 file and `README.md` — the numbers appear in both and in the module docstring.
 
-`docs/adversarial-review-1.md` and `docs/adversarial-review-2.md` record every
+`docs/adversarial-review-1.md`, `-2.md` and `-3.md` record every
 defect found so far, with the reproduction for each. If a test fails in a way
 that looks familiar, it is probably in there.
 

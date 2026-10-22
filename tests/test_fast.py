@@ -64,6 +64,100 @@ def test_ion_switches_to_a_sequential_scale():
     assert any("does not change sign" in n for n in notes)
 
 
+def test_default_colormap_follows_the_scale_kind():
+    """Review 3, H3: --cmap defaulted to vik on every scale, so an anion's
+    sequential scale was drawn diverging and its -80 kcal/mol end came out
+    dark blue, the colour every caption reads as positive."""
+    assert em.resolve_cmap("sequential") in em.SEQUENTIAL
+    assert em.resolve_cmap("diverging") not in em.SEQUENTIAL
+    _, kind, _ = em.choose_scale(_anion())
+    assert em.resolve_cmap(kind) in em.SEQUENTIAL
+
+
+@pytest.mark.parametrize("kind, cmap", [
+    ("sequential", "vik"),       # diverging map on an ion: the H3 defect
+    ("sequential", "RdBu"),
+    ("diverging", "lajolla"),    # sequential map on a sign-changing field hides the sign
+])
+def test_mismatched_colormap_is_refused_unless_forced(kind, cmap):
+    with pytest.raises(ValueError, match="does not fit"):
+        em.resolve_cmap(kind, cmap)
+    assert em.resolve_cmap(kind, cmap, force=True) == cmap
+
+
+@pytest.mark.parametrize("kind, cmap", [("sequential", "batlow"), ("diverging", "PuOr")])
+def test_matching_explicit_colormap_is_kept(kind, cmap):
+    assert em.resolve_cmap(kind, cmap) == cmap
+
+
+_MAPS = {"vik", "RdBu", "lajolla", "batlow", "viridis"}
+
+
+@pytest.mark.parametrize("scale, cmap, force, refused", [
+    ("sequential", "vik", False, True),    # kind known: refuse before the SCF
+    ("diverging", "lajolla", False, True),
+    ("sequential", "vik", True, False),    # --force-cmap
+    ("auto", "vik", False, False),         # kind unknown until the SCF: decide later
+    ("auto", "nonsense", False, True),     # unknown map: refuse before the SCF
+    ("sequential", None, False, False),
+])
+def test_cmap_preflight_refuses_what_it_can_before_the_scf(scale, cmap, force, refused):
+    """#11 follow-up: resolve_cmap ran after the SCF, so `--cmap vik` on an
+    ion did the whole calculation (15 min on a C18) and then wrote nothing."""
+    err = em.cmap_preflight(scale, cmap, force, available=_MAPS)
+    assert bool(err) is refused
+
+
+def test_mismatch_found_after_the_scf_falls_back_and_says_so():
+    name, warning = em.cmap_after_scf("sequential", "vik")
+    assert name == "lajolla" and "only known after the SCF" in warning
+    assert em.cmap_after_scf("sequential", "vik", force=True) == ("vik", None)
+    assert em.cmap_after_scf("diverging", None) == ("vik", None)
+
+
+def test_every_caption_uses_one_reading_rule():
+    """#11 follow-up: the notebook's static image kept 'warm = negative' on
+    ions after the 3D colourbar was fixed."""
+    from pathlib import Path
+    assert em.scale_caption("diverging") == "warm = negative"
+    assert "warm" not in em.scale_caption("sequential")
+    nb = (Path(__file__).resolve().parents[1] / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8")
+    display = nb[nb.index("5 · Display"):nb.index("6 · Package")]
+    assert "em.scale_caption(kind)" in display and "warm = negative" not in display
+
+
+def _diag(**over):
+    d = dict(closed=True, open_edges=0, nonmanifold_edges=0, components=1, genus=0,
+             chi=2, face_max_rho=1e-6, margin=5.0, strict=True, problems=[])
+    d.update(over)
+    return d
+
+
+def test_surface_report_tells_clipped_from_folded():
+    """Review 3, H4: the JSON kept only chi, and chi = -2 is both a clipped
+    surface run with --no-strict (V_min 23 % wrong) and a valid genus-2 fold."""
+    clipped = em.surface_report(_diag(closed=False, open_edges=266, genus=None, chi=-2,
+                                      face_max_rho=4e-3, margin=2.0, strict=False,
+                                      problems=["... CLIPPED ...", "... OPEN ..."]))
+    folded = em.surface_report(_diag(genus=2, chi=-2))
+    assert clipped["chi"] == folded["chi"] == -2          # the old JSON's only field
+    assert clipped["valid"] is False and clipped["problems"] and clipped["strict"] is False
+    assert folded["valid"] is True and folded["problems"] == [] and folded["genus"] == 2
+    assert em.surface_report(_diag())["valid"] is True
+
+
+def test_gate_report_marks_a_forced_rejection():
+    """Review 3, H4: a structure the gate REJECTED and --force computed was
+    written to the JSON as approved_smiles, with no verdict."""
+    findings = [(em.BLOCK, "MULTIPLE_FRAGMENTS", "msg", "fix")]
+    g = em.gate_report(em.BLOCK, findings, forced=True)
+    assert g == {"verdict": "BLOCK", "forced": True,
+                 "findings": [["BLOCK", "MULTIPLE_FRAGMENTS"]]}
+    # --force on a structure the gate accepted overrides nothing
+    assert em.gate_report(em.WARN, [(em.WARN, "X", "m", "f")], forced=True)["forced"] is False
+
+
 def test_lim_does_not_reimpose_symmetry_on_a_sequential_scale():
     """Review 2, G6: --lim 200 on an anion gave -200..+200, more than half the
     ramp unreachable -- the exact failure the sequential branch exists for."""
@@ -362,6 +456,25 @@ def _stop_before_scf(monkeypatch):
     monkeypatch.setattr(em, "estimate_cost", stop)
 
 
+def test_optimize_without_pyberny_is_refused_before_the_scf(monkeypatch):
+    """--optimize imported pyscf.geomopt.berny_solver only after the first SCF,
+    and pyberny was in no dependency list: the run computed, then crashed."""
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setitem(sys.modules, "berny", None)        # import berny -> ImportError
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO", "--optimize"])
+    with pytest.raises(SystemExit, match="pyberny"):
+        em.main()
+
+
+def test_optimize_with_pyberny_reaches_the_compute(monkeypatch):
+    import types
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setitem(sys.modules, "berny", types.ModuleType("berny"))
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO", "--optimize"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
 def test_main_refuses_coordinates_that_are_not_the_approved_structure(monkeypatch):
     """Fault injection at the boundary the old check could not see: the gate
     approves CCO, the geometry step hands PySCF acetaldehyde. Only the
@@ -374,6 +487,19 @@ def test_main_refuses_coordinates_that_are_not_the_approved_structure(monkeypatc
     monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO"])
     with pytest.raises(SystemExit, match="not the one about to be computed"):
         em.main()
+
+
+def test_main_refuses_a_contradicting_cmap_before_the_scf(tmp_path, monkeypatch):
+    """--scale fixes the kind up front, so --cmap vik on it is refused before
+    any compute (cmap_preflight wired into main), with no image written."""
+    out = tmp_path / "ac.png"
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-]",
+                                      "--scale", "sequential", "--cmap", "vik",
+                                      "--out", str(out)])
+    with pytest.raises(SystemExit, match="does not fit"):
+        em.main()
+    assert not out.exists()
 
 
 def test_main_lets_a_healthy_structure_through_to_the_scf(monkeypatch):
@@ -560,3 +686,16 @@ def test_3d_view_maps_vlim_and_has_no_specular_highlight():
     assert list(surf.intensity) == list(V)
     assert surf.lighting.specular == 0.0
     assert len(fig.data[1].x) == 3                     # one O-H bond: 2 points + gap
+    assert "warm = negative" in surf.colorbar.title.text
+
+
+def test_3d_colourbar_does_not_say_warm_is_negative_on_a_sequential_scale():
+    """Review 3, H3: the HTML colourbar said 'warm = negative' on an ion too."""
+    pytest.importorskip("plotly")
+    verts = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], float)
+    faces = np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]])
+    V = np.array([-170.0, -150.0, -100.0, -80.0])
+    fig = em.esp_figure(verts, faces, V, ["O"], np.zeros((1, 3)),
+                        em.build_maps()["lajolla"], (-170.0, -80.0), kind="sequential")
+    title = fig.data[0].colorbar.title.text
+    assert "warm" not in title and "more negative" in title
