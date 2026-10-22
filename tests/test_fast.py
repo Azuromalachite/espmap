@@ -307,6 +307,38 @@ def test_gpu_without_gpu4pyscf_fails_before_any_work():
         em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True)
 
 
+@pytest.mark.parametrize("kind, lim, vmin, vmax, comparable", [
+    ("diverging", None, None, None, False),     # auto-scaled to this molecule
+    ("diverging", 50.0, None, None, True),      # --lim fixes a diverging scale
+    ("diverging", None, -60.0, 60.0, False),    # --vmin/--vmax ignored here
+    ("sequential", None, None, None, False),    # the defect: was reported True
+    ("sequential", 50.0, None, None, False),    # --lim ignored for sequential
+    ("sequential", None, -170.0, None, False),  # one end auto, still per-molecule
+    ("sequential", None, -170.0, -30.0, True),  # both ends fixed
+])
+def test_scale_is_comparable_only_when_the_user_fixed_it(kind, lim, vmin, vmax,
+                                                         comparable):
+    """An auto-scaled sequential map (one anion at -170..-80, another at
+    -130..-30) was written to --json as comparable. Panels are comparable
+    only when the limits came from the user, through the flag that applies
+    to that scale kind."""
+    p = em.scale_provenance(kind, lim, vmin, vmax)
+    assert p == {"source": "user" if comparable else "auto",
+                 "comparable": comparable}
+
+
+def test_scale_provenance_agrees_with_choose_scale():
+    """The flags scale_provenance trusts are the ones choose_scale obeys."""
+    anion = np.array([-170.0, -120.0, -80.0])
+    vlim, kind, _ = em.choose_scale(anion, vmin=-200.0, vmax=0.0)
+    assert kind == "sequential" and vlim == (-200.0, 0.0)
+    vlim, kind, _ = em.choose_scale(anion, lim=50.0)          # ignored
+    assert kind == "sequential" and vlim == (-170.0, -80.0)
+    neutral = np.array([-40.0, 10.0, 55.0])
+    vlim, kind, _ = em.choose_scale(neutral, lim=60.0)
+    assert kind == "diverging" and vlim == (-60.0, 60.0)
+
+
 def _rgb(s):
     return np.array([int(x) for x in s[4:-1].split(",")]) / 255.0
 
