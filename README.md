@@ -105,7 +105,8 @@ python esp_map.py --smiles "CCO" --out esp.png \
   of Python, NumPy, SciPy, scikit-image, PySCF, RDKit and Matplotlib, and the
   thread count. Read
   `validity` before anything else. Compare **numbers** only between records
-  whose `analysis_key` matches (method, solvent convention, surface), and
+  whose `analysis_key` matches (method, solvent convention, surface, and how
+  the geometry was made: `etkdg_mmff94s`, `file_frozen`, `dft_opt:…`, …), and
   **pictures** only when `render_key` matches as well (colormap, limits,
   camera). `key_fields` lists what each key hashes.
 

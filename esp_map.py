@@ -1729,7 +1729,7 @@ def provenance():
                 threads=int(lib.num_threads()), blas=blas)
 
 
-def analysis_fields(xc, basis, solvent, iso, spacing, density_fit,
+def analysis_fields(xc, basis, solvent, iso, spacing, density_fit, geometry_method,
                     reaction_field=False):
     """What makes two records' NUMBERS comparable (spec section 5). Colour
     settings are deliberately absent: review 3's single compare_key would
@@ -1738,12 +1738,46 @@ def analysis_fields(xc, basis, solvent, iso, spacing, density_fit,
     Normalised first, since PySCF is case-insensitive: def2-TZVP and
     def2-tzvp are one calculation and must get one key. Site and partition
     schema versions are NOT here: they cannot change a global V_min, and the
-    site block carries its own schema."""
+    site block carries its own schema.
+
+    geometry_method (see geometry_method()) is how the coordinates were
+    made. Review 4 N2: it was absent, yet on small anions it is the largest
+    measured axis (MMFF vs DFT up to 6.5 kcal/mol, above the basis row)."""
     solv = None if solvent is None or solvent.lower() == "vacuum" else solvent.lower()
     return dict(xc=xc.lower(), basis=basis.lower(), solvent=solv,
                 solvent_esp=SOLVENT_ESP[bool(reaction_field)] if solv else None,
                 spacing_bohr=float(spacing), density_fit=bool(density_fit),
+                geometry_method=geometry_method,
                 surface_definition=surface_definition(iso))
+
+
+def geometry_method(source=None, forcefield=None, atoms=False, molecule=None,
+                    optimize=None):
+    """How the computed coordinates were made, as one normalised label.
+
+    source/forcefield are from_smiles/from_file's info["source"] and
+    info["forcefield"]; atoms and molecule mark --atoms and --molecule
+    runs; optimize is (xc, basis, solvent) when --optimize replaced the
+    coordinates, which then decides the label on its own."""
+    if optimize is not None:
+        xc, basis, solvent = optimize
+        solv = None if solvent in (None, "vacuum") else solvent.lower()
+        return f"dft_opt:{xc.lower()}/{basis.lower()}" + (f"/{solv}" if solv else "")
+    if atoms:
+        return "atoms_string"
+    if molecule is not None:
+        return "idealised_builtin"
+    if source is None:
+        raise ValueError("geometry_method needs a source, --atoms or --molecule")
+    if source.startswith("file 3D coordinates used as-is"):
+        if "hydrogen(s) added" not in source:
+            return "file_frozen"
+        return ("file_frozen+mmff94s_h" if (forcefield or "").startswith("MMFF94s")
+                else "file_frozen+added_h")
+    if "ETKDG" in source:
+        # _embed_and_minimise falls back to UFF where MMFF94s has no parameters
+        return "etkdg_uff" if (forcefield or "").startswith("UFF") else "etkdg_mmff94s"
+    raise ValueError(f"unrecognised geometry source: {source!r}")
 
 
 def validity(gate, verified, surface):
@@ -2367,8 +2401,13 @@ def main():
     print(f"wrote {a.out}  ({kind} scale {vlim[0]:+.1f} to {vlim[1]:+.1f} "
           f"kcal/mol, cmap {cmap_name})")
 
+    g_method = geometry_method(
+        source=(gi or {}).get("source"), forcefield=(gi or {}).get("forcefield"),
+        atoms=bool(a.atoms and gi is None),
+        molecule=a.molecule if gi is None and not a.atoms else None,
+        optimize=(a.xc, a.basis, a.solvent) if a.optimize else None)
     a_fields = analysis_fields(a.xc, a.basis, a.solvent, a.iso, a.spacing,
-                               a.density_fit, reaction_field=rf_added)
+                               a.density_fit, g_method, reaction_field=rf_added)
     r_fields = render_fields(cmap_name, kind, vlim, a.elev, a.azim, a.size, a.ambient)
     symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
     label = (gi or {}).get("formula") or a.smiles or a.file or a.molecule
