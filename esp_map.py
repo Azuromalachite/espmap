@@ -48,9 +48,12 @@ NEW IN v3 — the structure check (--check)
                 reachable tautomers, net charge, isotopes.
 
     The stereochemistry wording is measured, not assumed: threonine's two
-    diastereomers differ in ESP extrema by ~0.9 kcal/mol against a
-    0.4 kcal/mol conformer-selection noise floor. Stereochemistry changes the
-    SHAPE of the surface far more than the numbers on it.
+    diastereomers differ in mean ESP extrema by 1.6 (V_min) and 1.9 (V_max)
+    kcal/mol at def2-SVP, against a spread of up to 1.25 between MMFF seeds
+    of one diastereomer (bench/error_budget.jsonl; the earlier "0.9 against
+    0.4" had no data behind it and did not reproduce, review 3 H8).
+    Stereochemistry moves the numbers about as much as conformer choice does,
+    and the SHAPE of the surface more.
 
 NEW IN v3 — structure input from a drawing program
 
@@ -69,11 +72,13 @@ NEW IN v3 — SMILES input
 
         idealised bond lengths   +9.83 kcal/mol   (C-Cl 1.7400 A)
         SMILES + MMFF94s         +9.94            (C-Cl 1.7209 A)
-        B3LYP/def2-SVP optimised +9.59            (C-Cl 1.7512 A)
+        B3LYP/def2-SVP optimised +9.54
 
-    a 0.35 kcal/mol spread, an order of magnitude below the basis-set error.
-    A force-field geometry is therefore adequate for this quantity; --optimize
-    runs a DFT optimisation if you want it anyway.
+    a 0.40 kcal/mol spread, an order of magnitude below the basis-set error
+    (bench/error_budget.jsonl, def2-TZVP). A force-field geometry is adequate
+    for this quantity on this molecule. It is NOT for small anions: MMFF
+    puts nitrite's N-O at 1.42 A against 1.25 and moves V_min/V_max by up to
+    6.5 kcal/mol (bench/anion_geometry.jsonl). Use --optimize there.
 
     ETKDG is stochastic, so --seed is fixed by default: without it the same
     SMILES gives a different conformer every run. Measured conformer effect on
@@ -119,11 +124,13 @@ CHANGES IN v2 (all driven by the adversarial review, see esp-adversarial-review.
 WHAT IT DOES
     1. DFT single point (PySCF)
     2. electron density on a regular grid
-    3. marching cubes at rho = 0.002 e/bohr^3 (Bader surface, ~98% of rho)
+    3. marching cubes at rho = 0.002 e/bohr^3 (Bader et al. 1987; encloses
+       98.5-99.1 % of the electrons here, bench/isosurface_enclosed.jsonl)
     4. ESP evaluated ONLY at the isosurface vertices, not on a full grid
        -- ~10^4 points instead of ~10^6, so this costs seconds, and the
           potential is evaluated exactly where it is displayed rather than
-          interpolated onto the surface from a cube file
+          interpolated onto the surface from a cube file. An established
+          approach (Bulat et al. 2010; Lu & Chen 2012), see docs/prior-art.md
     5. z-buffered render with deliberately weak shading, so the colormap's
        lightness carries the data instead of fighting the lighting
 
@@ -147,6 +154,11 @@ import numpy as np
 
 BOHR = 0.52917721092
 HA2KCAL = 627.5095
+AU2DEBYE = 2.541746473
+# esp_at_points sums the solute's nuclei and (PCM-polarised) electrons only;
+# the potential of the PCM surface charges is not added (review 3 H7).
+SOLVENT_ESP = {False: "polarised solute only (reaction field excluded)",
+               True: "polarised solute + PCM reaction field"}
 ISO_BADER = 0.002
 
 # basis sets at or below double zeta; penalty measured in the review
@@ -154,8 +166,10 @@ SMALL_BASIS = {"sto-3g", "3-21g", "6-31g", "6-31g*", "def2-svp", "def2-sv(p)"}
 
 # dielectric constants for --solvent. Measured effect on the chlorobenzene
 # sigma-hole: gas +9.83 -> chloroform +7.14 -> water +6.22 kcal/mol, i.e. the
-# solvent axis is CO-DOMINANT with the basis-set axis (+3.55). Do not quote a
-# condensed-phase number from a gas-phase run.
+# solvent axis is CO-DOMINANT with the basis-set axis (+3.54). Do not quote a
+# condensed-phase number from a gas-phase run. That is the polarised-solute
+# convention; with the reaction field added the shifts are +0.05 (water) and
+# -0.34 (chloroform), bench/solvent_convention.jsonl (review 3 H7).
 SOLVENTS = {"vacuum": None, "water": 78.3553, "dmso": 46.826, "methanol": 32.613,
             "acetonitrile": 35.688, "chloroform": 4.7113, "toluene": 2.3741,
             "hexane": 1.8819}
@@ -242,39 +256,71 @@ def _embed_and_minimise(mol, n_confs, seed, max_iters=2000):
             len(cids), int((ok == 0).sum()))
 
 
-def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
-    """Read .mol/.sdf/.cdxml/.xyz/.pdb from a drawing program and return
-    (PySCF atom string, info).
+def coordinate_kind(mol, fmt, tol=0.03):
+    """What the coordinates in a file are: "none", "geometry", "drawing", or
+    "ambiguous" (which the reader turns into a BLOCK).
 
-    The load-bearing distinction is 2D vs 3D. A structure drawn in ChemDraft,
-    ChemDraw, Ketcher or MarvinSketch and exported as MOL/SDF/CDXML carries a
-    FLAT depiction: every z is zero and it is a picture, not a geometry.
-    Feeding that to an SCF would produce a planar molecule and a confidently
-    wrong map. RDKit records the dimensionality on line 2 of a molblock and
-    exposes it as Conformer.Is3D(); we check that AND the coordinates, because
-    a file can claim 3D and be flat.
+    Review 3 H5: the old rule ("every z is zero" = drawing) also discarded
+    real planar geometries -- a DFT-optimised chlorobenzene in the xy plane,
+    water from an .xyz -- and so depended on how many decimals a file printed.
+      - .xyz and .pdb are never drawings;
+      - MOL/SDF/CDXML whose header says 2D are drawings;
+      - a 3D header with every z = 0 is a drawing only if every bond has the
+        same length (within tol) across at least two element pairs. Drawing
+        programs draw every bond at one length; a geometry has C-H ~1.09,
+        C-Cl ~1.74 A. Pairs ignore bond ORDER: Kekule nitrite has N=O and
+        N-O(-), both 1.258 A in a DFT geometry, and counting orders called it
+        a drawing. With one element pair (nitrite, nitrate, CO2, a diatomic)
+        lengths cannot tell a drawing from a symmetric molecule -> ambiguous.
+    """
+    if mol.GetNumConformers() == 0:
+        return "none"
+    if fmt in ("xyz", "pdb"):
+        return "geometry"
+    c = mol.GetConformer()
+    if not c.Is3D():
+        return "drawing"
+    if max(abs(c.GetAtomPosition(i).z) for i in range(mol.GetNumAtoms())) >= 1e-6:
+        return "geometry"
+    if mol.GetNumBonds() == 0:
+        return "geometry"
+    pairs, lengths = set(), []
+    for b in mol.GetBonds():
+        i, j = b.GetBeginAtomIdx(), b.GetEndAtomIdx()
+        pairs.add(tuple(sorted((b.GetBeginAtom().GetSymbol(),
+                                b.GetEndAtom().GetSymbol()))))
+        lengths.append((c.GetAtomPosition(i) - c.GetAtomPosition(j)).Length())
+    mean = sum(lengths) / len(lengths)
+    if max(abs(x - mean) for x in lengths) > tol * mean:
+        return "geometry"
+    return "drawing" if len(pairs) > 1 else "ambiguous"
+
+
+def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0, record=None):
+    """Read .mol/.sdf/.cdxml/.xyz/.pdb and return (PySCF atom string, info).
+
+    The load-bearing distinction is a DRAWING vs a GEOMETRY. A structure drawn
+    in ChemDraft, ChemDraw, Ketcher or MarvinSketch and exported as
+    MOL/SDF/CDXML is a picture: feeding it to an SCF would produce a confidently
+    wrong map, so its coordinates are discarded and a conformer generated.
+    read_structure decides which (coordinate_kind) and blocks when it cannot.
     """
     from rdkit import Chem
     from rdkit.Chem import AllChem
     # ONE reader, shared with the gate. v3 had a second copy here, so a fix
     # applied to parse_for_check (XYZ bond perception) silently did not reach
     # the path that actually builds the geometry.
-    mol, problems, n_found = read_structure(path, charge=charge)
+    mol, problems, n_found = read_structure(path, charge=charge, record=record)
     if mol is None:
         raise ValueError(problems[0][2] if problems else
                          f"RDKit could not read any molecule from {path}")
 
     has_conf = mol.GetNumConformers() > 0
-    is3d = bool(has_conf and mol.GetConformer().Is3D())
-    flat = True
-    if has_conf:
-        c = mol.GetConformer()
-        flat = max(abs(c.GetAtomPosition(i).z)
-                   for i in range(mol.GetNumAtoms())) < 1e-6
+    drawing = mol.GetProp("_coords") == "drawing"
     n_h_before = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H")
     perceived = mol.HasProp("_bonds") and mol.GetProp("_bonds") == "perceived"
 
-    if is3d and not flat:
+    if has_conf and not drawing:
         n_supplied = mol.GetNumAtoms()
         mol = Chem.AddHs(mol, addCoords=True)
         n_h_added = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H") - n_h_before
@@ -310,7 +356,7 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
         mol = Chem.AddHs(mol)
         best, ff, spread, n_emb, n_conv = _embed_and_minimise(mol, n_confs, seed)
         source = ("2D depiction: drawn coordinates DISCARDED, 3D generated "
-                  "by ETKDGv3" if (has_conf and (flat or not is3d))
+                  "by ETKDGv3" if drawing
                   else "no coordinates in file, 3D generated by ETKDGv3")
 
     info = dict(forcefield=ff, n_embedded=n_emb, n_converged=n_conv,
@@ -319,6 +365,7 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
                 formula=Chem.rdMolDescriptors.CalcMolFormula(mol),
                 n_rot=int(AllChem.CalcNumRotatableBonds(mol)), seed=seed,
                 source=source, n_found=n_found,
+                record=dict(index=record or 1, of=n_found),
                 smiles=Chem.MolToSmiles(Chem.RemoveHs(mol)), mol=mol)
     return _mol_to_spec(mol, best), info
 
@@ -412,9 +459,9 @@ def check_structure(mol, basis="def2-tzvp", spin=0):
             msg = (f"{n} stereocentres drawn without wedges or hashes: "
                    f"{2 ** n} stereoisomers, and they are diastereomers, i.e. "
                    f"genuinely different molecules. Measured on threonine, the "
-                   f"ESP EXTREMA differ by only ~0.9 kcal/mol (against a "
-                   f"0.4 kcal/mol conformer-noise floor), but the SHAPE of the "
-                   f"surface and where the features sit on it do differ.")
+                   f"ESP EXTREMA differ by ~1.6-1.9 kcal/mol, about as much as "
+                   f"conformer choice moves them (up to 1.25), and the SHAPE of "
+                   f"the surface and where the features sit on it differ too.")
             sev = WARN
         out.append((sev, "UNSPECIFIED_TETRAHEDRAL",
                     msg + f" Atom index: {unspec_atoms}",
@@ -506,7 +553,7 @@ def _quiet_rdkit():
     RDLogger.DisableLog("rdApp.*")
 
 
-def parse_for_check(smiles=None, path=None, charge=0):
+def parse_for_check(smiles=None, path=None, charge=0, record=None):
     """Parse to an RDKit mol WITHOUT generating 3D coordinates.
 
     The admissibility gate must run before embedding: a radical or an R-group
@@ -528,7 +575,7 @@ def parse_for_check(smiles=None, path=None, charge=0):
                           for p in probs]
         return None, [(BLOCK, "UNPARSEABLE", f"RDKit cannot read {smiles!r}",
                        "check the SMILES syntax")]
-    mol, problems, _ = read_structure(path, charge=charge)
+    mol, problems, _ = read_structure(path, charge=charge, record=record)
     return mol, problems
 
 
@@ -566,8 +613,11 @@ def _perceive_bonds(m, charge, fmt):
     return mol
 
 
-def read_structure(path, charge=0):
+def read_structure(path, charge=0, record=None):
     """The single structure reader. Returns (mol or None, problems, n_found).
+
+    record (1-based) picks one record from a multi-record file; without it a
+    file holding more than one record is a BLOCK.
 
     charge is needed only for XYZ, which carries coordinates and no bonds:
     bond perception has to be told the net charge or it fails. v4.0 hard-coded
@@ -614,7 +664,30 @@ def read_structure(path, charge=0):
                        f"RDKit read no valid molecule from {path}",
                        "re-export from the drawing program; check for R-groups "
                        "or query atoms the exporter could not represent")], 0
-    return mols[0], [], len(mols)
+    # One geometry in, one record out. A multi-record file (a docking run's
+    # poses, a CDXML page of fragments) used to warn and silently take the
+    # first; in a pipeline 20 poses became an analysis of pose 1.
+    n = len(mols)
+    if record is None and n > 1:
+        return None, [(BLOCK, "MULTIPLE_RECORDS",
+                       f"{path} holds {n} records; one run computes one",
+                       f"pass --record N (1..{n}) to choose one, or split the file")], n
+    if record is not None and not 1 <= record <= n:
+        return None, [(BLOCK, "RECORD_OUT_OF_RANGE",
+                       f"--record {record}, but {path} holds {n} record(s)",
+                       f"pass --record between 1 and {n}")], n
+    m = mols[(record or 1) - 1]
+    m.SetProp("_format", ext)
+    kind = coordinate_kind(m, ext)
+    if kind == "ambiguous":
+        return None, [(BLOCK, "DIMENSION_AMBIGUOUS",
+                       f"{path} is flagged 3D with every z = 0 and every bond "
+                       f"the same length: a drawing and a symmetric planar "
+                       f"molecule look identical",
+                       "write a 2D header if this is a drawing, or give any "
+                       "atom a non-zero z (or save as .xyz) if it is a geometry")], n
+    m.SetProp("_coords", kind)
+    return m, [], n
 
 
 def _skeleton(m):
@@ -713,6 +786,19 @@ def total_dm(mf):
     return dm[0] + dm[1] if dm.ndim == 3 else dm
 
 
+def gpu_untested(spin=0, solvent=None, density_fit=False):
+    """The parts of a --gpu run outside what bench/gpu_l4.json validated
+    (closed shell, gas phase, density fitting). Empty means validated."""
+    out = []
+    if spin:
+        out.append(f"an open shell (spin={spin}, UKS)")
+    if solvent not in (None, "vacuum"):
+        out.append(f"a PCM solvent ({solvent})")
+    if not density_fit:
+        out.append("exact integrals (no --density-fit)")
+    return out
+
+
 def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
             solvent=None, density_fit=False, gpu=False):
     """Restricted for a closed shell, UNRESTRICTED when spin != 0.
@@ -728,11 +814,17 @@ def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
 
     gpu runs the SCF ONLY on GPU4PySCF and hands back a CPU object, so
     total_dm and everything downstream are unchanged. Validated once
-    (bench/gpu_l4.json): RKS + density_fit, gas phase, decanoic acid, where
-    V_min/V_max matched the CPU to <0.001 kcal/mol. UKS, PCM and runs
-    without density fitting are untested on the GPU.
+    (bench/gpu_l4.json, at commits 2313965 and 183ccd7): RKS + density_fit,
+    gas phase, decanoic acid, where V_min/V_max matched the CPU to <0.001
+    kcal/mol. UKS, PCM and runs without density fitting are untested on the
+    GPU, and say so (review 3 H9: the contract was written and not enforced).
     """
     if gpu:
+        for why in gpu_untested(spin, solvent, density_fit):
+            print(f"WARNING: --gpu with {why} is untested; validated only for "
+                  f"closed-shell, gas-phase, density-fitted runs (bench/gpu_l4.json). "
+                  f"Check one result against a CPU run before relying on it.",
+                  file=sys.stderr)
         try:
             import gpu4pyscf  # noqa: F401
         except ImportError:
@@ -803,6 +895,52 @@ def esp_at_points(mol, dm, pts, mem_budget_gb=0.5):
         ints = mol.intor("int1e_grids", grids=pts[s:s + chunk])
         V[s:s + chunk] -= np.einsum("pij,ij->p", ints, dm)
     return V
+
+
+def reaction_field_at_points(mf, pts):
+    """Potential (Hartree/e) of the PCM surface charges at points (bohr).
+
+    esp_at_points gives the potential of the PCM-POLARISED SOLUTE; the
+    solvent's own response, the apparent surface charges on the cavity, is a
+    second term. Review 3 H7: on the chlorobenzene sigma-hole the two
+    conventions give solvent shifts of opposite sign, and only one was stated.
+    PySCF's charges are Gaussian-smeared (exponent charge_exp; the
+    switching/Gaussian scheme of Lange & Herbert 2010 and York & Karplus 1999,
+    as cited in pyscf/solvent/pcm.py), so each contributes q erf(zeta r) / r:
+    finite at a vertex that sits near the cavity, where a bare point charge
+    would blow up.
+    """
+    from scipy.special import erf
+    ws = mf.with_solvent
+    q = np.asarray(ws._intermediates["q"]).ravel()
+    centres = ws.surface["grid_coords"]
+    zeta = ws.surface["charge_exp"]
+    pts = np.asarray(pts, float)
+    V = np.zeros(len(pts))
+    for s in range(0, len(pts), 2000):
+        d = np.linalg.norm(pts[s:s + 2000, None, :] - centres[None], axis=2)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            k = np.where(d > 1e-12, erf(zeta * d) / d, 2.0 * zeta / np.sqrt(np.pi))
+        V[s:s + 2000] = k @ q
+    return V
+
+
+def unbound_anion_warning(mf, charge, solvent):
+    """A gas-phase anion whose HOMO is above zero has an electron the basis
+    is holding in place: in a complete basis it would leave. Its surface
+    potential then depends on how diffuse the basis is rather than on the
+    chemistry. A continuum binds it, so name --solvent as the remedy."""
+    if charge >= 0 or solvent:
+        return None
+    e = np.atleast_2d(np.asarray(mf.mo_energy, dtype=float))
+    occ = np.atleast_2d(np.asarray(mf.mo_occ, dtype=float))
+    homo = float(e[occ > 0].max())
+    if homo <= 0:
+        return None
+    return (f"gas-phase anion with HOMO {homo * 27.211386:+.2f} eV: the outer "
+            f"electron is unbound and held only by the basis, so the map tracks "
+            f"the basis set, not the molecule. Compute it in a continuum "
+            f"(--solvent water) or as the neutral/protonated form.")
 
 
 # ------------------------------------------------------------------- surface
@@ -1032,31 +1170,54 @@ def build_maps():
 SEQUENTIAL = {"lajolla", "batlow", "viridis"}
 
 
+# The minority sign must reach this fraction of the larger extremum before a
+# surface counts as changing sign (review 3 H11).
+SIGN_CHANGE_MIN = 0.05
+
+
+def sign_change_ratio(V):
+    """min(|V_min|, |V_max|) / max(...) if V spans zero, else 0.
+
+    Review 3 H11: `V.min() < 0 < V.max()` was a knife-edge. A cation surface
+    from -0.01 to +120 got a diverging +-120 scale using half the ramp, and
+    from +0.01 to +120 a sequential one using all of it: 0.02 kcal/mol, far
+    below the 3.5 kcal/mol basis error, decided the picture.
+    """
+    lo, hi = float(np.min(V)), float(np.max(V))
+    if not lo < 0.0 < hi:
+        return 0.0
+    return min(-lo, hi) / max(-lo, hi)
+
+
 def choose_scale(V, lim=None, kind="auto", vmin=None, vmax=None):
     """Decide the colour scale from the data, not from habit.
 
     A diverging scale symmetric about zero is right only if the surface
     actually CHANGES SIGN. For an ion it does not: benzoate runs -158.7 to
     -40.7 kcal/mol, so centring on zero maps the whole molecule to one end
-    and hides 118 kcal/mol of structure.
+    and hides 118 kcal/mol of structure. "Changes sign" means the minority
+    sign reaches SIGN_CHANGE_MIN of the larger extremum (sign_change_ratio).
 
     Returns (vlim, kind, notes).
     """
     data_min, data_max = float(V.min()), float(V.max())
-    spans_zero = data_min < 0.0 < data_max
+    ratio = sign_change_ratio(V)
+    spans_zero = ratio > SIGN_CHANGE_MIN
+    sign_txt = (f"minority sign {ratio:.3f} of the larger extremum, threshold "
+                f"{SIGN_CHANGE_MIN}")
     notes = []
     if kind == "auto":
         kind = "diverging" if spans_zero else "sequential"
         if not spans_zero:
-            notes.append(f"surface does not change sign ({data_min:+.1f} to {data_max:+.1f} "
-                         f"kcal/mol): using a SEQUENTIAL scale over the actual "
-                         f"range. A diverging scale centred on zero would put the "
-                         f"whole molecule at one end of the ramp.")
+            notes.append(f"surface does not change sign appreciably ({data_min:+.1f} to "
+                         f"{data_max:+.1f} kcal/mol; {sign_txt}): using a SEQUENTIAL "
+                         f"scale over the actual range. A diverging scale centred on "
+                         f"zero would put the whole molecule at one end of the ramp.")
     if kind == "diverging":
         if not spans_zero:
-            notes.append(f"WARNING: diverging scale requested but V never changes "
-                         f"sign ({data_min:+.1f} to {data_max:+.1f}); every vertex falls on "
-                         f"one side of the midpoint colour.")
+            notes.append(f"WARNING: diverging scale requested but V barely or never "
+                         f"changes sign ({data_min:+.1f} to {data_max:+.1f}; {sign_txt}); "
+                         f"nearly every vertex falls on one side of the midpoint colour.")
         hi = abs(lim) if lim else max(abs(data_min), abs(data_max))
         vlim = (-hi, hi)
         asym = (max(abs(data_min), abs(data_max))
@@ -1149,14 +1310,21 @@ MOLECULES = {"bromobenzene": ("Br", 1.890), "chlorobenzene": ("Cl", 1.740),
              "benzene": ("H", 1.080)}
 
 
-def surface_report(diag):
+def surface_definition(iso):
+    """Every area and value in a record is on this surface. It is the
+    electron-density isosurface, NOT a solvent-accessible surface."""
+    return dict(property="electron_density", isovalue_e_bohr3=float(iso))
+
+
+def surface_report(diag, iso):
     """The surface-integrity block of --json.
 
     Review 3 H4: the JSON kept only chi, and chi = -2 is what a clipped surface
     run with --no-strict gives AND what a valid folded genus-2 surface gives.
     A downstream reader could not tell a 23 %-wrong V_min from a good one.
     """
-    return dict(closed=bool(diag["closed"]), open_edges=int(diag["open_edges"]),
+    return dict(definition=surface_definition(iso),
+                closed=bool(diag["closed"]), open_edges=int(diag["open_edges"]),
                 nonmanifold_edges=int(diag["nonmanifold_edges"]),
                 components=int(diag["components"]), genus=diag["genus"],
                 chi=int(diag["chi"]), face_max_rho=float(diag["face_max_rho"]),
@@ -1173,10 +1341,12 @@ def gate_report(verdict, findings, forced):
 
 
 def scale_provenance(kind, lim=None, vmin=None, vmax=None):
-    """Where the colour limits came from, and whether panels can be compared.
+    """Where the colour limits came from, and whether the user fixed them.
 
-    Comparable means the limits were fixed by the user, so another molecule
-    run with the same flags maps a colour to the same kcal/mol. The first
+    Fixed means another molecule run with the same flags maps a colour to the
+    same kcal/mol. It says nothing about the numbers: review 3 H6 found it
+    named "comparable" across def2-SVP vs TZVP and gas vs PCM; whether numbers
+    compare is analysis_key, whether pictures do is render_key. The first
     --json marked every sequential scale comparable; an auto-scaled one (acetate
     -170..-80 next to another anion at -130..-30) is not. --lim only fixes a
     DIVERGING scale; --vmin/--vmax only fix a SEQUENTIAL one, and only as a
@@ -1186,7 +1356,7 @@ def scale_provenance(kind, lim=None, vmin=None, vmax=None):
         fixed = lim is not None
     else:
         fixed = vmin is not None and vmax is not None
-    return dict(source="user" if fixed else "auto", comparable=fixed)
+    return dict(source="user" if fixed else "auto", colour_scale_fixed=fixed)
 
 
 def plotly_colorscale(cmap, n=33):
@@ -1279,8 +1449,181 @@ def monosubstituted_benzene(sub,c_sub, rcc=1.390, rch=1.080):
     return "; ".join(f"{s} {a:.4f} {b:.4f} {c:.4f}" for s, (a, b, c) in out)
 
 
+def sigma_axis_partner(coords, i_sub):
+    """The atom the sigma-hole axis runs from: the substituent's nearest atom.
+    One function so the JSON's i_bond is the atom sigma_hole actually used."""
+    d = np.linalg.norm(coords - coords[i_sub], axis=1)
+    d[i_sub] = np.inf
+    return int(d.argmin())
+
+
+def sigma_hole_record(verts, V, mol, i_sub, reason=None):
+    """results.sigma_hole for the JSON (review 3 H6: the number every
+    error-budget row is about was printed and never written). Returns
+    (record or None, reason or None)."""
+    if i_sub is None:
+        return None, reason or "no Cl/Br/I"
+    i_bond = sigma_axis_partner(mol.atom_coords(), i_sub)
+    sh, ns = sigma_hole(verts, V, mol, i_sub=i_sub, i_bond=i_bond)
+    return dict(V_max_kcal_mol=None if np.isnan(sh) else sh, n_cap_vertices=ns,
+                i_sub=int(i_sub), i_bond=i_bond), None
+
+
+def dipole_about_nuclear_centre(mol, dm):
+    """Dipole (Debye) about the centre of nuclear charge, and that centre (A).
+
+    Review 3 H6: PySCF's dip_moment takes the origin at (0,0,0), and for a
+    charged species the dipole depends on the origin -- acetate gave 6.42 D as
+    embedded and 30.35 D translated by 5 A, same energy. About the centre of
+    nuclear charge the nuclear term vanishes and the value moves with the
+    molecule. For a neutral molecule it equals the origin-free dipole.
+    """
+    Z = mol.atom_charges().astype(float)
+    centre = Z @ mol.atom_coords() / Z.sum()
+    with mol.with_common_orig(centre):
+        r = mol.intor_symmetric("int1e_r", comp=3)
+    mu_au = -np.einsum("xij,ji->x", r, np.asarray(dm))
+    mu = mu_au * AU2DEBYE
+    return dict(vector_D=[float(x) for x in mu], magnitude_D=float(np.linalg.norm(mu)),
+                origin=dict(kind="centre_of_nuclear_charge",
+                            xyz_angstrom=[float(x) for x in centre * BOHR]))
+
+
+def record_key(fields):
+    """sha1 of the canonical JSON of fields: equal keys, equal fields."""
+    import hashlib
+    import json
+    return hashlib.sha1(json.dumps(fields, sort_keys=True).encode()).hexdigest()
+
+
+def geometry_record(mol, charge, spin):
+    """The coordinates actually computed, in PySCF atom order (review 3 H14:
+    the JSON had none, and ETKDG output depends on the RDKit version, so a
+    seed is not a substitute). Full float precision, so feeding the record
+    back through --atoms reproduces V; the sha1 is taken at %.8f so it does
+    not depend on how a float happens to be printed.
+
+    The sha1 covers the nuclei only (symbols and positions), not charge or
+    spin: an anion and a radical on the same nuclei share it, and differ in
+    the calculation. No atom maps here; the site block carries those."""
+    syms = [mol.atom_symbol(i) for i in range(mol.natm)]
+    xyz = mol.atom_coords() * BOHR
+    canon = "\n".join(f"{s} {x:.8f} {y:.8f} {z:.8f}" for s, (x, y, z) in zip(syms, xyz))
+    return dict(symbols=syms, xyz_angstrom=[[float(c) for c in r] for r in xyz],
+                sha1=_sha1(canon), sha1_covers=GEOMETRY_SHA1_COVERS,
+                charge=int(charge), spin=int(spin))
+
+
+GEOMETRY_SHA1_COVERS = ("symbols and xyz_angstrom at %.8f, one 'Sym x y z' line "
+                        "per atom, newline-joined; not charge or spin")
+
+
+def atoms_from_geometry(geom):
+    """--atoms string for a JSON geometry block: the way to recompute a record."""
+    return "; ".join(f"{s} {x!r} {y!r} {z!r}"
+                     for s, (x, y, z) in zip(geom["symbols"], geom["xyz_angstrom"]))
+
+
+def _sha1(text):
+    import hashlib
+    return hashlib.sha1(text.encode()).hexdigest()
+
+
+def code_identity():
+    """Which espmap produced a number. Review 3 H14: `git rev-parse HEAD` was
+    null outside git, reported a clean HEAD for an edited tree, and inside
+    someone else's repository would report THEIR commit. Now the commit is
+    taken only if this very file is tracked there, with --dirty, and
+    "unknown" otherwise -- never a clean commit by default.
+
+    espmap_version is the INSTALLED metadata: an editable install keeps the
+    version it was installed at until it is reinstalled, so for a checkout
+    `code` is the identity to trust."""
+    import subprocess
+    from importlib import metadata
+    try:
+        version = metadata.version("espmap")
+    except metadata.PackageNotFoundError:
+        version = "unknown"
+    here = os.path.dirname(os.path.abspath(__file__))
+    code = "unknown"
+    try:
+        tracked = subprocess.run(["git", "ls-files", "--error-unmatch",
+                                  os.path.basename(__file__)], cwd=here,
+                                 capture_output=True, text=True, timeout=10)
+        if tracked.returncode == 0:
+            d = subprocess.run(["git", "describe", "--always", "--dirty", "--abbrev=12"],
+                               cwd=here, capture_output=True, text=True, timeout=10)
+            code = d.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return dict(espmap_version=version, code=code)
+
+
+def provenance():
+    """Versions and threads that move results, for --json (review 3 H14)."""
+    import platform
+    from importlib import metadata
+
+    def ver(dist):
+        try:
+            return metadata.version(dist)
+        except metadata.PackageNotFoundError:
+            return None
+    from pyscf import lib
+    blas = None
+    try:
+        from threadpoolctl import threadpool_info
+        blas = [dict(api=p.get("internal_api"), version=p.get("version"),
+                     threads=p.get("num_threads")) for p in threadpool_info()
+                if p.get("user_api") == "blas"]
+    except ImportError:
+        pass
+    return dict(**code_identity(), python=platform.python_version(),
+                numpy=np.__version__, scipy=ver("scipy"),
+                scikit_image=ver("scikit-image"), pyscf=ver("pyscf"),
+                rdkit=ver("rdkit"), matplotlib=ver("matplotlib"),
+                threads=int(lib.num_threads()), blas=blas)
+
+
+def analysis_fields(xc, basis, solvent, iso, spacing, density_fit,
+                    reaction_field=False):
+    """What makes two records' NUMBERS comparable (spec section 5). Colour
+    settings are deliberately absent: review 3's single compare_key would
+    have called two identical calculations incomparable over a colormap.
+
+    Normalised first, since PySCF is case-insensitive: def2-TZVP and
+    def2-tzvp are one calculation and must get one key. Site and partition
+    schema versions are NOT here: they cannot change a global V_min, and the
+    site block carries its own schema."""
+    solv = None if solvent is None or solvent.lower() == "vacuum" else solvent.lower()
+    return dict(xc=xc.lower(), basis=basis.lower(), solvent=solv,
+                solvent_esp=SOLVENT_ESP[bool(reaction_field)] if solv else None,
+                spacing_bohr=float(spacing), density_fit=bool(density_fit),
+                surface_definition=surface_definition(iso))
+
+
+def validity(gate, verified, surface):
+    """One place a consumer reads validity from (spec section 6), never from
+    stderr, chi or a filename. sites is False until a site block exists."""
+    return dict(input=not (gate and gate["forced"]) and verified is not False,
+                surface=not surface["problems"], sites=False)
+
+
+def render_fields(cmap, kind, vlim, elev, azim, size, ambient):
+    """What makes two PICTURES share one visual scale. vlim is the resolved
+    range, so two auto-scaled panels match only if their ranges do."""
+    return dict(cmap=cmap, kind=kind, vmin=round(float(vlim[0]), 6),
+                vmax=round(float(vlim[1]), 6), elev=float(elev), azim=float(azim),
+                size=int(size), ambient=float(ambient))
+
+
 def sigma_hole(verts, V, mol, i_sub=6, pr_min=0.3, pe_max=1.6, i_bond=None):
     """V_max on the outer cap of the substituent, along the X-to-neighbour axis.
+
+    The sigma-hole and its surface V_s,max are established (Clark et al.
+    2007; Murray, Lane & Politzer 2009; docs/prior-art.md). What is espmap's
+    own is this implementation: the cone around the bond axis, below.
 
     v3 took the axis as (X - mean of atoms 0..5), hard-coding "the first six
     atoms are the benzene ring". For any other molecule that reference point
@@ -1301,9 +1644,7 @@ def sigma_hole(verts, V, mol, i_sub=6, pr_min=0.3, pe_max=1.6, i_bond=None):
     co = mol.atom_coords()
     X = co[i_sub]
     if i_bond is None:
-        d = np.linalg.norm(co - X, axis=1)
-        d[i_sub] = np.inf
-        i_bond = int(d.argmin())
+        i_bond = sigma_axis_partner(co, i_sub)
     axis = X - co[i_bond]
     axis /= np.linalg.norm(axis)
     rel = verts - X
@@ -1378,13 +1719,16 @@ def main():
     ap.add_argument("--smiles", help="build 3D coordinates from SMILES (RDKit)")
     ap.add_argument("--file", help="read a structure file: .mol .sdf .cdxml .xyz "
                                    ".pdb — i.e. what a drawing program exports")
+    ap.add_argument("--record", type=int, default=None,
+                    help="1-based record to compute from a multi-record SDF/CDXML; "
+                         "without it such a file is refused")
     ap.add_argument("--seed", type=lambda s: int(s, 0), default=0xC0FFEE,
                     help="ETKDG random seed; fixed so runs are reproducible")
     ap.add_argument("--nconfs", type=int, default=20,
                     help="conformers to embed; the lowest-energy one is used")
     ap.add_argument("--optimize", action="store_true",
                     help="DFT geometry optimisation after the force field "
-                         "(slow; measured worth 0.35 kcal/mol on a sigma-hole)")
+                         "(slow; measured worth 0.40 kcal/mol on a sigma-hole, up to 6.5 on small anions)")
     ap.add_argument("--molecule", default="bromobenzene", choices=sorted(MOLECULES))
     ap.add_argument("--atoms", help="PySCF atom string; overrides --molecule")
     ap.add_argument("--charge", type=int, default=None,
@@ -1408,10 +1752,18 @@ def main():
     ap.add_argument("--xc", default="b3lyp")
     ap.add_argument("--solvent", default="vacuum",
                     choices=sorted(SOLVENTS),
-                    help="PCM continuum. Measured: gas->water moves the "
-                         "chlorobenzene sigma-hole by -3.6 kcal/mol, as large "
-                         "as the basis-set error. Default vacuum, stated in "
-                         "the output either way")
+                    help="PCM continuum. The map is the potential of the "
+                         "PCM-POLARISED SOLUTE only; the PCM surface charges' "
+                         "own potential (the reaction field) is left out unless "
+                         "--include-reaction-field. Measured under that "
+                         "convention: gas->water moves the chlorobenzene "
+                         "sigma-hole by -3.6 kcal/mol. Default vacuum, stated "
+                         "in the output either way")
+    ap.add_argument("--include-reaction-field", action="store_true",
+                    help="with --solvent, add the potential of the PCM surface "
+                         "charges to the map. A different quantity: it changes "
+                         "analysis_key and the sign of the solvent effect on the "
+                         "chlorobenzene sigma-hole (review 3 H7)")
     ap.add_argument("--iso", type=float, default=ISO_BADER)
     ap.add_argument("--spacing", type=float, default=0.26,
                     help="bohr; V_max converged to 0.04 kcal/mol at this value")
@@ -1456,6 +1808,9 @@ def main():
         except ImportError:
             raise SystemExit("--optimize needs pyberny: pip install 'espmap[opt]' "
                              "(or pip install pyberny)") from None
+    if a.include_reaction_field and a.solvent == "vacuum":
+        raise SystemExit("--include-reaction-field needs --solvent: in the gas "
+                         "phase there is no reaction field to add")
     if a.lim == 0.0:
         raise SystemExit("--lim 0 is not a range")
     err = cmap_preflight(a.scale, a.cmap, a.force_cmap, available=set(build_maps()))
@@ -1463,13 +1818,14 @@ def main():
         raise SystemExit(err)
 
     charge, spin, i_sub = a.charge or 0, a.spin, 6
+    sh_reason = None
     gi = None
     if a.smiles and a.file:
         raise SystemExit("--smiles and --file are mutually exclusive")
 
     if a.smiles or a.file:
         probe, probs = parse_for_check(smiles=a.smiles, path=a.file,
-                                       charge=a.charge or 0)
+                                       charge=a.charge or 0, record=a.record)
         if probe is None:
             print_check(BLOCK, probs, a.smiles or str(a.file))
             raise SystemExit(1)
@@ -1494,15 +1850,14 @@ def main():
     if a.file:
         try:
             spec, gi = from_file(a.file, n_confs=a.nconfs, seed=a.seed,
-                                 charge=a.charge or 0)
+                                 charge=a.charge or 0, record=a.record)
         except ValueError as e:              # e.g. H_COUNT_MISMATCH: refuse, no traceback
             raise SystemExit(f"structure rejected: {e}") from None
-        print(f"{a.file}  ->  {gi['formula']}, charge {gi['charge']:+d}")
+        print(f"{a.file}  ->  {gi['formula']}, charge {gi['charge']:+d}"
+              + (f"  (record {gi['record']['index']} of {gi['record']['of']})"
+                 if gi["record"]["of"] > 1 else ""))
         print(f"  SMILES as read: {gi['smiles']}")
         print(f"  geometry: {gi['source']}")
-        if gi["n_found"] > 1:
-            print(f"WARNING: file contains {gi['n_found']} molecules; using the "
-                  f"first. Split the file to map the others.", file=sys.stderr)
         if "DISCARDED" in gi["source"]:
             print("WARNING: this file is a FLAT 2D depiction, not a geometry. The "
                   "drawn layout has been replaced by a generated 3D conformer, so "
@@ -1547,11 +1902,15 @@ def main():
         # to read noise as a halogen-bond donor.
         hal = [i for i, s in enumerate(sym) if s in ("Cl", "Br", "I")]
         i_sub = hal[0] if len(hal) == 1 else None
-        if i_sub is None and sum(1 for s in sym if s == "F"):
+        if len(hal) > 1:
+            sh_reason = "more than one Cl/Br/I"
+        elif i_sub is None and "F" in sym:
+            sh_reason = "fluorine does not form one"
             print("note: fluorine present; no sigma-hole is reported because F "
                   "does not form one.", file=sys.stderr)
     elif a.atoms:
         spec, i_sub = a.atoms, None
+        sh_reason = "input has no halogen index (--atoms)"
     else:
         spec = monosubstituted_benzene(*MOLECULES[a.molecule])
         i_sub = None if a.molecule == "benzene" else 6
@@ -1573,6 +1932,10 @@ def main():
     if a.optimize:
         from pyscf.geomopt.berny_solver import optimize as _opt
         print("optimising geometry...", flush=True)
+        if a.gpu:
+            # run_scf hands back a CPU object, so berny's gradients are CPU
+            print("note: --optimize --gpu: each SCF runs on the GPU, but the "
+                  "geometry gradients run on the CPU.", file=sys.stderr)
         mol = _opt(mf, maxsteps=50)
         spec = "; ".join(
             f"{mol.atom_symbol(i)} "
@@ -1586,6 +1949,9 @@ def main():
           f"{'PCM ' + a.solvent if solv else 'GAS PHASE'}"
           + (f", UNRESTRICTED (spin={spin}, <S^2>={mf.spin_square()[0]:.3f})"
              if spin else ""))
+    warn = unbound_anion_warning(mf, charge, solv)
+    if warn:
+        print(f"WARNING: {warn}", file=sys.stderr)
 
     verts, faces, diag = extract_surface(mol, dm, a.spacing, iso=a.iso,
                                          margin=a.margin, strict=not a.no_strict)
@@ -1599,10 +1965,19 @@ def main():
           f"{diag['rho_integral']:.2f} vs {diag['nelec']} electrons")
 
     V = esp_at_points(mol, dm, verts) * HA2KCAL
-    print(f"V = {V.min():+.2f} .. {V.max():+.2f} kcal/mol")
-    if i_sub is not None:
-        sh, ns = sigma_hole(verts, V, mol, i_sub=i_sub)
-        print(f"sigma-hole V_max = {sh:+.2f} kcal/mol  ({ns} vertices in the cap)")
+    rf_added = bool(solv and a.include_reaction_field)
+    if rf_added:
+        rf = reaction_field_at_points(mf, verts) * HA2KCAL
+        print(f"reaction field on the surface {rf.min():+.2f} .. {rf.max():+.2f} "
+              f"kcal/mol, added to V")
+        V = V + rf
+    print(f"V = {V.min():+.2f} .. {V.max():+.2f} kcal/mol"
+          + (f"  [{SOLVENT_ESP[rf_added]}]" if solv else ""))
+    sh_rec, sh_reason = sigma_hole_record(verts, V, mol, i_sub, sh_reason)
+    if sh_rec is not None:
+        sh = sh_rec["V_max_kcal_mol"]
+        print(f"sigma-hole V_max = {float('nan') if sh is None else sh:+.2f} "
+              f"kcal/mol  ({sh_rec['n_cap_vertices']} vertices in the cap)")
 
     vlim, kind, notes = choose_scale(V, lim=a.lim, kind=a.scale,
                                      vmin=a.vmin, vmax=a.vmax)
@@ -1632,6 +2007,9 @@ def main():
     print(f"wrote {a.out}  ({kind} scale {vlim[0]:+.1f} to {vlim[1]:+.1f} "
           f"kcal/mol, cmap {cmap_name})")
 
+    a_fields = analysis_fields(a.xc, a.basis, a.solvent, a.iso, a.spacing,
+                               a.density_fit, reaction_field=rf_added)
+    r_fields = render_fields(cmap_name, kind, vlim, a.elev, a.azim, a.size, a.ambient)
     symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
     label = (gi or {}).get("formula") or a.smiles or a.file or a.molecule
     if a.html:
@@ -1642,18 +2020,23 @@ def main():
     if a.npz:
         np.savez_compressed(a.npz, verts=verts, faces=faces, V=V,
                             symbols=np.array(symbols), coords=mol.atom_coords(),
-                            vlim=np.array(vlim), kind=kind, cmap=cmap_name)
+                            vlim=np.array(vlim), kind=kind, cmap=cmap_name,
+                            units="coords, verts: bohr; V, vlim: kcal/mol",
+                            xc=a.xc, basis=a.basis, solvent=a.solvent,
+                            solvent_esp=str(a_fields["solvent_esp"]), iso=a.iso,
+                            analysis_key=record_key(a_fields),
+                            render_key=record_key(r_fields))
         print(f"wrote {a.npz}  (surface, bohr; V in kcal/mol)")
     if a.json:
         import json
-        import subprocess
-        import pyscf
-        import rdkit
-        commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                                text=True, cwd=os.path.dirname(os.path.abspath(
-                                    __file__))).stdout.strip() or None
+        surface = surface_report(diag, a.iso)
         rec = dict(
+            validity=validity(gate, verified, surface),
+            analysis_key=record_key(a_fields), render_key=record_key(r_fields),
+            key_fields=dict(analysis=a_fields, render=r_fields),
+            geometry=geometry_record(mol, charge, spin),
             input=dict(smiles=a.smiles, file=a.file,
+                       record=(gi or {}).get("record"),
                        # the structure the gate saw; "approved" only if it passed
                        gate_smiles=approved,
                        approved_smiles=approved if not (gate and gate["forced"]) else None,
@@ -1661,24 +2044,32 @@ def main():
                        computed_smiles=computed, structure_verified=verified,
                        formula=(gi or {}).get("formula"), charge=charge, spin=spin),
             settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
-                          density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
-                          spacing_bohr=a.spacing, seed=a.seed, nconfs=a.nconfs,
+                          solvent_esp=a_fields["solvent_esp"],
+                          include_reaction_field=rf_added,
+                          density_fit=a.density_fit, gpu=a.gpu,
+                          gpu_validated=(not gpu_untested(spin, solv, a.density_fit)
+                                         if a.gpu else None),
+                          iso=a.iso,
+                          spacing_bohr=a.spacing, margin_bohr=a.margin,
+                          grids_level=int(mf.grids.level), conv_tol=float(mf.conv_tol),
+                          seed=a.seed, nconfs=a.nconfs,
                           optimize=a.optimize, geometry=(gi or {}).get("source")),
             results=dict(e_tot_Ha=float(mf.e_tot), nao=int(mol.nao),
-                         dipole_D=float(np.linalg.norm(mf.dip_moment(
-                             unit="Debye", verbose=0))),
-                         V_min=float(V.min()), V_max=float(V.max()),
-                         n_verts=int(diag["n_verts"]), surface=surface_report(diag)),
+                         dipole=dipole_about_nuclear_centre(mol, dm),
+                         V_min_kcal_mol=float(V.min()), V_max_kcal_mol=float(V.max()),
+                         sigma_hole=sh_rec, sigma_hole_reason=sh_reason,
+                         n_verts=int(diag["n_verts"]), surface=surface),
             scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
+                       sign_change_ratio=sign_change_ratio(V),
+                       sign_change_threshold=SIGN_CHANGE_MIN,
                        cmap=cmap_name, cmap_requested=a.cmap,
                        cmap_substituted=bool(cmap_warning),
                        cmap_forced=bool(a.cmap and a.force_cmap),
                        **scale_provenance(kind, a.lim, a.vmin, a.vmax)),
-            versions=dict(pyscf=pyscf.__version__, rdkit=rdkit.__version__,
-                          espmap_commit=commit),
+            provenance=provenance(),
             caveat=("Measured error budget (README): basis def2-SVP -> "
-                    "def2-TZVPP moves the chlorobenzene sigma-hole by +3.55 "
-                    "kcal/mol; solvent gas -> water by -3.61. Quote numbers only "
+                    "def2-TZVPP moves the chlorobenzene sigma-hole by +3.54 "
+                    "kcal/mol; solvent gas -> water by -3.60. Quote numbers only "
                     "against those margins."))
         with open(a.json, "w") as f:
             json.dump(rec, f, indent=2)

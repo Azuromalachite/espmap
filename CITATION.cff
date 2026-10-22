@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: >-
+  If you use espmap, please cite it as below, and also cite the methods and
+  software it builds on: PySCF, RDKit, and the electrostatic-potential and
+  molecular-surface literature listed in docs/prior-art.md, with full
+  entries in docs/references.bib.
+type: software
+title: "espmap: electrostatic-potential maps for organic molecules"
+abstract: >-
+  DFT electrostatic potential evaluated at the vertices of the
+  rho = 0.002 e/bohr^3 density isosurface, with a structure gate, surface
+  integrity checks, a measured error budget and a colour scale chosen from
+  the data. Research code.
+authors:
+  - family-names: Wongsatit
+    given-names: Thanakrit
+    alias: Austin
+version: 0.1.2
+date-released: 2026-10-22
+license: MIT
+repository-code: "https://github.com/Azuromalachite/espmap"
+keywords:
+  - chemistry
+  - electrostatic potential
+  - DFT
+  - molecular surface
+  - sigma-hole
+  - colormap

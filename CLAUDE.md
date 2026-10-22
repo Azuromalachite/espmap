@@ -43,13 +43,16 @@ before and after any change to `esp_at_points`, `run_scf`, `total_dm` or
 | scale | `choose_scale`, `resolve_cmap`, `cmap_preflight`, `cmap_after_scf` | diverging only if the field changes sign; the map follows the scale |
 | render | `look_at`, `render`, `build_maps` | own z-buffer rasteriser, no VTK |
 
-### The one idea worth preserving
+### The implementation choice worth preserving
 
 `esp_at_points` is called on the **isosurface vertices**, never on a
 volumetric grid. ~10⁴ points instead of ~10⁶: about 100× cheaper, and it
 removes the cube-file interpolation error because the potential is computed
 exactly where it is drawn. If you ever find yourself writing a `.cube` file,
-stop and re-read this paragraph.
+stop and re-read this paragraph. It is an established approach to
+quantitative molecular surfaces (Bulat et al. 2010; Lu & Chen 2012), not an
+espmap invention: describe it that way, and keep `docs/prior-art.md` current
+when a feature builds on published methods.
 
 ## Invariants — do not regress these
 
@@ -84,7 +87,10 @@ stop and re-read this paragraph.
 7. **Diverging and symmetric only when the field changes sign.** An ion's
    surface never does, and centring on zero collapses its entire range into
    one colour. `--lim` is the diverging range; `--vmin`/`--vmax` are the
-   sequential ones.
+   sequential ones. "Changes sign" is `sign_change_ratio(V) > SIGN_CHANGE_MIN`
+   (0.05), never `V.min() < 0 < V.max()`: that knife-edge let 0.02 kcal/mol
+   decide the scale (review 3 H11). Anything that asks whether V changes sign,
+   the notebook included, calls the helper.
 8. **The isosurface must be closed and interior to its box**: no edge used by
    only one triangle, and no density above the isovalue on a box face. A
    clipped surface changed a measured V_max by 26 % with every other number in
@@ -99,17 +105,25 @@ Do not re-derive these; do not quote a number against a smaller margin.
 
 | axis | effect (kcal/mol) |
 | --- | --- |
-| basis set, def2-SVP → def2-TZVPP | **+3.55** |
-| solvent, gas → PCM water | **−3.61** |
-| solvent, gas → chloroform | −2.69 |
+| basis set, def2-SVP → def2-TZVPP | **+3.54** |
+| solvent, gas → PCM water (polarised solute, the default) | **−3.60** |
+| solvent, gas → chloroform (polarised solute) | −2.69 |
+| solvent, gas → water / chloroform, + reaction field (`--include-reaction-field`) | +0.05 / −0.34 |
 | functional, B3LYP / PBE0 / M06-2X / HF | 0.69 spread |
 | conformer, lowest vs highest MMFF | ~1 (extended; 5.2 on V_min with folded C18 conformers, see below) |
-| stereochemistry, diastereomers | ~0.9 (0.4 noise floor) |
-| geometry source, MMFF / idealised / DFT | 0.35 |
+| stereochemistry, threonine diastereomers (def2-SVP) | 1.6–1.9 (seed spread up to 1.25) |
+| geometry source, MMFF / idealised / DFT | 0.40 (chlorobenzene); **up to 6.5** on small anions |
 | grid spacing, 0.26 → 0.16 bohr | 0.04 |
 | density fitting (`--density-fit`), 7 pairs up to 898 nao | ≤ 0.02, always upward on V_max |
 | GPU4PySCF (`--gpu`) vs CPU, decanoic acid, both RI | < 0.001 |
 | σ-hole region definition | 0.00 |
+
+**The solvent row is a convention, not a fact about the molecule.** The
+default map is the PCM-polarised solute alone; adding the PCM surface
+charges' potential cancels almost all of the shift (+0.05 in water, def2-TZVP,
+`bench/solvent_convention.jsonl`). Never quote −3.60 without naming the
+convention, and never compare records whose `solvent_esp` differs (it is in
+`analysis_key`).
 
 **The basis error is molecule-specific.** The same change moves bromobenzene
 by **−0.76** — opposite sign, a fifth the size. Validating on one molecule

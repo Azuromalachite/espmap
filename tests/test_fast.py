@@ -64,6 +64,28 @@ def test_ion_switches_to_a_sequential_scale():
     assert any("does not change sign" in n for n in notes)
 
 
+@pytest.mark.parametrize("ratio, expect", [
+    (0.01, "sequential"), (0.04, "sequential"), (0.05, "sequential"),
+    (0.06, "diverging"), (0.5, "diverging"),
+])
+@pytest.mark.parametrize("sign", [+1, -1])      # cation with a negative patch, and the mirror
+def test_a_sliver_of_the_other_sign_does_not_make_a_diverging_scale(ratio, expect, sign):
+    """Review 3 H11: -0.01..+120 was diverging and +0.01..+120 sequential, so
+    0.02 kcal/mol decided the picture. Now the minority sign must exceed 5 %
+    of the larger extremum, and the notes print the ratio."""
+    V = sign * np.array([-ratio * 120.0, 3.0, 120.0])
+    assert em.sign_change_ratio(V) == pytest.approx(ratio)
+    _, kind, notes = em.choose_scale(V, kind="auto")
+    assert kind == expect
+    if expect == "sequential":
+        assert any(f"{ratio:.3f}" in n for n in notes)
+
+
+def test_sign_change_ratio_is_zero_when_the_field_has_one_sign():
+    assert em.sign_change_ratio(_anion()) == 0.0
+    assert em.sign_change_ratio(np.array([0.0, 5.0, 120.0])) == 0.0
+
+
 def test_default_colormap_follows_the_scale_kind():
     """Review 3, H3: --cmap defaulted to vik on every scale, so an anion's
     sequential scale was drawn diverging and its -80 kcal/mol end came out
@@ -139,12 +161,35 @@ def test_surface_report_tells_clipped_from_folded():
     surface run with --no-strict (V_min 23 % wrong) and a valid genus-2 fold."""
     clipped = em.surface_report(_diag(closed=False, open_edges=266, genus=None, chi=-2,
                                       face_max_rho=4e-3, margin=2.0, strict=False,
-                                      problems=["... CLIPPED ...", "... OPEN ..."]))
-    folded = em.surface_report(_diag(genus=2, chi=-2))
+                                      problems=["... CLIPPED ...", "... OPEN ..."]), 0.002)
+    folded = em.surface_report(_diag(genus=2, chi=-2), 0.002)
     assert clipped["chi"] == folded["chi"] == -2          # the old JSON's only field
     assert clipped["valid"] is False and clipped["problems"] and clipped["strict"] is False
     assert folded["valid"] is True and folded["problems"] == [] and folded["genus"] == 2
-    assert em.surface_report(_diag())["valid"] is True
+    assert em.surface_report(_diag(), 0.002)["valid"] is True
+
+
+def test_surface_report_states_the_surface_it_is_on():
+    """Spec section 6: the record itself says every area is on the density
+    isosurface, not a solvent-accessible surface."""
+    d = em.surface_report(_diag(), 0.001)["definition"]
+    assert d == {"property": "electron_density", "isovalue_e_bohr3": 0.001}
+
+
+@pytest.mark.parametrize("gate, verified, problems, expect", [
+    (None, None, [], True),                                        # --atoms
+    ({"verdict": "ACCEPT", "forced": False}, True, [], True),
+    ({"verdict": "BLOCK", "forced": True}, True, [], False),       # --force
+    ({"verdict": "ACCEPT", "forced": False}, False, [], False),    # H2 mismatch
+])
+def test_validity_input(gate, verified, problems, expect):
+    v = em.validity(gate, verified, {"problems": problems})
+    assert v["input"] is expect and v["surface"] is True and v["sites"] is False
+
+
+def test_validity_surface_is_false_when_the_surface_has_problems():
+    v = em.validity(None, None, em.surface_report(_diag(problems=["CLIPPED"]), 0.002))
+    assert v["surface"] is False
 
 
 def test_gate_report_marks_a_forced_rejection():
@@ -276,6 +321,109 @@ def test_real_3d_coordinates_are_used_as_is(tmp_path):
     assert "as-is" in info["source"]
 
 
+_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+
+
+def _flat_nitrite_mol(tmp_path, header="3D"):
+    """A DFT-like nitrite in the xy plane (N-O 1.258 A, 115 deg), Kekule:
+    N=O and N-O(-). One element pair, so lengths cannot decide."""
+    import math
+    from rdkit import Chem
+    m = Chem.RWMol(Chem.MolFromSmiles("N(=O)[O-]"))
+    c = Chem.Conformer(3)
+    h = math.radians(115 / 2)
+    c.SetAtomPosition(0, (0.0, 0.0, 0.0))
+    c.SetAtomPosition(1, (1.258 * math.sin(h), 1.258 * math.cos(h), 0.0))
+    c.SetAtomPosition(2, (-1.258 * math.sin(h), 1.258 * math.cos(h), 0.0))
+    c.Set3D(header == "3D")
+    m.AddConformer(c)
+    p = tmp_path / "nitrite.mol"
+    p.write_text(Chem.MolToMolBlock(m))
+    return p
+
+
+@pytest.mark.parametrize("path, expect", [
+    # review 3 H5: real planar geometries were thrown away as "drawings"
+    ("docs/review-3/fx/chlorobenzene_3d_planar.mol", "as-is"),
+    ("docs/review-3/fx/water_xy.xyz", "as-is"),
+    ("docs/review-3/fx/chlorobenzene_dft_like.xyz", "as-is"),
+    # drawings must still be caught, whatever the header claims
+    ("docs/review-3/fx/rd2d.mol", "DISCARDED"),
+    ("docs/review-3/fx/rd2d_flagged3d.mol", "DISCARDED"),
+    ("examples/drawn_2d.mol", "DISCARDED"),
+    ("examples/drawn.cdxml", "DISCARDED"),
+    # unchanged behaviour on ordinary 3D input
+    ("examples/real_3d.mol", "as-is"),
+    ("examples/real_3d_noH.mol", "as-is"),
+    ("examples/water.xyz", "as-is"),
+])
+def test_planar_geometry_is_kept_and_drawings_are_discarded(path, expect):
+    _, info = em.from_file(str(_ROOT / path))
+    assert expect in info["source"], (path, info["source"])
+
+
+def test_symmetric_flat_ion_with_a_3d_header_is_refused_not_guessed(tmp_path):
+    """Kekule nitrite has two bond ORDERS but one element pair, and a DFT
+    geometry gives both bonds 1.258 A. Counting orders called it a drawing and
+    MMFF replaced it with N-O 1.42 A; lengths cannot tell the two apart."""
+    p = _flat_nitrite_mol(tmp_path)
+    mol, probs = em.parse_for_check(path=str(p), charge=-1)
+    assert mol is None and probs[0][1] == "DIMENSION_AMBIGUOUS"
+    with pytest.raises(ValueError):
+        em.from_file(str(p))
+
+
+def test_symmetric_flat_ion_with_a_2d_header_is_a_drawing(tmp_path):
+    _, info = em.from_file(str(_flat_nitrite_mol(tmp_path, header="2D")))
+    assert "DISCARDED" in info["source"]
+
+
+def _multi_sdf(tmp_path, smiles=("CCO", "CCCl", "c1ccccc1")):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    p = tmp_path / "poses.sdf"
+    w = Chem.SDWriter(str(p))
+    for s in smiles:
+        m = Chem.AddHs(Chem.MolFromSmiles(s))
+        AllChem.EmbedMolecule(m, randomSeed=1)
+        w.write(m)
+    w.close()
+    return p
+
+
+def test_multi_record_file_is_refused_without_record(tmp_path):
+    """One geometry in, one record out: 20 docking poses used to become an
+    analysis of pose 1 with a warning nobody reads in a pipeline."""
+    mol, probs = em.parse_for_check(path=str(_multi_sdf(tmp_path)))
+    assert mol is None and probs[0][1] == "MULTIPLE_RECORDS"
+
+
+def test_record_picks_one_record(tmp_path):
+    from rdkit import Chem
+    p = _multi_sdf(tmp_path)
+    mol, probs = em.parse_for_check(path=str(p), record=2)
+    assert not probs and Chem.MolToSmiles(Chem.RemoveHs(mol)) == "CCCl"
+    _, info = em.from_file(str(p), record=2)
+    assert info["record"] == {"index": 2, "of": 3}
+
+
+@pytest.mark.parametrize("record", [0, 4])
+def test_record_out_of_range_is_refused(tmp_path, record):
+    mol, probs = em.parse_for_check(path=str(_multi_sdf(tmp_path)), record=record)
+    assert mol is None and probs[0][1] == "RECORD_OUT_OF_RANGE"
+
+
+def test_cli_refuses_multi_record_before_compute_and_accepts_record(tmp_path, monkeypatch):
+    p = str(_multi_sdf(tmp_path))
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--file", p])
+    with pytest.raises(SystemExit):
+        em.main()
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--file", p, "--record", "3"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
 def _spec_xyz(spec):
     return np.array([[float(x) for x in t.split()[1:]] for t in spec.split(";")])
 
@@ -374,9 +522,10 @@ def test_h_count_guard_catches_a_reader_that_guesses_wrong(tmp_path, monkeypatch
     p = tmp_path / "clph.pdb"
     p.write_text(_CLPH_PDB)
 
-    def old_reader(path, charge=0):
+    def old_reader(path, charge=0, record=None):
         m = Chem.MolFromPDBFile(str(path), removeHs=False)
         m.SetProp("_bonds", "perceived")
+        m.SetProp("_coords", "geometry")
         return m, [], 1
     monkeypatch.setattr(em, "read_structure", old_reader)
     with pytest.raises(ValueError, match="H_COUNT_MISMATCH"):
@@ -624,6 +773,52 @@ def test_gpu_without_gpu4pyscf_fails_before_any_work():
         em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True)
 
 
+@pytest.mark.parametrize("spin, solvent, df, expect", [
+    (0, None, True, []),                                  # the validated path
+    (0, "vacuum", True, []),
+    (0, "water", True, ["PCM"]),
+    (2, None, True, ["open shell"]),
+    (0, None, False, ["exact integrals"]),
+    (1, "water", False, ["open shell", "PCM", "exact integrals"]),
+])
+def test_gpu_untested_names_each_unvalidated_part(spin, solvent, df, expect):
+    got = em.gpu_untested(spin, solvent, df)
+    assert len(got) == len(expect) and all(e in g for e, g in zip(expect, got))
+
+
+class _Stop(Exception):
+    pass
+
+
+def test_run_scf_warns_on_an_untested_gpu_path(monkeypatch, capsys):
+    """Review 3 H9 validation: with gpu4pyscf stubbed, run_scf(gpu=True,
+    solvent="water") must warn. The notebook's GPU = auto put every GPU
+    runtime with a solvent on this path silently."""
+    import types
+    from pyscf import gto
+    monkeypatch.setitem(sys.modules, "gpu4pyscf", types.ModuleType("gpu4pyscf"))
+
+    def stop(*a, **k):
+        raise _Stop
+    monkeypatch.setattr(gto, "M", stop)
+    with pytest.raises(_Stop):
+        em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True,
+                   solvent="water", density_fit=True)
+    err = capsys.readouterr().err
+    assert "WARNING: --gpu with a PCM solvent (water) is untested" in err
+    with pytest.raises(_Stop):
+        em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True, density_fit=True)
+    assert "WARNING" not in capsys.readouterr().err
+
+
+def test_notebook_warns_on_an_untested_gpu_path():
+    from pathlib import Path
+    nb = (Path(__file__).resolve().parents[1] / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8")
+    run = nb[nb.index("4 · Run"):]
+    assert run.index("em.gpu_untested(SPIN, SOLVENT, DENSITY_FIT)") < run.index("cmd = [")
+
+
 @pytest.mark.parametrize("kind, lim, vmin, vmax, comparable", [
     ("diverging", None, None, None, False),     # auto-scaled to this molecule
     ("diverging", 50.0, None, None, True),      # --lim fixes a diverging scale
@@ -641,7 +836,168 @@ def test_scale_is_comparable_only_when_the_user_fixed_it(kind, lim, vmin, vmax,
     to that scale kind."""
     p = em.scale_provenance(kind, lim, vmin, vmax)
     assert p == {"source": "user" if comparable else "auto",
-                 "comparable": comparable}
+                 "colour_scale_fixed": comparable}
+
+
+_A = dict(xc="b3lyp", basis="def2-svp", solvent="vacuum", iso=0.002,
+          spacing=0.2, density_fit=False)
+_R = dict(cmap="vik", kind="diverging", vlim=(-25.0, 25.0), elev=20.0, azim=-60.0,
+          size=900, ambient=0.35)
+
+
+def _keys(a=None, r=None):
+    return (em.record_key(em.analysis_fields(**{**_A, **(a or {})})),
+            em.record_key(em.render_fields(**{**_R, **(r or {})})))
+
+
+def test_cmap_changes_only_the_render_key_and_basis_only_the_analysis_key():
+    """Spec 8b. Review 3 proposed one compare_key over method AND colour, which
+    would call two identical calculations incomparable over a colormap; and
+    'comparable' used to depend on the colour flags alone, across bases."""
+    a0, r0 = _keys()
+    a1, r1 = _keys(r={"cmap": "RdBu"})
+    a2, r2 = _keys(a={"basis": "def2-tzvp"})
+    assert a1 == a0 and r1 != r0
+    assert a2 != a0 and r2 == r0
+
+
+@pytest.mark.parametrize("change", [
+    {"xc": "B3LYP"}, {"basis": "def2-SVP"}, {"solvent": None}, {"solvent": "Vacuum"},
+])
+def test_one_calculation_gets_one_analysis_key(change):
+    """PySCF is case-insensitive: def2-SVP and def2-svp are the same run."""
+    assert _keys(a=change)[0] == _keys()[0]
+
+
+@pytest.mark.parametrize("change", [
+    {"solvent": "water"}, {"iso": 0.001}, {"spacing": 0.16}, {"density_fit": True},
+    {"xc": "pbe0"},
+])
+def test_every_method_axis_changes_the_analysis_key(change):
+    assert _keys(a=change)[0] != _keys()[0]
+
+
+def test_auto_scaled_panels_get_different_render_keys():
+    assert _keys(r={"vlim": (-30.0, 30.0)})[1] != _keys()[1]
+
+
+def test_solvent_esp_is_recorded_with_solvent_only():
+    assert em.analysis_fields(**{**_A, "solvent": "water"})["solvent_esp"] == em.SOLVENT_ESP[False]
+    assert em.analysis_fields(**_A)["solvent_esp"] is None
+
+
+def test_reaction_field_convention_is_a_different_analysis_key():
+    """Review 3 H7: the two conventions give solvent shifts of opposite sign
+    on the chlorobenzene sigma-hole. Numbers under one must never be compared
+    with numbers under the other."""
+    water = {**_A, "solvent": "water"}
+    a = em.analysis_fields(**water)
+    b = em.analysis_fields(**water, reaction_field=True)
+    assert b["solvent_esp"] == em.SOLVENT_ESP[True]
+    assert em.record_key(a) != em.record_key(b)
+    assert em.analysis_fields(**_A, reaction_field=True)["solvent_esp"] is None
+
+
+class _FakePCM:
+    def __init__(self, q, centres, zeta):
+        import types
+        self.with_solvent = types.SimpleNamespace(
+            _intermediates={"q": np.asarray(q, float)},
+            surface={"grid_coords": np.asarray(centres, float),
+                     "charge_exp": np.asarray(zeta, float)})
+
+
+def test_reaction_field_is_coulombic_far_away_and_finite_on_a_charge():
+    """Smeared charges q erf(zeta r)/r: a point charge at long range, and
+    2 zeta q / sqrt(pi) on top of one, where a bare 1/r would blow up."""
+    from math import erf, pi, sqrt
+    centres = [[0, 0, 0], [3.0, 0, 0]]
+    mf = _FakePCM([0.4, -0.1], centres, [2.0, 1.5])
+    far = np.array([[60.0, 0, 0]])
+    assert em.reaction_field_at_points(mf, far)[0] == pytest.approx(0.4 / 60 - 0.1 / 57, rel=1e-9)
+    on = em.reaction_field_at_points(mf, np.array([[0.0, 0, 0]]))[0]
+    assert on == pytest.approx(2 * 2.0 * 0.4 / sqrt(pi) - 0.1 * erf(1.5 * 3.0) / 3.0)
+
+
+class _FakeSCF:
+    def __init__(self, e, occ):
+        self.mo_energy, self.mo_occ = np.asarray(e, float), np.asarray(occ, float)
+
+
+@pytest.mark.parametrize("e, occ, charge, solvent, warns", [
+    ([-0.5, 0.02, 0.3], [2, 2, 0], -1, None, True),        # unbound HOMO
+    ([-0.5, -0.02, 0.3], [2, 2, 0], -1, None, False),      # bound
+    ([-0.5, 0.02, 0.3], [2, 2, 0], -1, "water", False),    # continuum binds it
+    ([-0.5, 0.02, 0.3], [2, 2, 0], 0, None, False),        # not an anion
+    ([[-0.5, 0.02], [-0.5, 0.3]], [[1, 1], [1, 0]], -1, None, True),   # UKS
+])
+def test_unbound_gas_phase_anion_is_warned(e, occ, charge, solvent, warns):
+    w = em.unbound_anion_warning(_FakeSCF(e, occ), charge, solvent)
+    assert bool(w) is warns
+    if w:
+        assert "--solvent" in w
+
+
+def test_reaction_field_without_solvent_is_refused_before_compute(monkeypatch):
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO",
+                                      "--include-reaction-field"])
+    with pytest.raises(SystemExit, match="needs --solvent"):
+        em.main()
+
+
+def _fake_dm(mol, seed=0):
+    rng = np.random.default_rng(seed)
+    x = rng.normal(size=(mol.nao, mol.nao))
+    return x @ x.T / mol.nao
+
+
+def test_ion_dipole_does_not_depend_on_where_the_molecule_sits():
+    """Review 3 H6: acetate gave 6.42 D as embedded and 30.35 D translated by
+    5 A. About the centre of nuclear charge it must not move. Any fixed AO
+    density matrix will do: translation carries the basis with the atoms."""
+    from pyscf import gto
+    spec, _ = em.from_smiles("CC(=O)[O-]")
+    shifted = "; ".join(f"{t.split()[0]} " + " ".join(
+        f"{float(x) + 5.0:.10f}" for x in t.split()[1:]) for t in spec.split(";"))
+    m0 = gto.M(atom=spec, basis="sto-3g", charge=-1, verbose=0)
+    m1 = gto.M(atom=shifted, basis="sto-3g", charge=-1, verbose=0)
+    dm = _fake_dm(m0)
+    d0, d1 = em.dipole_about_nuclear_centre(m0, dm), em.dipole_about_nuclear_centre(m1, dm)
+    assert np.allclose(d0["vector_D"], d1["vector_D"], atol=1e-6)
+    assert np.allclose(np.array(d1["origin"]["xyz_angstrom"]) -
+                       np.array(d0["origin"]["xyz_angstrom"]), 5.0, atol=1e-8)
+
+
+def test_neutral_dipole_matches_pyscf():
+    """For a neutral molecule the origin does not matter, so the value must
+    equal PySCF's own dip_moment on the same density."""
+    from pyscf import gto, scf
+    m = gto.M(atom="O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692",
+              basis="sto-3g", verbose=0)
+    mf = scf.RHF(m)
+    dm = _fake_dm(m)
+    dm *= m.nelectron / np.trace(dm @ m.intor("int1e_ovlp"))      # neutral
+    ref = mf.dip_moment(mol=m, dm=dm, unit="Debye", verbose=0)
+    got = em.dipole_about_nuclear_centre(m, dm)
+    assert np.allclose(got["vector_D"], ref, atol=1e-5)
+
+
+def test_sigma_hole_record_names_the_axis_atom():
+    """The JSON's i_bond is the atom sigma_hole actually used, and a missing
+    sigma-hole is null with a reason, never silently absent."""
+    from pyscf import gto
+    spec = em.monosubstituted_benzene(*em.MOLECULES["chlorobenzene"])
+    mol = gto.M(atom=spec, basis="sto-3g", verbose=0)
+    co = mol.atom_coords()
+    axis = co[6] - co[0]
+    verts = co[6] + 3.0 * axis / np.linalg.norm(axis) + np.zeros((1, 3))
+    rec, why = em.sigma_hole_record(verts, np.array([7.5]), mol, 6)
+    assert why is None and rec == {"V_max_kcal_mol": 7.5, "n_cap_vertices": 1,
+                                   "i_sub": 6, "i_bond": 0}
+    assert em.sigma_hole_record(verts, np.array([7.5]), mol, None,
+                                "fluorine does not form one") == (
+        None, "fluorine does not form one")
 
 
 def test_scale_provenance_agrees_with_choose_scale():
@@ -699,3 +1055,77 @@ def test_3d_colourbar_does_not_say_warm_is_negative_on_a_sequential_scale():
                         em.build_maps()["lajolla"], (-170.0, -80.0), kind="sequential")
     title = fig.data[0].colorbar.title.text
     assert "warm" not in title and "more negative" in title
+
+
+# ------------------------------------------------------------- provenance (H14)
+def _water(charge=0, spin=0):
+    from pyscf import gto
+    return gto.M(atom="O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692",
+                 basis="sto-3g", charge=charge, spin=spin, verbose=0)
+
+
+def test_geometry_record_hashes_the_nuclei_only():
+    """Review 3 H14: the JSON had no coordinates. The sha1 covers symbols and
+    positions, so an ion and a radical on the same nuclei share it."""
+    g0 = em.geometry_record(_water(), 0, 0)
+    g1 = em.geometry_record(_water(charge=1, spin=1), 1, 1)
+    assert g0["symbols"] == ["O", "H", "H"] and len(g0["xyz_angstrom"]) == 3
+    assert g0["sha1"] == g1["sha1"] and (g1["charge"], g1["spin"]) == (1, 1)
+    assert g0["xyz_angstrom"][1][1] == pytest.approx(0.7572, abs=1e-12)
+    assert "not charge or spin" in g0["sha1_covers"]
+
+
+def test_geometry_round_trips_through_atoms_exactly():
+    """The record is how to recompute a run: --atoms built from it must give
+    the same nuclei to float precision."""
+    from pyscf import gto
+    m = _water()
+    g = em.geometry_record(m, 0, 0)
+    m2 = gto.M(atom=em.atoms_from_geometry(g), basis="sto-3g", verbose=0)
+    assert np.abs(m2.atom_coords() - m.atom_coords()).max() < 1e-12
+    assert em.geometry_record(m2, 0, 0)["sha1"] == g["sha1"]
+
+
+def test_code_identity_is_unknown_outside_a_repo_that_tracks_this_file(tmp_path,
+                                                                        monkeypatch):
+    """`git rev-parse HEAD` reported whatever repository happened to enclose
+    the module, and a clean HEAD for an edited tree. Untracked -> "unknown"."""
+    fake = tmp_path / "esp_map.py"
+    fake.write_text("")
+    monkeypatch.setattr(em, "__file__", str(fake))
+    assert em.code_identity()["code"] == "unknown"
+
+
+def test_provenance_records_what_moves_results():
+    p = em.provenance()
+    for k in ("espmap_version", "code", "python", "numpy", "scipy", "scikit_image",
+              "pyscf", "rdkit", "threads"):
+        assert p[k] not in (None, ""), k
+    assert isinstance(p["threads"], int) and p["threads"] >= 1
+
+
+def test_notebook_pins_rdkit_and_stops_on_a_different_geometry():
+    """Review 3 H14: RDKit was unpinned, so the GPU check printed DIFFERENT on
+    the geometry hash and went on comparing energies of different molecules."""
+    from pathlib import Path
+    nb = (Path(__file__).resolve().parents[1] / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8")
+    assert "'rdkit==" in nb and "'pyscf==" in nb
+    gpu = nb[nb.index("GPU vs CPU check"):]
+    assert gpu.index("raise RuntimeError(f\"geometry hash") < gpu.index("em.run_scf(")
+
+
+def test_code_identity_matches_git_describe_inside_this_repo():
+    """The positive case: where git can read this checkout and tracks the
+    module, the identity is `git describe --dirty`, not "unknown"."""
+    import os
+    import subprocess
+    here = os.path.dirname(os.path.abspath(em.__file__))
+    try:
+        d = subprocess.run(["git", "describe", "--always", "--dirty", "--abbrev=12"],
+                           cwd=here, capture_output=True, text=True, timeout=10)
+    except OSError:
+        pytest.skip("no git")
+    if d.returncode != 0:
+        pytest.skip("git cannot read this checkout")
+    assert em.code_identity()["code"] == d.stdout.strip()
