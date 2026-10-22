@@ -1057,6 +1057,343 @@ def test_3d_colourbar_does_not_say_warm_is_negative_on_a_sequential_scale():
     assert "warm" not in title and "more negative" in title
 
 
+# ------------------------------------------------------------------- sites
+# per-site-spec P2: the triangle partition and the area-weighted statistics.
+# Meshes come from marching cubes on a model density (atom-centred
+# exponentials), the same construction extract_surface uses, so the
+# triangles are as uneven as real ones.
+def _blob_mesh(coords_A, scale=None, iso=0.05, h=0.12):
+    """(verts_A, faces) of the iso-surface of sum_i exp(-2 |r - R_i| / s_i)."""
+    from skimage import measure
+    X = np.asarray(coords_A, float)
+    s = np.ones(len(X)) if scale is None else np.asarray(scale, float)
+    lo = X.min(0) - 3.5
+    n = np.ceil((X.max(0) + 3.5 - lo) / h).astype(int)
+    g = np.stack(np.meshgrid(*[lo[k] + h * np.arange(n[k]) for k in range(3)],
+                             indexing="ij"), -1)
+    rho = sum(np.exp(-2.0 * np.linalg.norm(g - X[i], axis=-1) / s[i]) for i in range(len(X)))
+    v, f, _, _ = measure.marching_cubes(rho, level=iso)
+    return lo + v * h, f.astype(int)
+
+
+_CH2O = (["C", "O", "H", "H"],
+         [[0.0, 0.0, 0.0], [1.21, 0.0, 0.0], [-0.55, 0.94, 0.0], [-0.55, -0.94, 0.0]])
+
+
+def _field(P):
+    """A smooth signed model potential: negative near +x (the 'O' end)."""
+    return -30.0 * P[:, 0] + 5.0 * P[:, 1] ** 2
+
+
+def test_area_stats_are_area_weighted_not_vertex_averaged():
+    """Two triangles of areas 1 and 3: a vertex average would weight them by
+    vertex count. The spec forbids it (marching-cubes vertex density is a
+    mesh artefact, not chemistry)."""
+    P = np.array([[0, 0, 0], [1, 0, 0], [0, 2, 0],           # area 1
+                  [5, 0, 0], [8, 0, 0], [5, 2, 0]], float)   # area 3
+    faces = np.array([[0, 1, 2], [3, 4, 5]])
+    V = np.array([-4.0, -4.0, -4.0, 8.0, 8.0, 8.0])
+    s = em.area_stats(P, faces, V)
+    assert s["area_A2"] == pytest.approx(4.0)
+    assert s["area_neg_A2"] == pytest.approx(1.0) and s["area_pos_A2"] == pytest.approx(3.0)
+    assert s["V_area_mean_kcal_mol"] == pytest.approx((1 * -4 + 3 * 8) / 4)
+    assert s["V_min_kcal_mol"] == -4.0 and s["V_max_kcal_mol"] == 8.0
+    assert s["V_p05_kcal_mol"] == -4.0 and s["V_p95_kcal_mol"] == 8.0
+
+
+@pytest.mark.parametrize("rule", ["nearest_nucleus", "radius_scaled"])
+def test_site_areas_conserve_the_surface_exactly(rule):
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    rep = em.site_report(P, faces, _field(P), X, sym)
+    total = em.area_stats(P, faces, _field(P))["area_A2"]
+    atoms = sum(a[rule]["area_A2"] for a in rep["atoms"])
+    sites = sum(s[rule]["area_A2"] for s in rep["reaction_sites"])
+    assert atoms == pytest.approx(total, rel=1e-12)
+    assert sites == pytest.approx(total, rel=1e-12)
+
+
+def test_hydrogens_fold_into_their_parent_site():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    rep = em.site_report(P, faces, _field(P), X, sym)
+    by_index = {a["index"]: a for a in rep["atoms"]}
+    c_site = next(s for s in rep["reaction_sites"] if s["atoms"] == [0, 2, 3])
+    expect = sum(by_index[i]["nearest_nucleus"]["area_A2"] for i in (0, 2, 3))
+    assert c_site["nearest_nucleus"]["area_A2"] == pytest.approx(expect)
+    assert [s["label"] for s in rep["reaction_sites"]] == ["C0", "O1"]
+    assert by_index[2]["parent"] == 0 and by_index[0]["parent"] is None
+
+
+def test_site_extrema_are_the_global_extrema():
+    """The same vertices, so exactly equal: a partition that loses triangles,
+    or reads V from the wrong index, breaks this."""
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    V = _field(P)
+    rep = em.site_report(P, faces, V, X, sym)
+    for rule in em.PARTITION_RULES:
+        mins = [s[rule]["V_min_kcal_mol"] for s in rep["reaction_sites"]]
+        maxs = [s[rule]["V_max_kcal_mol"] for s in rep["reaction_sites"]]
+        assert min(mins) == V[np.unique(faces)].min()
+        assert max(maxs) == V[np.unique(faces)].max()
+
+
+def test_a_buried_atom_is_reported_with_zero_area():
+    """'Not on the surface' must stay distinguishable from 'not computed'."""
+    # an atom at the centre of an octahedron: any surface point more than
+    # ~1.2 A out is nearer one of the six than the centre, by either rule
+    sym = ["C"] + ["O"] * 6
+    X = [[0.0, 0.0, 0.0]] + [[s * 1.4 if k == j else 0.0 for k in range(3)]
+                             for j in range(3) for s in (1, -1)]
+    P, faces = _blob_mesh(X)
+    rep = em.site_report(P, faces, _field(P), X, sym)
+    c_atom = rep["atoms"][0]
+    c_site = next(s for s in rep["reaction_sites"] if s["label"] == "C0")
+    for entry in (c_atom, c_site):
+        assert entry["nearest_nucleus"]["area_A2"] == 0.0
+        assert entry["nearest_nucleus"]["V_area_mean_kcal_mol"] is None
+        assert entry["delta"]["V_area_mean_kcal_mol"] is None
+    assert len(rep["atoms"]) == 7
+
+
+def test_radius_scaled_rule_can_differ_from_nearest_nucleus():
+    """A centroid 1.5 A from H and 1.6 A from C belongs to H by distance but
+    to C by d / r_Bondi (1.25 vs 0.94)."""
+    sym = ["C", "H"]
+    X = np.array([[0.0, 0.0, 0.0], [3.1, 0.0, 0.0]])
+    tri = np.array([[1.6, 0.0, 0.0], [1.6, 0.01, 0.0], [1.6, 0.0, 0.01]])
+    owner = {r: em.partition_surface(tri, np.array([[0, 1, 2]]), X, sym, r)[0]
+             for r in em.PARTITION_RULES}
+    assert owner == {"nearest_nucleus": 1, "radius_scaled": 0}
+
+
+def test_radius_scaled_is_null_for_an_element_without_a_radius():
+    sym = ["Fe", "O"]
+    X = [[0.0, 0.0, 0.0], [1.8, 0.0, 0.0]]
+    P, faces = _blob_mesh(X)
+    rep = em.site_report(P, faces, _field(P), X, sym)
+    assert rep["partition"]["radius_scaled"] is None
+    assert all(a["radius_scaled"] is None and a["delta"] is None for a in rep["atoms"])
+    assert rep["atoms"][0]["nearest_nucleus"]["area_A2"] > 0
+
+
+def test_site_block_is_withheld_from_an_invalid_record():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    for bad in (dict(input=False, surface=True), dict(input=True, surface=False)):
+        block, reason = em.sites_block(dict(bad, sites=False), P, faces, _field(P), X, sym)
+        assert block is None and reason
+    block, reason = em.sites_block(dict(input=True, surface=True, sites=False),
+                                   P, faces, _field(P), X, sym)
+    assert block["schema"] == em.SITES_SCHEMA and reason is None
+
+
+def test_h_source_records_which_hydrogens_the_file_supplied(tmp_path):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    m = Chem.AddHs(Chem.MolFromSmiles("CCO"))
+    AllChem.EmbedMolecule(m, randomSeed=3)
+    rw = Chem.RWMol(m)
+    for i in sorted((a.GetIdx() for a in m.GetAtoms() if a.GetSymbol() == "H"
+                     and a.GetNeighbors()[0].GetSymbol() == "C"), reverse=True):
+        rw.RemoveAtom(i)
+    p = tmp_path / "pose.mol"
+    p.write_text(Chem.MolToMolBlock(rw.GetMol()))
+    _, info = em.from_file(str(p))
+    hs = [s for s in info["h_source"] if s is not None]
+    assert hs.count("supplied") == 1 and hs.count("generated_relaxed") == 5
+    _, info = em.from_smiles("CCO")
+    assert {s for s in info["h_source"] if s is not None} == {"generated_relaxed"}
+
+
+# ---------------------------------------------------------- atom identity
+# per-site-spec P1. Maps are metadata: they never change what is computed,
+# but a site table keyed by them must point at the right atoms.
+def _map_codes(smiles=None, path=None):
+    from rdkit import Chem
+    mol, _ = em.parse_for_check(smiles=smiles, path=path)
+    _, findings = em.check_structure(Chem.RemoveHs(mol), maps_from=mol, smiles=smiles)
+    return {code for _, code, *_ in findings}
+
+
+@pytest.mark.parametrize("smiles, code", [
+    ("[CH3:1]CO", "PARTIAL_ATOM_MAP"),               # a table with holes
+    ("[CH3:1][CH2:1][OH:2]", "DUPLICATE_ATOM_MAP"),
+    ("[CH3:1][CH2:2][O:3][H:4]", "MAPPED_HYDROGEN"),  # RDKit's parser drops this map silently
+])
+def test_ambiguous_atom_maps_are_blocked(smiles, code):
+    assert code in _map_codes(smiles)
+    from rdkit import Chem
+    mol, _ = em.parse_for_check(smiles=smiles)
+    verdict, _ = em.check_structure(Chem.RemoveHs(mol), maps_from=mol, smiles=smiles)
+    assert verdict == em.BLOCK
+
+
+@pytest.mark.parametrize("smiles", ["[CH3:1][CH2:2][OH:3]", "CCO"])
+def test_full_or_absent_maps_pass(smiles):
+    assert not _map_codes(smiles) & {"PARTIAL_ATOM_MAP", "DUPLICATE_ATOM_MAP",
+                                     "MAPPED_HYDROGEN"}
+
+
+def test_a_mapped_hydrogen_in_a_file_is_blocked(tmp_path):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    m = Chem.AddHs(Chem.MolFromSmiles("[CH3:1][CH2:2][OH:3]"))
+    AllChem.EmbedMolecule(m, randomSeed=1)
+    m.GetAtomWithIdx(m.GetNumAtoms() - 1).SetAtomMapNum(9)
+    p = tmp_path / "h.sdf"
+    w = Chem.SDWriter(str(p)); w.write(m); w.close()
+    assert "MAPPED_HYDROGEN" in _map_codes(path=str(p))
+
+
+@pytest.mark.parametrize("smiles", ["[CH3:1][CH:2]([CH3:3])[OH:4]",
+                                    "[CH3:1][C:2]([CH3:3])([CH3:4])[OH:5]"])
+def test_a_mapped_molecule_with_equivalent_groups_is_not_refused(smiles):
+    """Maps make isopropyl's two methyls distinct labels, and RDKit then sees
+    a stereocentre the chemistry does not have: verify_computed refused a
+    correctly mapped isopropanol as 'stereochemistry differs'. Chemical
+    identity is compared with maps stripped; verify_mapping owns the maps."""
+    from rdkit import Chem
+    spec, _ = em.from_smiles(smiles)
+    ok, computed, reason = em.verify_computed(spec, Chem.MolFromSmiles(smiles))
+    assert ok, reason
+    assert ":" not in computed                        # chemical identity, no maps
+
+
+def test_atom_order_must_match_the_approval_by_index():
+    """verify_computed searches for SOME match, so it accepts a geometry whose
+    atoms were reordered. A site table keyed by index cannot: spec atom i
+    must be approval atom i."""
+    from rdkit import Chem
+    probe = Chem.MolFromSmiles("[CH3:1][CH:2]([CH3:3])[OH:4]")
+    spec, _ = em.from_smiles(Chem.MolToSmiles(probe))
+    assert em.verify_mapping(spec, probe)[0]
+    rows = spec.split(";")
+    rows[0], rows[2] = rows[2], rows[0]               # swap the two methyl carbons
+    swapped = ";".join(rows)
+    assert em.verify_computed(swapped, Chem.RemoveHs(probe))[0]   # same molecule
+    ok, reason = em.verify_mapping(swapped, probe)
+    assert not ok and reason
+
+
+def test_supplied_coordinates_must_stay_where_the_file_put_them(tmp_path):
+    """A pose: map 1 must sit where the adapter wrote atom 1. Swap the two
+    methyl GROUPS consistently: chemistry and connectivity are unchanged, so
+    only the comparison with the file catches it."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    m = Chem.AddHs(Chem.MolFromSmiles("[CH3:1][CH:2]([CH3:3])[OH:4]"))
+    AllChem.EmbedMolecule(m, randomSeed=2)
+    p = tmp_path / "pose.sdf"
+    w = Chem.SDWriter(str(p)); w.write(m); w.close()
+    probe, _ = em.parse_for_check(path=str(p))
+    spec, info = em.from_file(str(p))
+    assert em.verify_mapping(spec, probe, reference=True)[0]
+    sym, X = zip(*[(t.split()[0], [float(v) for v in t.split()[1:]]) for t in spec.split(";")])
+    X = np.array(X)
+    nb = lambda i: [n.GetIdx() for n in m.GetAtomWithIdx(i).GetNeighbors() if n.GetAtomicNum() == 1]
+    perm = list(range(len(sym)))
+    for a, b in [(0, 2)] + list(zip(nb(0), nb(2))):
+        perm[a], perm[b] = b, a
+    swapped = "; ".join(f"{sym[i]} {X[perm[i]][0]:.6f} {X[perm[i]][1]:.6f} {X[perm[i]][2]:.6f}"
+                        for i in range(len(sym)))
+    assert em.verify_mapping(swapped, probe)[0]       # internally consistent
+    ok, reason = em.verify_mapping(swapped, probe, reference=True)
+    assert not ok and "file" in reason
+
+
+def test_main_refuses_coordinates_whose_atom_order_moved(monkeypatch):
+    from rdkit import Chem
+    real = em.from_smiles
+
+    def reordered(s, **k):
+        spec, info = real(s, **k)
+        rows = spec.split(";")
+        rows[0], rows[2] = rows[2], rows[0]
+        return ";".join(rows), info
+    monkeypatch.setattr(em, "from_smiles", reordered)
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][CH:2]([CH3:3])[OH:4]"])
+    with pytest.raises(SystemExit, match="atom order"):
+        em.main()
+
+
+# ------------------------------------------------------------ caller sites
+# per-site-spec section 1: Arrowfield names its own sites ("C3-H",
+# "carbonyl O"); espmap only checks that every named atom exists.
+def _ethanol_mapped():
+    from rdkit import Chem
+    spec, info = em.from_smiles("[CH3:1][CH2:2][OH:3]")
+    sym, X = zip(*[(t.split()[0], [float(v) for v in t.split()[1:]]) for t in spec.split(";")])
+    maps = {a.GetIdx(): a.GetAtomMapNum() for a in info["mol"].GetAtoms() if a.GetAtomMapNum()}
+    return list(sym), np.array(X), maps
+
+
+def test_caller_groups_resolve_maps_and_hydrogens():
+    sym, X, maps = _ethanol_mapped()
+    groups = [{"label": "C1-H", "atoms": ["1+H"]}, {"label": "hydroxyl", "atoms": ["3+H"]},
+              {"label": "C2", "atoms": [2]}]
+    got = dict(em.resolve_site_groups(groups, sym, X, maps))
+    parent = em.site_parents(X, sym)
+    assert got["C1-H"] == sorted([0] + [i for i, p in enumerate(parent) if p == 0])
+    assert len(got["C1-H"]) == 4 and got["C2"] == [1]
+    assert got["hydroxyl"] == sorted([2] + [i for i, p in enumerate(parent) if p == 2])
+
+
+def test_unmapped_input_names_atoms_by_index():
+    spec, _ = em.from_smiles("CCO")
+    sym, X = zip(*[(t.split()[0], [float(v) for v in t.split()[1:]]) for t in spec.split(";")])
+    got = dict(em.resolve_site_groups([{"label": "O", "atoms": [2]}], list(sym), np.array(X), None))
+    assert got == {"O": [2]}
+
+
+@pytest.mark.parametrize("groups, words", [
+    ([{"label": "x", "atoms": [7]}], "7"),                         # no such map
+    ([{"label": "x", "atoms": []}], "no atoms"),
+    ([{"label": "a", "atoms": [1]}, {"label": "a", "atoms": [2]}], "twice"),
+    ([{"label": "x", "atoms": ["1+X"]}], r"1\+X"),                 # malformed token
+    ([{"atoms": [1]}], "label"),
+])
+def test_bad_caller_groups_are_refused_with_a_reason(groups, words):
+    sym, X, maps = _ethanol_mapped()
+    with pytest.raises(ValueError, match=words):
+        em.resolve_site_groups(groups, sym, X, maps)
+
+
+def test_overlapping_caller_groups_each_get_their_own_values():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    groups = [("CO", [0, 1]), ("O", [1]), ("C-H", [0, 2, 3])]
+    rep = em.site_report(P, faces, _field(P), X, sym, groups=groups)
+    s = {g["label"]: g for g in rep["reaction_sites"]}
+    assert set(s) == {"CO", "O", "C-H"} and all(g["source"] == "caller" for g in s.values())
+    by_atom = {a["index"]: a["nearest_nucleus"]["area_A2"] for a in rep["atoms"]}
+    assert s["CO"]["nearest_nucleus"]["area_A2"] == pytest.approx(by_atom[0] + by_atom[1])
+    assert s["O"]["nearest_nucleus"]["area_A2"] == pytest.approx(by_atom[1])
+
+
+def test_main_refuses_bad_groups_before_the_scf(tmp_path, monkeypatch):
+    import json
+    p = tmp_path / "g.json"
+    p.write_text(json.dumps([{"label": "C9-H", "atoms": ["9+H"]}]))
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][CH2:2][OH:3]",
+                                      "--sites", str(p)])
+    with pytest.raises(SystemExit, match="--sites"):
+        em.main()
+
+
+def test_main_lets_good_groups_through_to_the_scf(tmp_path, monkeypatch):
+    import json
+    p = tmp_path / "g.json"
+    p.write_text(json.dumps([{"label": "C1-H", "atoms": ["1+H"]}]))
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][CH2:2][OH:3]",
+                                      "--sites", str(p)])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
 # ------------------------------------------------------------- provenance (H14)
 def _water(charge=0, spin=0):
     from pyscf import gto
@@ -1129,3 +1466,89 @@ def test_code_identity_matches_git_describe_inside_this_repo():
     if d.returncode != 0:
         pytest.skip("git cannot read this checkout")
     assert em.code_identity()["code"] == d.stdout.strip()
+
+
+# ------------------------------------------------------------- notebook (H10)
+# Review 3 H10. The notebook's logic is tested from the GENERATED .ipynb: the
+# code a user runs, which must also be what build_notebook.py produces.
+from pathlib import Path  # noqa: E402
+_NB_DIR = Path(__file__).resolve().parents[1] / "notebooks"
+
+
+def _nb_code():
+    import json
+    nb = json.loads((_NB_DIR / "espmap_colab.ipynb").read_text(encoding="utf-8"))
+    return ["".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"]
+
+
+def _nb_function(name, **env):
+    """Exec one top-level function out of the notebook's code cells."""
+    for src in _nb_code():
+        lines = src.splitlines()
+        for i, line in enumerate(lines):
+            if line.startswith(f"def {name}("):
+                body = [line]
+                for nxt in lines[i + 1:]:
+                    if nxt.strip() and not nxt[0].isspace():
+                        break
+                    body.append(nxt)
+                ns = dict(env)
+                exec("\n".join(body), ns)
+                return ns[name]
+    raise AssertionError(f"no function {name} in the notebook")
+
+
+def test_committed_notebook_is_what_the_builder_writes(tmp_path):
+    """CLAUDE.md: never hand-edit the .ipynb. A stale or hand-edited notebook
+    would also make the tests below test the wrong code."""
+    import subprocess
+    out = tmp_path / "nb.ipynb"
+    subprocess.run([sys.executable, str(_NB_DIR / "build_notebook.py"), str(out)],
+                   check=True, capture_output=True)
+    norm = lambda p: p.read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert norm(out) == norm(_NB_DIR / "espmap_colab.ipynb")
+
+
+def test_install_marker_follows_the_branch(tmp_path):
+    """The marker ignored BRANCH: after one install, changing it neither
+    cloned nor reinstalled, and the old code kept running silently."""
+    write = _nb_function("write_install_marker")
+    current = _nb_function("install_marker_current")
+    m = tmp_path / "ESPMAP_READY"
+    assert not current(str(m), "master")                  # nothing installed yet
+    write(str(m), "master", "abc1234")
+    assert current(str(m), "master")
+    assert not current(str(m), "v0.2.0")                  # branch changed: reinstall
+    assert "abc1234" in m.read_text()
+
+
+def test_cache_key_covers_colour_range_and_code_and_trusts_only_finished_runs():
+    run = next(s for s in _nb_code() if "4 · Run" in s)
+    settings = run[run.index("settings = dict("):run.index("tag = ")]
+    assert "lim=LIM" in settings and "espmap=ESPMAP_COMMIT" in settings
+    # settings.json is written last, so only a finished run is reused
+    assert 'os.path.isfile(os.path.join(JOB, "settings.json"))' in run
+    assert "if os.path.isfile(npz)" not in run
+
+
+def test_an_all_ion_series_gets_a_shared_sequential_scale():
+    """An all-ion series passed the old check and was drawn on a symmetric
+    +/-60 diverging scale: the failure the notebook's own text says it refuses."""
+    plan = _nb_function("series_scale", em=em)
+    acetate, benzoate = np.linspace(-170, -80, 50), np.linspace(-158, -41, 50)
+    kind, vlim = plan([acetate, benzoate], 60)
+    assert kind == "sequential" and vlim == pytest.approx((-170.0, -41.0))
+    kind, vlim = plan([np.linspace(-30, 20, 50), np.linspace(-12, 40, 50)], 60)
+    assert kind == "diverging" and vlim == (-60, 60)
+    with pytest.raises(ValueError, match="separate"):
+        plan([acetate, np.linspace(-30, 20, 50)], 60)    # mixed: still refused
+
+
+@pytest.mark.parametrize("phrase", [
+    "ESP extrema move little with conformation",   # 5.2 kcal/mol once folded
+    "about ±3.5 kcal/mol in absolute values",      # one signed, molecule-specific shift
+    "decanoic acid ~1 min",                         # a 16-thread laptop figure
+])
+def test_notebook_drops_review_3_stale_claims(phrase):
+    text = (_NB_DIR / "build_notebook.py").read_text(encoding="utf-8")
+    assert phrase not in text
