@@ -1805,6 +1805,30 @@ def test_provenance_records_what_moves_results():
     assert isinstance(p["threads"], int) and p["threads"] >= 1
 
 
+def test_espmap_version_is_the_module_that_ran(monkeypatch):
+    """Review 5 R18: espmap_version read the installed metadata, so a stale
+    0.1.0 editable install labelled every P3 record made by 0.1.2 code."""
+    from importlib import metadata
+    monkeypatch.setattr(metadata, "version", lambda name: "0.1.0")
+    ident = em.code_identity()
+    assert ident["espmap_version"] == em.__version__
+    assert ident["installed_distribution_version"] == "0.1.0"
+
+
+def test_the_version_has_one_source():
+    """pyproject.toml cannot drift from __version__ (test_claims checks
+    CITATION.cff against it)."""
+    from pathlib import Path
+    try:
+        import tomllib
+    except ImportError:                     # Python 3.10
+        tomllib = pytest.importorskip("tomli")
+    root = Path(__file__).resolve().parents[1]
+    proj = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    assert "version" not in proj["project"] and "version" in proj["project"]["dynamic"]
+    assert proj["tool"]["setuptools"]["dynamic"]["version"] == {"attr": "esp_map.__version__"}
+
+
 def test_notebook_pins_rdkit_and_stops_on_a_different_geometry():
     """Review 3 H14: RDKit was unpinned, so the GPU check printed DIFFERENT on
     the geometry hash and went on comparing energies of different molecules."""

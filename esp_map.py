@@ -153,6 +153,10 @@ import sys
 
 import numpy as np
 
+# the one place the version is written: pyproject.toml reads it from here
+# (review 5 R18), and provenance.espmap_version is this module's own
+__version__ = "0.1.2"
+
 BOHR = 0.52917721092
 HA2KCAL = 627.5095
 AU2DEBYE = 2.541746473
@@ -1793,15 +1797,17 @@ def code_identity():
     taken only if this very file is tracked there, with --dirty, and
     "unknown" otherwise -- never a clean commit by default.
 
-    espmap_version is the INSTALLED metadata: an editable install keeps the
-    version it was installed at until it is reinstalled, so for a checkout
-    `code` is the identity to trust."""
+    Review 5 R18: espmap_version was the INSTALLED metadata, which names
+    whatever espmap distribution the interpreter holds, not the file that
+    ran: every P3 record said 0.1.0 (a stale editable install) from 0.1.2
+    code. It is now __version__ of this module; the installed metadata is
+    kept, under its own name, as installed_distribution_version."""
     import subprocess
     from importlib import metadata
     try:
-        version = metadata.version("espmap")
+        installed = metadata.version("espmap")
     except metadata.PackageNotFoundError:
-        version = "unknown"
+        installed = None
     here = os.path.dirname(os.path.abspath(__file__))
     code = "unknown"
     try:
@@ -1814,7 +1820,8 @@ def code_identity():
             code = d.stdout.strip() or "unknown"
     except (OSError, subprocess.SubprocessError):
         pass
-    return dict(espmap_version=version, code=code)
+    return dict(espmap_version=__version__, code=code,
+                installed_distribution_version=installed)
 
 
 def provenance():

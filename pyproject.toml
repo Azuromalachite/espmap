@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "espmap"
-version = "0.1.2"
+dynamic = ["version"]
 description = "Electrostatic-potential maps for organic molecules, with a colormap that is not a dataviz disaster"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,6 +45,9 @@ espmap = "esp_map:main"
 
 [tool.setuptools]
 py-modules = ["esp_map"]
+
+[tool.setuptools.dynamic]
+version = { attr = "esp_map.__version__" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
