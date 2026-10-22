@@ -390,7 +390,7 @@ Each step lands with its tests, as a separate change:
    today's code), then the fix: remember which atoms existed before
    `AddHs()`, freeze all of them, relax only the new ones. It depends on
    nothing else, and it is a correctness bug today, with or without
-   Arrowfield. **In review: PR #6** (the test fails on master with the
+   Arrowfield. **Done: PR #6** (the test fails on master with the
    supplied O–H moving 0.79 Å, and passes with the fix).
 2. **Review 3's H1 and H2:** the PDB reader, `H_COUNT_MISMATCH`, and identity
    perceived from `spec`. Atom-map round-trip checks extend H2's perceived
