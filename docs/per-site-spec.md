@@ -60,11 +60,11 @@ definition before writing the SDF.
 | supplied-H freezing | a pose's supplied hydrogens are not moved | **done**, #6 |
 | H1 | PDB read through bond perception; `H_COUNT_MISMATCH` refuses a reader that guessed wrong | **done**, #7 (v0.1.1) |
 | H2 | identity checked against `spec`, the coordinates PySCF receives (`verify_computed`); §1 extends it to atom maps | **done**, #10 |
-| H3 | a one-signed field (every anion in the calibration set) gets a sequential colormap by default, never `vik` | open. **Not needed by the site block, needed by Arrowfield**: a learner shown −80 kcal/mol in blue has been taught the wrong sign |
-| H4 | `results.surface = {closed, open_edges, …, strict, problems}` and `input.gate = {verdict, forced, findings}`; feeds `validity` (§6) | open |
-| H5 | planar 3D input kept. Nitrite and thiocyanate are planar or linear, and a pose written in the xy plane is today discarded and regenerated | open; must land before any calibration fixture |
-| H6 | unit-suffixed keys, the stereo actually computed (now `computed_smiles`, #10), and `analysis_key` / `render_key` (§5) in place of review 3's single `compare_key` | partly done |
-| H7 | `settings.solvent_esp` naming the PCM convention; it is part of `analysis_key` | open |
+| H3 | a one-signed field (every anion in the calibration set) gets a sequential colormap by default, never `vik`. Not needed by the site block; needed by Arrowfield, since a learner shown −80 kcal/mol in blue has been taught the wrong sign | **done**, #11, #12, #14 |
+| H4 | `results.surface = {closed, open_edges, …, strict, problems}` and `input.gate = {verdict, forced, findings}` | **done**, #11 |
+| H5 | planar 3D input kept; a single-element-pair molecule (nitrite) with z ≡ 0 is refused as ambiguous rather than guessed. Must land before any calibration fixture | in review, #17 |
+| H6 | unit-suffixed keys, `analysis_key` / `render_key` (§5), dipole with origin, σ-hole, `surface.definition`, and the `validity` envelope (§6) | in review, #18 |
+| H7 | `settings.solvent_esp` naming the PCM convention, part of `analysis_key` | field in #18; help text and README wording open |
 | H14 | `geometry = {xyz_angstrom, sha1}` and full version provenance. A site's `V_min_at_A` means nothing without its coordinates | open |
 
 ## 1. Site identity and atom maps
@@ -297,13 +297,20 @@ method *and* the colour settings. That would make two identical calculations
 
 | key | hashes | answers |
 | --- | --- | --- |
-| `analysis_key` | `xc`, `basis`, `solvent`, `solvent_esp` (H7), `iso`, `spacing`, `density_fit`, surface definition, partition schema version, site schema version | are these numbers methodologically comparable? |
+| `analysis_key` | `xc`, `basis`, `solvent`, `solvent_esp` (H7), `iso`, `spacing`, `density_fit`, surface definition; names normalised first (lower-case, `vacuum` → null) | are these numbers methodologically comparable? |
 | `render_key` | `cmap`, `vmin`/`vmax` (or `lim`), scale kind, camera, image size, lighting | do these pictures share one visual scale? |
 
-Arrowfield compares site values only between records whose `analysis_key`
-matches, and shows images side by side only when `render_key` also matches.
-`scale.comparable` today depends on the colour flags alone `[V]`; it becomes
-`render_key` and stops being read as a statement about the numbers.
+**Schema versions are not in `analysis_key`.** Revision 3 put the partition
+and site schema versions there. That would make every record written before
+P2 stop matching every record written after it, even for global V_min and
+V_max, which a partition cannot change. Instead the sites block carries its
+own `schema` (`espmap.sites/1`, §6).
+
+Arrowfield compares global values between records whose `analysis_key`
+matches, site values only when `sites.schema` matches too, and shows images
+side by side only when `render_key` also matches. `scale.comparable` depended
+on the colour flags alone; H6 (#18) renames it `colour_scale_fixed` and moves
+the comparison question to these keys.
 
 ## 6. JSON schema (v1)
 
