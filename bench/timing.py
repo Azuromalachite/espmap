@@ -110,8 +110,9 @@ def one(mol, basis, df, threads):
 def done_keys():
     if not RESULTS.exists():
         return set()
-    return {json.loads(l)["key"] for l in RESULTS.read_text().splitlines()
-            if l.strip()}
+    # rows that errored are retried: an OSError from a full /tmp is not a result
+    rows = [json.loads(l) for l in RESULTS.read_text().splitlines() if l.strip()]
+    return {r["key"] for r in rows if "error" not in r}
 
 
 def main():
