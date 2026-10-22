@@ -142,6 +142,14 @@ the 2 folded ones (genus 2 and 3 surfaces) widened V_min to 5.2 and V_max to
 is local chemistry too. Do not quote the ~1 kcal/mol conformer row for a
 flexible molecule without sampling folded shapes.
 
+**Per-site statistics have their own budget** (`bench/site_partition.jsonl`,
+site means, kcal/mol): the partition rule moves a site by ≤ 3.0 on the small
+anions and ≤ 3.95 on the C18 acetate (median site 0.89); conformers move the
+median C18 site by 5.1; the grid moves means by 0.15. The 5th percentile
+moves up to 8.9 with the rule alone, so lead with means. Both rules are
+always reported (`delta`); never quote a site value from one rule as if the
+partition were a fact.
+
 ## Deliberately absent
 
 - **ωB97X-D** — not in this PySCF build, so range-separated + dispersion is

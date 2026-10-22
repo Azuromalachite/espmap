@@ -224,6 +224,22 @@ not transfer to small anions. The basis and water rows are +3.54 and −3.60
 from the unrounded values; the old +3.55 and −3.61 were differences of
 rounded endpoints.
 
+**Per-site statistics** (the `sites` block) carry their own budget: the same
+surface split two ways, by nearest nucleus and by d / r<sub>Bondi</sub>, and the
+same site on other conformers and grids. Site means unless stated, kcal/mol,
+nearest-nucleus rule and 0.26 bohr unless stated:
+
+| axis | effect | note | data in `bench/` |
+| --- | --- | --- | --- |
+| partition rule, small anions | ≤ 3.0 | enolate, SCN⁻, NO₂⁻ in PCM water; largest on the enolate C bonded to O, which the radius rule hands part of O's surface | `site_partition.jsonl` |
+| partition rule, C18 acetate | ≤ 3.95 | 10 conformers; median site 0.89, largest at the ester carbonyl C | `site_partition.jsonl` |
+| partition rule, 5th percentile | up to 8.9 | the tail is the fragile statistic; lead with the mean | `site_partition.jsonl` |
+| conformer, C18 acetate | 5.1 | median site's spread over 10 conformers, folded ones included (max 8.3): above the partition effect at almost every site | `site_partition.jsonl` |
+| grid spacing (0.26 → 0.16 bohr) | 0.15 | mean; 5th percentile 0.72, site V<sub>min</sub> 0.54, areas ≤ 1.7 % | `site_partition.jsonl` |
+
+Site areas sum to the surface area to 2×10⁻¹⁶ under both rules. A site's
+V<sub>min</sub> is far more grid-sensitive than the global V<sub>max</sub> row above.
+
 **The solvent rows measure a convention.** With `--solvent`, the map is the
 potential of the solute *as polarised by* the continuum; the potential of the
 continuum's own surface charges (the reaction field) is left out. That is the
