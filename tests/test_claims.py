@@ -308,18 +308,56 @@ def _site_rows():
                     for r in c18) for s in sites]
     spread = [max(nn(r)[s]["V_area_mean"] for r in c18) - min(nn(r)[s]["V_area_mean"] for r in c18)
               for s in sites]
+    ext = [r for r in c18 if r["genus"] == 0]          # folded conformers have genus > 0
+    spread_ext = [max(nn(r)[s]["V_area_mean"] for r in ext) - min(nn(r)[s]["V_area_mean"] for r in ext)
+                  for s in sites]
     grid = {}
     for r in rows:
         if r["part"] == "grid":
             grid.setdefault(r["molecule"], {})[r["spacing_bohr"]] = nn(r)
     g = lambda q: max(abs(v[0.16][s][q] - v[0.26][s][q])  # noqa: E731
                       for v in grid.values() for s in v[0.26] if q in v[0.26][s])
+    # review 4 N4: the atom level, hydrogens not folded into their parents
+    atom_d, atom_f, bare_d = [], [], []
+    for r in (r for r in rows if r["part"] == "atoms"):
+        an, ar = r["atom_sites"]["nearest_nucleus"], r["atom_sites"]["radius_scaled"]
+        sym = [t.split()[0] for t in r["atoms"].split(";")]
+        X = [[float(v) for v in t.split()[1:4]] for t in r["atoms"].split(";")]
+        heavy = [i for i, s in enumerate(sym) if s != "H"]
+        dist = lambda i, j: sum((a - b) ** 2 for a, b in zip(X[i], X[j]))  # noqa: E731
+        with_h = {min(heavy, key=lambda j: dist(i, j)) for i, s in enumerate(sym) if s == "H"}
+        for i, s in enumerate(sym):
+            k = f"{s}{i}"
+            if "V_area_mean" not in an[k] or "V_area_mean" not in ar[k]:
+                continue
+            d = abs(ar[k]["V_area_mean"] - an[k]["V_area_mean"])
+            atom_d.append(d)
+            atom_f.append(max(ar[k]["area_A2"], an[k]["area_A2"]) /
+                          min(ar[k]["area_A2"], an[k]["area_A2"]))
+            if s != "H" and i not in with_h:
+                bare_d.append(d)
+    # the same on the 10 C18 conformers (def2-SVP + RI, gas): a mean shift
+    # where both rules give the atom area, and how many heavy atoms the
+    # nearest-nucleus rule leaves with no surface at all
+    c18_d, c18_buried = [], []
+    for r in (r for r in rows if r["part"] == "c18atoms"):
+        an, ar = r["atom_sites"]["nearest_nucleus"], r["atom_sites"]["radius_scaled"]
+        c18_d += [abs(ar[k]["V_area_mean"] - an[k]["V_area_mean"]) for k in an
+                  if "V_area_mean" in an[k] and "V_area_mean" in ar[k]]
+        c18_buried.append(sum(1 for k in an if k[0] != "H" and an[k]["area_A2"] == 0))
     return {
+        "partition atoms C18": f"{max(c18_d):.1f}",
+        "atoms buried C18": f"{min(c18_buried)}–{max(c18_buried)}",
+        "partition atoms": f"{max(atom_d):.1f}",
+        "partition atoms area factor": f"{max(atom_f):.1f}",
+        "partition atoms without H": f"{max(bare_d):.2f}",
         "partition small anions": f"{max(max(delta(r, 'V_area_mean')) for r in small):.1f}",
         "partition C18": f"{max(per_site):.2f}",
         "partition C18 median": f"{statistics.median(per_site):.2f}",
         "partition p05": f"{max(max(delta(r, 'V_p05')) for r in small + c18):.1f}",
         "conformer C18": f"{statistics.median(spread):.1f}",
+        "conformer C18 extended": f"{statistics.median(spread_ext):.2f}",
+        "conformer C18 extended max": f"{max(spread_ext):.2f}",
         "grid mean": f"{g('V_area_mean'):.2f}",
         "grid p05": f"{g('V_p05'):.2f}",
         "grid V_min": f"{g('V_min'):.2f}",
@@ -329,6 +367,10 @@ def _site_rows():
 @pytest.mark.parametrize("row, expect", [
     ("partition small anions", "3.0"), ("partition C18", "3.95"),
     ("partition C18 median", "0.89"), ("partition p05", "8.9"), ("conformer C18", "5.1"),
+    ("conformer C18 extended", "2.69"), ("conformer C18 extended max", "5.16"),
+    ("partition atoms", "11.9"), ("partition atoms area factor", "5.2"),
+    ("partition atoms without H", "0.85"),
+    ("partition atoms C18", "8.7"), ("atoms buried C18", "14–15"),
     ("grid mean", "0.15"), ("grid p05", "0.72"), ("grid V_min", "0.54"),
 ])
 def test_every_per_site_row_is_recomputed_from_bench(row, expect):
@@ -360,6 +402,20 @@ def test_symmetry_rows_are_the_quoted_validation(row, expect):
     assert expect in doc, f"bench/site_partition.py does not quote {row} = {expect}"
     assert "not a validation" in doc, "the prototype agreement must not read as validation"
 
+def test_atom_rows_share_the_grid_rows_surface():
+    """The atom level is budgeted on the same surface as the group level."""
+    rows = {r["key"]: r for r in _jsonl("site_partition.jsonl")}
+    atoms = [r for r in rows.values() if r["part"] in ("atoms", "c18atoms")]
+    assert len(atoms) == 4 + 10
+    for r in atoms:
+        twin = (f"grid|{r['molecule']}|0.26" if r["part"] == "atoms"
+                else f"c18|Z3Z13-18OAc|{r['conf_id']}")
+        g = rows[twin]["sites"]
+        for rule in ("nearest_nucleus", "radius_scaled"):
+            for s, st in g[rule].items():
+                for q, v in st.items():
+                    assert r["sites"][rule][s][q] == pytest.approx(v, abs=1e-8), (r["key"], s, q)
+
 
 def test_site_areas_conserve_the_surface_in_every_row():
     for r in _jsonl("site_partition.jsonl"):
@@ -380,8 +436,16 @@ def test_record_budget_rows_are_the_recomputed_ones():
 
 def test_claude_md_quotes_the_per_site_budget():
     rows = _site_rows()
-    for key in ("partition small anions", "partition C18", "conformer C18", "grid mean"):
+    for key in ("partition small anions", "partition C18", "conformer C18", "grid mean",
+                "conformer C18 extended", "conformer C18 extended max", "partition atoms",
+                "partition atoms C18", "atoms buried C18"):
         assert rows[key] in TEXT["CLAUDE.md"], f"CLAUDE.md lacks {key} = {rows[key]}"
+    # review 4 N13: each number with its protocol, read first by a new session
+    t = TEXT["CLAUDE.md"]
+    para = t[t.index("**Per-site statistics have their own budget**"):t.index("## Deliberately absent")]
+    for protocol in ("def2-TZVP", "PCM water", "DFT geometries", "def2-SVP + RI",
+                     "gas phase", "folded conformers"):
+        assert protocol in para, f"CLAUDE.md per-site paragraph lacks {protocol!r}"
 
 
 # ------------------------------------------- stale figures stay gone (review 4 N10)

@@ -160,12 +160,28 @@ is local chemistry too. Do not quote the ~1 kcal/mol conformer row for a
 flexible molecule without sampling folded shapes.
 
 **Per-site statistics have their own budget** (`bench/site_partition.jsonl`,
-site means, kcal/mol): the partition rule moves a site by ≤ 3.0 on the small
-anions and ≤ 3.95 on the C18 acetate (median site 0.89); conformers move the
-median C18 site by 5.1; the grid moves means by 0.15. The 5th percentile
-moves up to 8.9 with the rule alone, so lead with means. Both rules are
-always reported (`delta`); never quote a site value from one rule as if the
-partition were a fact.
+site means, kcal/mol, nearest-nucleus rule, 0.26 bohr). Each number holds only
+under its protocol:
+
+- **small anions** (enolate, SCN⁻, NO₂⁻): B3LYP/def2-TZVP in **PCM water**, on
+  DFT geometries. The partition rule moves a site by ≤ 3.0.
+- **C18 acetate**: B3LYP/def2-SVP + RI in the **gas phase**, 10 MMFF
+  conformers. The partition rule moves a site by ≤ 3.95 (median site 0.89).
+  Conformers move the median site by 5.1 **with the two folded conformers
+  included**; over the 8 extended ones alone the median is 2.69 (max 5.16).
+- **grid** (0.26 → 0.16 bohr): moves means by 0.15.
+
+- **single atoms** (`sites.atoms`, hydrogens not folded; small anions and
+  chlorobenzene): the rule moves an atom by up to 11.9, because the two
+  rules trade area between a heavy atom and its hydrogens. On the C18
+  acetate (def2-SVP + RI, gas, 10 conformers) the nearest-nucleus rule
+  leaves 14–15 of 22 heavy atoms with no surface, and an atom with area
+  under both rules moves by up to 8.7. Atom values are diagnostic;
+  `reaction_sites` is the quotable level.
+
+The 5th percentile moves up to 8.9 with the rule alone, so lead with means.
+Both rules are always reported (`delta`); never quote a site value from one
+rule as if the partition were a fact.
 
 ## Deliberately absent
 

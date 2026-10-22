@@ -234,8 +234,9 @@ nearest-nucleus rule and 0.26 bohr unless stated:
 | --- | --- | --- | --- |
 | partition rule, small anions | ≤ 3.0 | enolate, SCN⁻, NO₂⁻ in PCM water; largest on the enolate C bonded to O, which the radius rule hands part of O's surface | `site_partition.jsonl` |
 | partition rule, C18 acetate | ≤ 3.95 | 10 conformers; median site 0.89, largest at the ester carbonyl C | `site_partition.jsonl` |
+| partition rule, **single atoms** (`atoms`, H not folded) | up to 11.9 | the small anions above plus chlorobenzene (gas), def2-TZVP, on the same surfaces as the grid rows. The rules trade area between a heavy atom and its own hydrogens (up to 5.2×); atoms with no hydrogens move ≤ 0.85. On the 10 C18 acetate conformers (def2-SVP + RI, gas) the nearest-nucleus rule leaves 14–15 of the 22 heavy atoms with no surface at all, and an atom that has area under both rules moves by up to 8.7. **Atom values are diagnostic; quote `reaction_sites`** | `site_partition.jsonl` |
 | partition rule, 5th percentile | up to 8.9 | the tail is the fragile statistic; lead with the mean | `site_partition.jsonl` |
-| conformer, C18 acetate | 5.1 | median site's spread over 10 conformers, folded ones included (max 8.3): above the partition effect at almost every site | `site_partition.jsonl` |
+| conformer, C18 acetate | 5.1 | median site's spread over 10 conformers, folded ones included (max 8.3): above the partition effect at almost every site. Over the 8 extended conformers alone: 2.69 (max 5.16) | `site_partition.jsonl` |
 | grid spacing (0.26 → 0.16 bohr) | 0.15 | mean; 5th percentile 0.72, site V<sub>min</sub> 0.54, areas ≤ 1.7 % | `site_partition.jsonl` |
 
 Site areas sum to the surface area to 2×10⁻¹⁶ under both rules. A site's
