@@ -6,8 +6,9 @@ the runtime warning and module docstring kept the old ~1 kcal/mol claim. These
 tests make that drift fail CI.
 
 Where a number comes from bench/, it is COMPUTED from the data here, so the
-data is the single source and the prose is checked against it. Numbers with
-no data file in the repo (the chlorobenzene budget) are pinned once below.
+data is the single source and the prose is checked against it. That now
+includes every row of the chlorobenzene budget (review 3 H8); the few
+figures with no data file are marked as prose where they are quoted.
 No SCF, no network: reads text and JSON only.
 """
 import json
@@ -345,3 +346,36 @@ def test_claude_md_quotes_the_per_site_budget():
     rows = _site_rows()
     for key in ("partition small anions", "partition C18", "conformer C18", "grid mean"):
         assert rows[key] in TEXT["CLAUDE.md"], f"CLAUDE.md lacks {key} = {rows[key]}"
+
+
+# ------------------------------------------- stale figures stay gone (review 4 N10)
+STALE = [
+    ("+9.59", "the retracted DFT-geometry sigma-hole (now +9.54, error_budget.jsonl)"),
+    ("0.35 kcal/mol spread", "the retracted geometry row (now 0.40)"),
+    ("about 2.7 kcal/mol", "the three-molecule basis claim (now +1.53 to +2.82)"),
+    ("+2.7 `[M]`", "the three-molecule basis claim (now +1.53 to +2.82)"),
+    ("roughly halves", "density fitting halves at def2-TZVP only"),
+    ("100 fast tests", "a test count that went stale; the docs give none now"),
+    ("13 tests with real DFT", "a test count that went stale; the docs give none now"),
+]
+SCANNED = {
+    "README.md": TEXT["README.md"],
+    "CLAUDE.md": TEXT["CLAUDE.md"],
+    "docs/roadmap-review.md": TEXT["docs/roadmap-review.md"],
+    "docs/colormaps.md": (ROOT / "docs" / "colormaps.md").read_text(encoding="utf-8"),
+    "notebooks/build_notebook.py": (ROOT / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8"),
+    "module docstring": DOC,
+}
+
+
+@pytest.mark.parametrize("phrase, why", STALE, ids=[p for p, _ in STALE])
+def test_stale_figures_do_not_come_back(phrase, why):
+    """Review 4 N10: retracted or superseded figures survived in the notebook,
+    colormaps.md and the roadmap review after the tables were fixed."""
+    hits = [name for name, text in SCANNED.items() if phrase in text]
+    assert not hits, f"{phrase!r} ({why}) is still quoted in {hits}"
+
+
+def test_prior_art_does_not_call_merged_work_planned():
+    assert "planned (v0.2 per-site records" not in PRIOR

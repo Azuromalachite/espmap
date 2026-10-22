@@ -303,11 +303,11 @@ Two consequences for anyone quoting a number from this:
 
 ```bash
 pip install -e ".[test]"
-pytest                      # 100 fast tests, ~5 s, no SCF
-pytest --runslow -m slow    # 13 tests with real DFT, ~3 min
+pytest                      # fast tests, seconds, no SCF
+pytest --runslow -m slow    # tests with real DFT, a few minutes
 ```
 
-Every test is a defect that actually shipped at some point, lifted from the two
+Every test is a defect that actually shipped at some point, lifted from the
 adversarial reviews in `docs/`. The reviews are included deliberately: they
 record what was measured, what was wrong before, and what remains untested.
 Among the findings they document — a sign-flipped Coulomb kernel caught only

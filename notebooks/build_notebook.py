@@ -54,13 +54,13 @@ print(f"molecule: {SMILES}   name: {NAME}   charge: {CHARGE}   spin: {SPIN}")
 
 code("""
 #@title 2 · Advanced settings (the defaults are fine)
-#@markdown **Quality.** `preview` = def2-SVP: right for pictures and teaching, but it read V_max about 2.7 kcal/mol low on the molecules benchmarked, and the shift is molecule-specific (bromobenzene −0.76, the other sign). `publication` = def2-TZVP: quote numbers only from this.
+#@markdown **Quality.** `preview` = def2-SVP: right for pictures and teaching, but it read V_max 1.5–2.8 kcal/mol low on the four molecules benchmarked, and the shift is molecule-specific (bromobenzene −0.76, the other sign). `publication` = def2-TZVP: quote numbers only from this.
 QUALITY = "preview (def2-SVP)"  #@param ["preview (def2-SVP)", "publication (def2-TZVP)"]
 SOLVENT = "vacuum"  #@param ["vacuum", "water", "hexane", "chloroform", "toluene", "methanol", "acetonitrile", "dmso"]
 FUNCTIONAL = "b3lyp"  #@param ["b3lyp", "pbe0", "m06-2x"]
 #@markdown **Colour range.** `auto` fits this molecule only. For panels you want to compare, set the same number (kcal/mol, symmetric ±) for every molecule.
 COLOUR_RANGE = "auto"  #@param {type:"string"}
-#@markdown **Speed.** Density fitting changed V by ≤ 0.02 kcal/mol in our benchmark and roughly halves the SCF time. GPU `auto` uses one if the runtime has it.
+#@markdown **Speed.** Density fitting changed V by ≤ 0.02 kcal/mol in our benchmark; it halves the SCF time at def2-TZVP and saves 20–28 % at def2-SVP. GPU `auto` uses one if the runtime has it.
 DENSITY_FIT = True  #@param {type:"boolean"}
 GPU = "auto"  #@param ["auto", "on", "off"]
 #@markdown Conformers tried by the force field (the lowest-energy one is computed) and the random seed.
