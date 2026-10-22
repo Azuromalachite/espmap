@@ -1,64 +1,71 @@
 # Per-site output: specification
 
-Status: **draft, revision 2, nothing implemented.** This is the contract that
-espmap's `--json` will grow into and that Arrowfield's v0.0 fixtures are
-written against. It extends item 1 of `docs/roadmap-review.md` ("extend
-`--json` with shape descriptors") from whole-molecule numbers to per-atom ones.
+Status: **draft, revision 3. The site block is not implemented.** This is the
+contract that espmap's `--json` will grow into and that Arrowfield's v0.0
+fixtures are written against. It extends item 1 of `docs/roadmap-review.md`
+("extend `--json` with shape descriptors") from whole-molecule numbers to
+per-atom ones.
 
 Labels as in the roadmap review: `[V]` verified in the repo · `[M]` measured ·
 `[I]` inferred · `[U]` not verifiable yet, a test must settle it.
 
-**Revision 2 (2026-10-22).** Rewritten against `docs/adversarial-review-3.md`,
-which landed while revision 1 was being drafted. Revision 1 built on four
-things that review shows are broken:
-- The identity split rested on the invariant-3 assertion, which compares the
-  input with itself (H2), so the "mapped identity" check would have been
-  tautological too. Both checks now perceive from the coordinates sent to
-  PySCF (§1).
-- Per-site numbers would have been written for a clipped surface with nothing
-  in the record to say so (H4). They are now withheld (§3).
-- The `budget` block quoted error-budget rows that have no data in `bench/`
-  (H8). It now carries a source for each row (§6).
-- Site positions are meaningless without the geometry, which the JSON does not
-  hold (H14). The geometry is now a prerequisite (§0).
+**Revision 3 (2026-10-22).** Brought up to date with v0.1.1 and reviewed for
+Arrowfield's needs:
+- Done since revision 2: supplied-hydrogen freezing (#6), H1 (#7), H2 (#10).
+  §0, §1, §4 and §8 now describe the code as it is.
+- **Two comparability keys**, not one: `analysis_key` for the numbers and
+  `render_key` for the picture (§5). A colormap must never decide whether two
+  calculations can be compared.
+- **A `validity` envelope** at the top of the record (§6), so a consumer reads
+  one field instead of inferring validity from stderr or χ.
+- **One geometry in, one record out** (Boundary): a file with more than one
+  record is refused unless one is chosen.
+- **H3 added** as a prerequisite for anything a learner sees (§0).
+- **Surface definition stated** in the record (§6): ρ = 0.002, not SASA.
+- **Robust site statistics** (area-weighted percentiles) beside the extrema
+  (§3).
+- **Mapped-hydrogen refusal is a v1 limitation**, and every hydrogen carries
+  enough provenance to be promoted to a persistent identity later (§1, §4).
+- The two RDKit unknowns about atom maps are now measured (§1).
 
-Other changes: two levels, atoms and reaction sites, instead of one
-carbon-centric site definition (§1); values under both partition rules, not
-only their difference (§5); an implementation order (§8); partial and
-hydrogen atom maps are refused; buried sites,
-boundary vertices and radii for every tested element are defined; a
-hydrogen-sensitivity flag, an NPZ field, two consistency tests and symmetric
-test geometries are added; the example values no longer reuse a measured
-number.
+Revision 2 rebuilt revision 1 on `docs/adversarial-review-3.md`: identity from
+the coordinates (H2), no site block on a damaged surface (H4), budget rows with
+sources (H8), geometry in the record (H14), atom and reaction-site levels,
+both partition rules reported.
 
 ## Boundary
 
 espmap decides what a defensible site descriptor is. Arrowfield decides how to
 teach with it. espmap never reads AF3 or GNINA output, never knows a protein is
-involved, and never sees a docking score. It receives one molecule with 3D
-coordinates and returns numbers per site.
+involved, and never sees a docking score.
 
-**Input for a pose is SDF (or MOL) with explicit bond orders.** Not PDB: a PDB
-ligand without CONECT records is read with every bond single and computes a
-different molecule while every check passes (review 3, H1). Not XYZ: bond
-orders are perceived, not given, so the mapped structure Arrowfield intended
-is not guaranteed. Arrowfield's adapters assign bond orders from the mapped
-ligand definition before writing the SDF.
+**One geometry in, one record out.** A run computes one molecule in one
+geometry and writes one record. A file holding several records (a GNINA
+multi-pose SDF) is a gate BLOCK (`MULTIPLE_RECORDS`) unless `--record N`
+names one, and the record then says which. Today such a file warns and uses the
+first record `[V]`: fine for a person at a terminal, but in a pipeline 20 poses
+would silently become an analysis of pose 1. Arrowfield's adapter splits
+multi-pose files into one file per pose.
 
-## 0. Prerequisites from review 3
+**Input for a pose is SDF (or MOL) with explicit bond orders.** PDB and XYZ
+are accepted, but their bond orders are perceived from geometry, not given
+(H1, fixed in #7), so the mapped structure Arrowfield intended is not
+guaranteed. Arrowfield's adapters assign bond orders from the mapped ligand
+definition before writing the SDF.
 
-The site block is built on the record and the checks below. None of them
-exists in a usable form today, so they land first, in this order:
+## 0. Prerequisites
 
-| finding | what the site block needs from it |
-| --- | --- |
-| H1 | the PDB reader fix and the `H_COUNT_MISMATCH` guard, so a pose with missing bond orders is refused, not silently recomputed as another molecule |
-| H2 | structure perceived from `spec` (the coordinates PySCF receives), with stereo from 3D. §1 extends this to atom maps |
-| H4 | `results.surface = {closed, open_edges, …, strict, problems}` and `input.gate = {verdict, forced, findings}` |
-| H5 | planar 3D input kept. Nitrite and thiocyanate, two of the three calibration anions, are planar or linear, and a pose written in the xy plane would be discarded and regenerated |
-| H6 | unit-suffixed keys and `compare_key`. The site block follows the same naming |
-| H7 | `settings.solvent_esp` naming the PCM convention. Every site potential under `--solvent` is the polarised solute only |
-| H14 | `geometry = {xyz_angstrom, sha1}`. A site's `V_min_at_A` means nothing without the coordinates it refers to |
+| finding | what this needs from it | status |
+| --- | --- | --- |
+| supplied-H freezing | a pose's supplied hydrogens are not moved | **done**, #6 |
+| H1 | PDB read through bond perception; `H_COUNT_MISMATCH` refuses a reader that guessed wrong | **done**, #7 (v0.1.1) |
+| H2 | identity checked against `spec`, the coordinates PySCF receives (`verify_computed`); §1 extends it to atom maps | **done**, #10 |
+| H3 | a one-signed field (every anion in the calibration set) gets a sequential colormap by default, never `vik` | open. **Not needed by the site block, needed by Arrowfield**: a learner shown −80 kcal/mol in blue has been taught the wrong sign |
+| H4 | `results.surface = {closed, open_edges, …, strict, problems}` and `input.gate = {verdict, forced, findings}`; feeds `validity` (§6) | open |
+| H5 | planar 3D input kept. Nitrite and thiocyanate are planar or linear, and a pose written in the xy plane is today discarded and regenerated | open; must land before any calibration fixture |
+| H6 | unit-suffixed keys, the stereo actually computed (now `computed_smiles`, #10), and `analysis_key` / `render_key` (§5) in place of review 3's single `compare_key` | partly done |
+| H7 | `settings.solvent_esp` naming the PCM convention; it is part of `analysis_key` | open |
+| H14 | `geometry = {xyz_angstrom, sha1}` and full version provenance. A site's `V_min_at_A` means nothing without its coordinates | open |
 
 ## 1. Site identity and atom maps
 
@@ -101,43 +108,53 @@ Rules for both levels:
 - **Maps are all or nothing on heavy atoms.** Some heavy atoms mapped and
   others not is a gate BLOCK (`PARTIAL_ATOM_MAP`, remedy "map every heavy atom
   or none"). A site table with holes is worse than no maps.
-- **A map number on a hydrogen is a gate BLOCK** (`MAPPED_HYDROGEN`).
-  Hydrogens belong to their parent's site and carry no identity of their own.
-  This also avoids depending on whether `RemoveHs` keeps mapped hydrogens
-  `[U]`.
 - A repeated map number is a gate BLOCK (`DUPLICATE_ATOM_MAP`).
+- **A map number on a hydrogen is a gate BLOCK in v1** (`MAPPED_HYDROGEN`).
+  This is a limitation of v1, not a principle. The two hydrogens on one carbon
+  are not always interchangeable: pro-R versus pro-S abstraction in P450
+  oxidation or stereospecific desaturation is a question Arrowfield will want
+  to ask. So every hydrogen already carries `index`, `parent`, coordinates and
+  `h_source` (§4, §6), which is what a later schema needs to promote a
+  hydrogen to a persistent identity. Until then hydrogens belong to their
+  parent's site.
 - A buried site (area 0 under the partition) is **still reported**, with
   `area_A2: 0` and `null` potentials. Dropping it would make "this carbon is not
   on the surface" indistinguishable from "this carbon was not computed".
 
-### Identity checks, perceived from the coordinates
+### Identity checks, from the coordinates
 
-H2's correction perceives the computed structure from `spec`: XYZ block,
-`DetermineBonds(charge)`, `AssignStereochemistryFrom3D`. Because of the index
-correspondence above, atom i of that perceived molecule is input atom i, so
-maps can be transferred onto it by index. Two checks follow, both against the
-**perceived** molecule, never the input:
+`verify_computed` (#10) already checks the chemical identity against `spec`
+`[V]`: connectivity, hydrogens included, perceived from distances and matched
+to the approval's skeleton; stereo assigned from 3D and accepted if it
+completes what the approval specified. It deliberately does not compare bond
+orders, because the SCF never sees them and comparing them refused valid
+resonance forms (`[N-]=C=S`, DMSO). Atom maps add one check:
 
 | check | compares | must hold |
 | --- | --- | --- |
-| `chemical` | perceived canonical isomeric SMILES, maps stripped, against the gate-approved SMILES, maps stripped | equal (stereo-stripped where the approved structure leaves stereo unspecified, as H2 specifies) |
-| `mapped` | for every heavy atom: (map, element, sorted maps of heavy neighbours, bond orders to them) in the perceived molecule against the input | identical for every atom |
+| `chemical` | `verify_computed`, maps stripped from the approval first | as today |
+| `mapped` | the **identity correspondence**: heavy atom i in `spec` against heavy atom i in the approval, by element and by the set of heavy neighbours' indices; each hydrogen against its parent's index | i → i is itself a match of the skeleton |
 
-`chemical` alone would pass a pose where two atoms were swapped between the
-reader and the coordinates. `mapped` alone would pass nothing extra on an
-unmapped input. `mapped` is a neighbourhood signature, so it also covers
-map-to-chemistry consistency: map 3 after the round trip must be the same
-graph node (same element, same mapped neighbours, same bond orders), not just
-some unique atom that carries the number 3. Both are written to the JSON with their result. A failure is a
-refusal, the same as invariant 3.
+`verify_computed` searches for *some* match, so on a molecule with
+graph-equivalent atoms (the two methyls of an isopropyl) it would accept a
+geometry in which they were swapped. In a pose they are not equivalent: map 5
+must point at the coordinates the adapter put there. `mapped` therefore checks
+the correspondence the maps rely on, not just that one exists. It is the same
+signature as "map 3 is the same graph node after the round trip": element and
+mapped neighbours. Bond orders are left out for the same reason as in
+`chemical`. Both results go into the JSON. A failure refuses, as invariant 3
+does.
 
-`[I]` Atom maps appear in RDKit's SMILES output, so a mapped SMILES and its
-unmapped form would compare as different strings. That is why `chemical`
-strips maps on both sides. Confirm by test.
-
-`[U]` Whether `SDMolSupplier` reads atom-map numbers from a V2000 atom block's
-mapping column, or only from a `molAtomMapNumber` property, decides how
-Arrowfield must write its SDFs. Test this before writing the adapter.
+Measured `[M]` (RDKit 2026.09.1, the `espmap` venv):
+- Atom maps change canonical SMILES: `[CH3:1][CH2:2][OH:3]` and `CCO` are
+  different strings, and renumbering the maps even changes the atom order of
+  the output. `chemical` must strip maps on both sides.
+- RDKit writes maps to the V2000 atom block's mapping column and reads them
+  back from that column alone, with no `molAtomMapNumber` property needed.
+  Arrowfield's adapters can write maps there. Hydrogens added by `AddHs` get
+  map 0.
+- `verify_computed` passes a mapped approval against its own geometry as it
+  stands; its `computed_smiles` then carries the maps.
 
 ## 2. Surface partition
 
@@ -165,18 +182,22 @@ every site** (§5). That makes the partition an observable uncertainty axis,
 measured on every molecule, rather than a hidden implementation choice or a
 one-off benchmark. Neither rule is claimed to be the chemically correct one.
 
+**Measure before refining.** No exact weighted-Voronoi clipping of triangles
+in v1. If the two rules agree closely on the calibration set and the C18
+acetate, that settles it. If they differ materially, that difference is the
+finding, and a finer partition is investigated then.
+
 On a folded surface (genus > 0) a triangle can be nearest to an atom on the
 other side of a contact. That is correct, and it is how the contact shows up
 in the site table, but it makes those sites not comparable with an extended
 conformer's (§5, `topology`).
 
 Before anything is quoted against it, add an error-budget row for the
-partition, with its data committed under `bench/`, measured on the
-calibration set and the C18 acetate. This is the per-site analogue of the
-"σ-hole region definition" row, and unlike that row it must have a data file
-(H8).
+partition, with its data committed under `bench/`. This is the per-site
+analogue of the "σ-hole region definition" row, and unlike that row it must
+have a data file (H8).
 
-## 3. Area weighting and extrema
+## 3. Area weighting and statistics
 
 Use exactly what `bench/conformers.py:surface_stats` already does `[V]`:
 triangle area × mean V over the triangle's three vertices. Every per-site mean
@@ -184,17 +205,31 @@ and every area is area-weighted. **Never average over vertices.**
 Marching-cubes vertex density follows grid orientation and curvature, not
 chemistry.
 
-Extrema per site (`V_min_kcal_mol`, `V_max_kcal_mol`) are taken over the
-vertices of the triangles assigned to that site, because V is computed exactly
-at the vertices. They are not area-weighted: an extremum is a point property.
-A vertex on a boundary belongs to triangles of two sites and counts for both.
-Each extremum also reports its position in Å.
+Per atom and per site, under each rule:
 
-**No site block on a damaged surface.** If `results.surface.problems` is
-non-empty (a `--no-strict` run), or the gate verdict was BLOCK and `--force`
-was used, the record holds `"sites": null` and the reason. A clipped surface
-moved one extremum by 23 % with every other number plausible (H4), and per-site
-values near the box face would be worse than the global ones.
+| field | what | robust? |
+| --- | --- | --- |
+| `V_area_mean_kcal_mol` | area-weighted mean | yes |
+| `V_p05_kcal_mol`, `V_p95_kcal_mol` | area-weighted 5th and 95th percentiles of the per-triangle V | yes: the "reactive patch" value |
+| `V_min_kcal_mol`, `V_max_kcal_mol` | extrema over the site's triangles' vertices, with position in Å | **no** |
+
+Extrema are kept because V is computed exactly at the vertices and the global
+extrema are the numbers the error budget is about. On a small site, though,
+an extremum can be one vertex on a boundary, and it moves with mesh
+orientation and small geometric changes. **Arrowfield leads with the mean and
+the percentiles, and shows the extremum as a raw value.** A vertex on a
+boundary belongs to triangles of two sites and counts for both sites'
+extrema.
+
+`[U]` Whether 5 % is the right patch size is not measured: on a site of a few
+Å² it is a handful of triangles. Measure the percentiles' grid sensitivity
+alongside the areas (§7, test 10) and change the cut-off then if needed.
+
+**No site block on an invalid record.** If `validity.surface` or
+`validity.input` is false (§6), the record holds `"sites": null` and the
+reason. A clipped surface moved one extremum by 23 % with every other number
+plausible (H4), and per-site values near the box face would be worse than the
+global ones.
 
 `[U]` How far per-site areas move with grid spacing is not measured. The
 existing 0.04 kcal/mol spacing row is for V_max only, and it has no data file
@@ -203,21 +238,14 @@ quote an area difference.
 
 ## 4. Geometry and hydrogen provenance
 
-**Today's behaviour** `[V]` (`from_file`, `esp_map.py:257-271`): when a 3D
-file is missing some hydrogens, they are added with `addCoords=True`, every
-heavy atom is fixed, and MMFF94s minimises the rest. **The rest includes the
-hydrogens the file did supply.** A GNINA pose with its polar hydrogens kept
-would therefore have its O–H hydrogen re-optimised along with the added C–H
-hydrogens. That is the exact case where protein context mattered.
+`from_file` freezes every atom the file supplied, hydrogens included, and
+relaxes only the hydrogens `AddHs` created (#6) `[V]`. Before #6 the supplied
+hydrogens moved too: a test pose's O–H moved 0.79 Å. If MMFF94s has no
+parameters, the added hydrogens keep their `addCoords` positions and the record
+says so. For PDB and XYZ, `H_COUNT_MISMATCH` (#7) refuses a file whose
+perceived bond orders would need more hydrogens than it supplied.
 
-**Required change** (PR #6): freeze every supplied atom, hydrogens included,
-and relax only the hydrogens that were added. If MMFF94s has no parameters, the added
-hydrogens keep their `addCoords` positions and the record says so. H1's
-`H_COUNT_MISMATCH` guard runs first: if the file has explicit hydrogens and
-`AddHs` wants to add more to an atom that already has them, the bond orders
-are wrong and nothing is relaxed.
-
-Each record carries:
+Each record carries a summary:
 
 ```json
 "geometry_provenance": {
@@ -228,18 +256,20 @@ Each record carries:
 }
 ```
 
-`heavy_atoms` is `"generated"` on the SMILES path. `generated_relaxed` is a
-subset of `generated`.
+and every hydrogen in `atoms` carries `h_source`: `"supplied"`,
+`"generated"` or `"generated_relaxed"`. `heavy_atoms` is `"generated"` on the
+SMILES path.
 
-**Hydrogen sensitivity is flagged per site.** A site containing a polar hydrogen
-(on O, N or S) that was generated, not supplied, gets
-`h_generated_polar: true`. `[I]` For a
-terminal –CH₂–OH, the O–H rotamer in a pocket is set by a protein hydrogen
-bond, and isolated relaxation will pick a different one. The ESP around O is
-sensitive to it. espmap records the fact. Arrowfield decides what to say about
-it. Sampling O–H rotamers is a later, separate option.
+**Hydrogen sensitivity is flagged per site.** A site containing a polar
+hydrogen (on O, N or S) that was generated, not supplied, gets
+`h_generated_polar: true`. `[I]` For a terminal –CH₂–OH, the O–H rotamer in a
+pocket is set by a protein hydrogen bond, and isolated relaxation will pick a
+different one. The ESP around O is sensitive to it. espmap records the fact, so
+Arrowfield can say "the heavy-atom pose came from the protein model; this O–H
+was placed without the protein". Sampling O–H rotamers is a later, separate
+option.
 
-## 5. Uncertainty fields
+## 5. Uncertainty and comparability
 
 espmap cannot put an error bar on each site from a single run. It can report
 what was measured, and it must point to what was not.
@@ -250,8 +280,9 @@ what was measured, and it must point to what was not.
   quantity that is `null` under either rule. Reporting both values and not
   just the delta lets a reader see a site whose area halves between rules
   while its mean barely moves.
-- `budget` at run level: see §6. Rows come with their source; the record does
-  not attach ±3.55 to every site.
+- `budget` at run level: see §6. A measured shift is evidence about how
+  sensitive the method is, recorded with the molecule it was measured on. The
+  record does not turn it into a ±3.55 interval on every site.
 - `conformer_scope`: `"single conformer"` together with the rotatable-bond
   count, plus the measured warning when a folded geometry is possible (C18
   acetate, V_min spread 1.1 → 5.2 kcal/mol once folded members are included)
@@ -260,20 +291,66 @@ what was measured, and it must point to what was not.
   Genus > 0 means the molecule touches itself, and sites near the contact are
   not comparable with an extended conformer's.
 
-Arrowfield, not espmap, compares two runs' site values against these numbers,
-and only between runs whose `compare_key` (H6) matches.
+**Two keys, not one.** Review 3 (H6) proposed a single `compare_key` over the
+method *and* the colour settings. That would make two identical calculations
+"not comparable" because one was drawn with another colormap.
+
+| key | hashes | answers |
+| --- | --- | --- |
+| `analysis_key` | `xc`, `basis`, `solvent`, `solvent_esp` (H7), `iso`, `spacing`, `density_fit`, surface definition, partition schema version, site schema version | are these numbers methodologically comparable? |
+| `render_key` | `cmap`, `vmin`/`vmax` (or `lim`), scale kind, camera, image size, lighting | do these pictures share one visual scale? |
+
+Arrowfield compares site values only between records whose `analysis_key`
+matches, and shows images side by side only when `render_key` also matches.
+`scale.comparable` today depends on the colour flags alone `[V]`; it becomes
+`render_key` and stops being read as a statement about the numbers.
 
 ## 6. JSON schema (v1)
 
-Added to the existing `--json` record as a new top-level key, so the existing
-fields change only as review 3 already requires.
+The record as a whole moves towards one versioned shape, `espmap.record/1`:
+
+```
+identity · geometry · calculation · validity · surface · properties · sites · uncertainty · provenance
+```
+
+The existing `input` / `settings` / `results` keys are mapped into it when H4,
+H6 and H14 land. This spec fixes the parts the site block reads.
+
+**Validity first.** A consumer reads one field and never infers validity from
+stderr, χ, a filename or console text:
+
+```json
+"validity": {"input": true, "surface": true, "sites": true},
+"gate": {"verdict": "ACCEPT", "forced": false, "findings": []},
+"surface": {
+  "definition": {"property": "electron_density", "isovalue_e_bohr3": 0.002},
+  "closed": true, "open_edges": 0, "nonmanifold_edges": 0,
+  "components": 1, "genus": 0, "strict": true, "problems": []
+}
+```
+
+- `validity.input` is false if the gate verdict was BLOCK (forced) or
+  `structure_verified` is false.
+- `validity.surface` is false if `surface.problems` is non-empty.
+- `validity.sites` is false if either is, or the site block failed its own
+  checks. `"sites"` is then `null` with a reason.
+- `surface.definition` states that every area here is on the ρ = 0.002 e·bohr⁻³
+  electron-density isosurface. **It is not a solvent-accessible surface.** A
+  large site area means much of that atom's density boundary is exposed; it
+  does not mean the atom is accessible to a protein or a solvent molecule,
+  which is a question for Arrowfield's geometry layer.
+
+Arrowfield's rule is then `if not record["validity"]["sites"]: refuse`, with
+no chemistry-specific defensive logic of its own.
+
+The site block:
 
 ```json
 "sites": {
   "schema": "espmap.sites/1",
   "identity": {
-    "chemical_smiles": "<perceived, maps stripped>",
-    "mapped_smiles": "<perceived, maps transferred by index>",
+    "chemical_smiles": "<computed, maps stripped>",
+    "mapped_smiles": "<computed, maps kept>",
     "chemical_match": true,
     "mapped_match": true
   },
@@ -287,14 +364,17 @@ fields change only as review 3 already requires.
       "atom_map": 1,
       "element": "O",
       "parent": null,
+      "h_source": null,
       "nearest_nucleus": {
         "area_A2": 0.0, "area_pos_A2": 0.0, "area_neg_A2": 0.0,
         "V_area_mean_kcal_mol": 0.0,
+        "V_p05_kcal_mol": 0.0, "V_p95_kcal_mol": 0.0,
         "V_min_kcal_mol": 0.0, "V_min_at_A": [0.0, 0.0, 0.0],
         "V_max_kcal_mol": 0.0, "V_max_at_A": [0.0, 0.0, 0.0]
       },
       "radius_scaled": { "...": "same fields" },
       "delta": {"area_A2": 0.0, "V_area_mean_kcal_mol": 0.0,
+                "V_p05_kcal_mol": 0.0, "V_p95_kcal_mol": 0.0,
                 "V_min_kcal_mol": 0.0, "V_max_kcal_mol": 0.0}
     }
   ],
@@ -325,6 +405,10 @@ The zeros are **placeholders for type and shape only**. Arrowfield's v0.0
 fixtures use this shape with values marked as fabricated until real runs
 replace them.
 
+`parent` is the heavy-atom index for a hydrogen, `null` otherwise; `h_source`
+is set for hydrogens only. Coordinates come from `geometry.xyz_angstrom` by
+`index`. `source` on a site is `"default"` or `"caller"`.
+
 **Budget rows.** Each row names its source: a `bench/` file, or `"prose"` for
 the seven rows review 3 found with no data (H8). Arrowfield must display a
 `"prose"` row as unbacked. Rows are selected by the run's settings: the basis
@@ -333,14 +417,11 @@ on. The numbers come from one table in the module, and the claim-consistency
 test checks that table against `CLAUDE.md` and `README.md`. The two rows above
 are illustrations of the shape; the basis range is the one H8 recomputed.
 
-`parent` is the heavy-atom index for a hydrogen, `null` otherwise. `source`
-is `"default"` or `"caller"`.
-
 **NPZ.** `--npz` gains `tri_atom` and `tri_atom_compared`: the atom index of
 every triangle under each rule. Sites are unions of atoms, so this is enough
 to colour a render by site, to regroup with other sites, or for Arrowfield to
-redo a partition, all without another SCF. Units and method go in
-the NPZ as H6 requires.
+redo a partition, all without another SCF. Units and method go in the NPZ as
+H6 requires.
 
 ## 7. Acceptance tests
 
@@ -353,20 +434,24 @@ on RDKit alone):
    `mapped_smiles`, and permutes `atoms` and `reaction_sites` to match. After
    an SDF write and read, each map number has the same neighbourhood
    signature as before.
-3. Duplicate, partial and hydrogen maps are each a gate BLOCK.
-4. **Index swap detector.** Swap two non-equivalent heavy atoms' coordinates in
-   `spec` after the gate: `mapped_match` must be false and the run refused.
-   This is the H2 lesson applied to maps. A check that never reads `spec`
-   cannot catch it.
+3. Duplicate, partial and hydrogen maps are each a gate BLOCK. A multi-record
+   SDF is a BLOCK without `--record`, and accepted with it.
+4. **Equivalent-atom swap detector.** Swap the coordinates of two
+   graph-equivalent heavy atoms (the methyls of an isopropyl) in `spec` after
+   the gate: `chemical_match` stays true, `mapped_match` must be false and the
+   run refused. This is the case `verify_computed` alone cannot see.
 5. Heavy atoms and supplied hydrogens move < 1e-6 Å through hydrogen
-   addition. Generated hydrogens are the only atoms that move.
+   addition; generated hydrogens are the only atoms that move (#6 has the
+   O–H case); `h_source` is right for every hydrogen.
 6. A buried atom appears with area 0 and null potentials.
 6b. A caller group naming an atom that does not exist is refused before the
    SCF. Overlapping groups each get their own values.
-7. `"sites": null` with a reason on a surface with `problems`, and on a forced
-   BLOCK.
+7. `validity.sites` false and `"sites": null` with a reason on a surface with
+   `problems`, on a forced BLOCK, and on `structure_verified: false`.
 8. The minimum of the site `V_min` values equals the global `V_min`, and the
    same for `V_max` (exact; they are the same vertices).
+8b. Two records that differ only in `--cmap` have equal `analysis_key` and
+   different `render_key`; two that differ only in `--basis` the reverse.
 
 Slow (real DFT):
 
@@ -379,46 +464,56 @@ Slow (real DFT):
    the role that far-field decay plays for the kernel sign (invariant 4): a
    partition bug gives plausible numbers, but it cannot give equal numbers to
    equivalent atoms by accident.
-10. Grid-spacing convergence of site areas, 0.26 → 0.16 bohr, committed as
-    rows under `bench/`.
+10. Grid-spacing convergence of site areas and percentiles, 0.26 → 0.16 bohr,
+    committed as rows under `bench/`.
+11. Partition sensitivity on the C18 acetate, extended and folded conformers,
+    committed under `bench/`.
 
 ## 8. Implementation order
 
-Each step lands with its tests, as a separate change:
+Each step lands with its tests, as a separate change.
 
-1. **Supplied-hydrogen freezing:** a regression test first (it must fail on
-   today's code), then the fix: remember which atoms existed before
-   `AddHs()`, freeze all of them, relax only the new ones. It depends on
-   nothing else, and it is a correctness bug today, with or without
-   Arrowfield. **Done: PR #6** (the test fails on master with the
-   supplied O–H moving 0.79 Å, and passes with the fix).
-2. **Review 3's H1 and H2:** the PDB reader, `H_COUNT_MISMATCH`, and identity
-   perceived from `spec`. Atom-map round-trip checks extend H2's perceived
-   molecule, so they cannot come first.
-3. **Atom-map gate rules and the `mapped` check** (§1), tests 2–4.
-4. **Record fields from review 3** the site block reads: H4 (surface,
-   gate), H14 (geometry), H6 (units, `compare_key`), H7 (`solvent_esp`).
-5. **Triangle partition under both rules** (§2–3), tests 1, 6–8.
-6. **Reaction-site grouping** above the atom level, default and caller
-   groups, test 6b.
-7. **Slow tests:** symmetry on constructed geometries, grid convergence of
-   areas, and the partition budget row, committed under `bench/`.
-8. **JSON schema and fixture outputs** from real runs on the calibration set.
-9. Only then: Arrowfield v0.0 scaffolded against those fixtures.
+**Done:** supplied-hydrogen freezing (#6), H1 (#7, v0.1.1), H2 (#10).
+
+**P0, boundaries.** Make one record impossible to misread:
+1. H3: the colormap follows the scale kind.
+2. H4: `gate`, `surface` and the `validity` envelope.
+3. H5: planar 3D input kept (before any calibration fixture).
+4. H6 and H7: unit-suffixed keys, `analysis_key` / `render_key`,
+   `solvent_esp`.
+5. H14: geometry and full provenance in the record.
+6. One record per run: `MULTIPLE_RECORDS` and `--record N`.
+
+**P1, identity.** Atom-map gate rules, the `mapped` check, SDF round-trip
+tests (§1; tests 2–4).
+
+**P2, sites.** Triangle partition under both rules (§2–3; tests 1, 6–8), then
+reaction-site grouping (test 6b), then the slow tests 9–11, with every
+measurement committed under `bench/`.
+
+**P3, the contract.** Freeze `espmap.sites/1` and produce real fixture records
+for benzene, nitrite, thiocyanate, an enolate model and a C18 pheromone.
+**Arrowfield v0.0 starts here.**
+
+**P4, more descriptors.** ALIE, then frontier-orbital amplitudes, then Fukui
+functions, each reusing the same geometry, surface, atom maps, partition and
+reaction sites, so a site gains a field per descriptor rather than a new
+integration model.
 
 ## When this lands
 
 Adding a partition is new science under "If you change the science" in
 `CLAUDE.md`. The partition row and the grid row for site areas go into the
 error-budget tables in `CLAUDE.md` and `README.md`, with their `bench/` files,
-in the same change. Invariant 3 in `CLAUDE.md` is reworded to the two
-perceived checks of §1.
+in the same change. Invariant 3 in `CLAUDE.md` (rewritten for
+`verify_computed` in #10) gains the `mapped` check in P1. "One geometry in,
+one record out" becomes a new invariant in P0.
 
 ## Not in this spec
 
-- ALIE, frontier-orbital amplitudes and Fukui functions. They will reuse the
-  same partition and the same `atoms` / `reaction_sites` shape, with one extra field each,
-  which is why the partition has to be settled first.
+- How ALIE, orbital amplitudes and Fukui functions are computed. They reuse
+  this partition and this `atoms` / `reaction_sites` shape (P4), which is why
+  the partition has to be settled first.
 - Anything about AF3, GNINA or licensing. Whether AlphaFold Server output may
   feed docking matters to Arrowfield's adapters, not here; espmap only sees an
   SDF. Those claims came from an external summary and are not verified in
