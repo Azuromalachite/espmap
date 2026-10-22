@@ -150,7 +150,8 @@ HA2KCAL = 627.5095
 AU2DEBYE = 2.541746473
 # esp_at_points sums the solute's nuclei and (PCM-polarised) electrons only;
 # the potential of the PCM surface charges is not added (review 3 H7).
-SOLVENT_ESP = "polarised solute only (reaction field excluded)"
+SOLVENT_ESP = {False: "polarised solute only (reaction field excluded)",
+               True: "polarised solute + PCM reaction field"}
 ISO_BADER = 0.002
 
 # basis sets at or below double zeta; penalty measured in the review
@@ -159,7 +160,9 @@ SMALL_BASIS = {"sto-3g", "3-21g", "6-31g", "6-31g*", "def2-svp", "def2-sv(p)"}
 # dielectric constants for --solvent. Measured effect on the chlorobenzene
 # sigma-hole: gas +9.83 -> chloroform +7.14 -> water +6.22 kcal/mol, i.e. the
 # solvent axis is CO-DOMINANT with the basis-set axis (+3.55). Do not quote a
-# condensed-phase number from a gas-phase run.
+# condensed-phase number from a gas-phase run. That is the polarised-solute
+# convention; with the reaction field added the shifts are +0.05 (water) and
+# -0.34 (chloroform), bench/solvent_convention.jsonl (review 3 H7).
 SOLVENTS = {"vacuum": None, "water": 78.3553, "dmso": 46.826, "methanol": 32.613,
             "acetonitrile": 35.688, "chloroform": 4.7113, "toluene": 2.3741,
             "hexane": 1.8819}
@@ -868,6 +871,50 @@ def esp_at_points(mol, dm, pts, mem_budget_gb=0.5):
     return V
 
 
+def reaction_field_at_points(mf, pts):
+    """Potential (Hartree/e) of the PCM surface charges at points (bohr).
+
+    esp_at_points gives the potential of the PCM-POLARISED SOLUTE; the
+    solvent's own response, the apparent surface charges on the cavity, is a
+    second term. Review 3 H7: on the chlorobenzene sigma-hole the two
+    conventions give solvent shifts of opposite sign, and only one was stated.
+    PySCF's charges are Gaussian-smeared (exponent charge_exp), so each
+    contributes q erf(zeta r) / r: finite at a vertex that sits near the
+    cavity, where a bare point charge would blow up.
+    """
+    from scipy.special import erf
+    ws = mf.with_solvent
+    q = np.asarray(ws._intermediates["q"]).ravel()
+    centres = ws.surface["grid_coords"]
+    zeta = ws.surface["charge_exp"]
+    pts = np.asarray(pts, float)
+    V = np.zeros(len(pts))
+    for s in range(0, len(pts), 2000):
+        d = np.linalg.norm(pts[s:s + 2000, None, :] - centres[None], axis=2)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            k = np.where(d > 1e-12, erf(zeta * d) / d, 2.0 * zeta / np.sqrt(np.pi))
+        V[s:s + 2000] = k @ q
+    return V
+
+
+def unbound_anion_warning(mf, charge, solvent):
+    """A gas-phase anion whose HOMO is above zero has an electron the basis
+    is holding in place: in a complete basis it would leave. Its surface
+    potential then depends on how diffuse the basis is rather than on the
+    chemistry. A continuum binds it, so name --solvent as the remedy."""
+    if charge >= 0 or solvent:
+        return None
+    e = np.atleast_2d(np.asarray(mf.mo_energy, dtype=float))
+    occ = np.atleast_2d(np.asarray(mf.mo_occ, dtype=float))
+    homo = float(e[occ > 0].max())
+    if homo <= 0:
+        return None
+    return (f"gas-phase anion with HOMO {homo * 27.211386:+.2f} eV: the outer "
+            f"electron is unbound and held only by the basis, so the map tracks "
+            f"the basis set, not the molecule. Compute it in a continuum "
+            f"(--solvent water) or as the neutral/protonated form.")
+
+
 # ------------------------------------------------------------------- surface
 def euler_characteristic(faces):
     e = np.vstack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [0, 2]]])
@@ -1398,7 +1445,8 @@ def record_key(fields):
     return hashlib.sha1(json.dumps(fields, sort_keys=True).encode()).hexdigest()
 
 
-def analysis_fields(xc, basis, solvent, iso, spacing, density_fit):
+def analysis_fields(xc, basis, solvent, iso, spacing, density_fit,
+                    reaction_field=False):
     """What makes two records' NUMBERS comparable (spec section 5). Colour
     settings are deliberately absent: review 3's single compare_key would
     have called two identical calculations incomparable over a colormap.
@@ -1409,7 +1457,7 @@ def analysis_fields(xc, basis, solvent, iso, spacing, density_fit):
     site block carries its own schema."""
     solv = None if solvent is None or solvent.lower() == "vacuum" else solvent.lower()
     return dict(xc=xc.lower(), basis=basis.lower(), solvent=solv,
-                solvent_esp=SOLVENT_ESP if solv else None,
+                solvent_esp=SOLVENT_ESP[bool(reaction_field)] if solv else None,
                 spacing_bohr=float(spacing), density_fit=bool(density_fit),
                 surface_definition=surface_definition(iso))
 
@@ -1559,10 +1607,18 @@ def main():
     ap.add_argument("--xc", default="b3lyp")
     ap.add_argument("--solvent", default="vacuum",
                     choices=sorted(SOLVENTS),
-                    help="PCM continuum. Measured: gas->water moves the "
-                         "chlorobenzene sigma-hole by -3.6 kcal/mol, as large "
-                         "as the basis-set error. Default vacuum, stated in "
-                         "the output either way")
+                    help="PCM continuum. The map is the potential of the "
+                         "PCM-POLARISED SOLUTE only; the PCM surface charges' "
+                         "own potential (the reaction field) is left out unless "
+                         "--include-reaction-field. Measured under that "
+                         "convention: gas->water moves the chlorobenzene "
+                         "sigma-hole by -3.6 kcal/mol. Default vacuum, stated "
+                         "in the output either way")
+    ap.add_argument("--include-reaction-field", action="store_true",
+                    help="with --solvent, add the potential of the PCM surface "
+                         "charges to the map. A different quantity: it changes "
+                         "analysis_key and the sign of the solvent effect on the "
+                         "chlorobenzene sigma-hole (review 3 H7)")
     ap.add_argument("--iso", type=float, default=ISO_BADER)
     ap.add_argument("--spacing", type=float, default=0.26,
                     help="bohr; V_max converged to 0.04 kcal/mol at this value")
@@ -1607,6 +1663,9 @@ def main():
         except ImportError:
             raise SystemExit("--optimize needs pyberny: pip install 'espmap[opt]' "
                              "(or pip install pyberny)") from None
+    if a.include_reaction_field and a.solvent == "vacuum":
+        raise SystemExit("--include-reaction-field needs --solvent: in the gas "
+                         "phase there is no reaction field to add")
     if a.lim == 0.0:
         raise SystemExit("--lim 0 is not a range")
     err = cmap_preflight(a.scale, a.cmap, a.force_cmap, available=set(build_maps()))
@@ -1741,6 +1800,9 @@ def main():
           f"{'PCM ' + a.solvent if solv else 'GAS PHASE'}"
           + (f", UNRESTRICTED (spin={spin}, <S^2>={mf.spin_square()[0]:.3f})"
              if spin else ""))
+    warn = unbound_anion_warning(mf, charge, solv)
+    if warn:
+        print(f"WARNING: {warn}", file=sys.stderr)
 
     verts, faces, diag = extract_surface(mol, dm, a.spacing, iso=a.iso,
                                          margin=a.margin, strict=not a.no_strict)
@@ -1754,7 +1816,14 @@ def main():
           f"{diag['rho_integral']:.2f} vs {diag['nelec']} electrons")
 
     V = esp_at_points(mol, dm, verts) * HA2KCAL
-    print(f"V = {V.min():+.2f} .. {V.max():+.2f} kcal/mol")
+    rf_added = bool(solv and a.include_reaction_field)
+    if rf_added:
+        rf = reaction_field_at_points(mf, verts) * HA2KCAL
+        print(f"reaction field on the surface {rf.min():+.2f} .. {rf.max():+.2f} "
+              f"kcal/mol, added to V")
+        V = V + rf
+    print(f"V = {V.min():+.2f} .. {V.max():+.2f} kcal/mol"
+          + (f"  [{SOLVENT_ESP[rf_added]}]" if solv else ""))
     sh_rec, sh_reason = sigma_hole_record(verts, V, mol, i_sub, sh_reason)
     if sh_rec is not None:
         sh = sh_rec["V_max_kcal_mol"]
@@ -1790,7 +1859,7 @@ def main():
           f"kcal/mol, cmap {cmap_name})")
 
     a_fields = analysis_fields(a.xc, a.basis, a.solvent, a.iso, a.spacing,
-                               a.density_fit)
+                               a.density_fit, reaction_field=rf_added)
     r_fields = render_fields(cmap_name, kind, vlim, a.elev, a.azim, a.size, a.ambient)
     symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
     label = (gi or {}).get("formula") or a.smiles or a.file or a.molecule
@@ -1832,6 +1901,7 @@ def main():
                        formula=(gi or {}).get("formula"), charge=charge, spin=spin),
             settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
                           solvent_esp=a_fields["solvent_esp"],
+                          include_reaction_field=rf_added,
                           density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
                           spacing_bohr=a.spacing, seed=a.seed, nconfs=a.nconfs,
                           optimize=a.optimize, geometry=(gi or {}).get("source")),

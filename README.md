@@ -186,8 +186,9 @@ the chlorobenzene σ-hole V<sub>max</sub>, B3LYP unless stated:
 | axis | effect | note |
 | --- | --- | --- |
 | **basis set** (def2-SVP → def2-TZVPP) | **+3.55** | +6.35 → +9.90; dominant |
-| **solvent** (gas → PCM water) | **−3.61** | +9.83 → +6.22; co-dominant |
-| solvent (gas → chloroform) | −2.69 | +7.14 |
+| **solvent** (gas → PCM water), polarised solute | **−3.61** | +9.83 → +6.22; co-dominant |
+| solvent (gas → chloroform), polarised solute | −2.69 | +7.14 |
+| solvent (gas → PCM water), solute + reaction field | +0.05 | +9.88; chloroform −0.34 (+9.49) |
 | functional (B3LYP / PBE0 / M06-2X / HF) | 0.69 | spread, +9.51 to +10.20 |
 | conformer (lowest vs highest MMFF) | ~1 | glycerol; C18 acetate: 1.1 over 8 extended conformers, **5.2** on V<sub>min</sub> once folded ones are included |
 | density fitting (`--density-fit`) | ≤ 0.02 | 7 pairs, always upward on V<sub>max</sub> |
@@ -196,6 +197,17 @@ the chlorobenzene σ-hole V<sub>max</sub>, B3LYP unless stated:
 | geometry source (MMFF / idealised / DFT) | 0.35 | +9.59 to +9.94 |
 | grid spacing (0.26 → 0.16 bohr) | 0.04 | converged |
 | σ-hole region definition | 0.00 | max is interior to the cone |
+
+**The solvent rows measure a convention.** With `--solvent`, the map is the
+potential of the solute *as polarised by* the continuum; the potential of the
+continuum's own surface charges (the reaction field) is left out. That is the
+default and the convention behind the −3.61. `--include-reaction-field` adds
+the reaction field, and then the solvent shift is +0.05 in water and −0.34 in
+chloroform: the polarisation of the solute and the field of the solvent that
+caused it almost cancel on this surface. Both are legitimate quantities; they
+answer different questions, and the JSON records which one (`solvent_esp`,
+part of `analysis_key`). def2-TZVP, `bench/solvent_convention.jsonl`; at
+def2-SVP the shifts are −3.10 and +0.57.
 
 **The basis-set error is molecule-specific and cannot be calibrated away**: the
 same def2-SVP → def2-TZVP change moves bromobenzene by **−0.76**, opposite in
@@ -215,7 +227,10 @@ Two consequences for anyone quoting a number from this:
 - the default basis is **def2-TZVP**, and anything double-zeta prints a warning
   naming the measured penalty;
 - the default is **gas phase**, stated in every run, and `--solvent water`
-  changes the answer by as much as the basis does.
+  changes the answer by as much as the basis does, under the default
+  (polarised-solute) convention;
+- a gas-phase anion whose outer electron is unbound (HOMO above zero) is
+  warned: its map follows the basis set, and `--solvent water` binds it.
 
 ## Limits
 
