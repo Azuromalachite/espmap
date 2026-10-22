@@ -281,3 +281,67 @@ def test_borrowed_method_is_not_presented_as_an_invention(phrase):
     for name in ("README.md", "CLAUDE.md"):
         assert phrase not in TEXT[name], name
     assert phrase not in (ROOT / "docs" / "colormaps.md").read_text(encoding="utf-8")
+
+
+# ------------------------------------------------- per-site budget (P2 rows)
+def _site_table():
+    t = TEXT["README.md"]
+    return t[t.index("**Per-site statistics**"):t.index("**The solvent rows measure")]
+
+
+def _site_rows():
+    """The per-site rows, recomputed from bench/site_partition.jsonl with the
+    definitions the README states: site means, nearest-nucleus rule, 0.26 bohr."""
+    import statistics
+    rows = _jsonl("site_partition.jsonl")
+    nn = lambda r: r["sites"]["nearest_nucleus"]          # noqa: E731
+
+    def delta(r, q):
+        rs = r["sites"]["radius_scaled"]
+        return [abs(rs[s][q] - nn(r)[s][q]) for s in nn(r) if q in nn(r)[s] and q in rs[s]]
+    small = [r for r in rows if r["part"] == "grid" and r["spacing_bohr"] == 0.26
+             and r["molecule"] != "chlorobenzene"]
+    c18 = [r for r in rows if r["part"] == "c18"]
+    sites = list(nn(c18[0]))
+    per_site = [max(abs(r["sites"]["radius_scaled"][s]["V_area_mean"] - nn(r)[s]["V_area_mean"])
+                    for r in c18) for s in sites]
+    spread = [max(nn(r)[s]["V_area_mean"] for r in c18) - min(nn(r)[s]["V_area_mean"] for r in c18)
+              for s in sites]
+    grid = {}
+    for r in rows:
+        if r["part"] == "grid":
+            grid.setdefault(r["molecule"], {})[r["spacing_bohr"]] = nn(r)
+    g = lambda q: max(abs(v[0.16][s][q] - v[0.26][s][q])  # noqa: E731
+                      for v in grid.values() for s in v[0.26] if q in v[0.26][s])
+    return {
+        "partition small anions": f"{max(max(delta(r, 'V_area_mean')) for r in small):.1f}",
+        "partition C18": f"{max(per_site):.2f}",
+        "partition C18 median": f"{statistics.median(per_site):.2f}",
+        "partition p05": f"{max(max(delta(r, 'V_p05')) for r in small + c18):.1f}",
+        "conformer C18": f"{statistics.median(spread):.1f}",
+        "grid mean": f"{g('V_area_mean'):.2f}",
+        "grid p05": f"{g('V_p05'):.2f}",
+        "grid V_min": f"{g('V_min'):.2f}",
+    }
+
+
+@pytest.mark.parametrize("row, expect", [
+    ("partition small anions", "3.0"), ("partition C18", "3.95"),
+    ("partition C18 median", "0.89"), ("partition p05", "8.9"), ("conformer C18", "5.1"),
+    ("grid mean", "0.15"), ("grid p05", "0.72"), ("grid V_min", "0.54"),
+])
+def test_every_per_site_row_is_recomputed_from_bench(row, expect):
+    got = _site_rows()[row]
+    assert got == expect, f"{row}: data gives {got}, the docs say {expect}"
+    assert expect in _site_table(), f"README per-site table lacks {row} = {expect}"
+
+
+def test_site_areas_conserve_the_surface_in_every_row():
+    for r in _jsonl("site_partition.jsonl"):
+        assert max(abs(v) for v in r["sites"]["conservation"].values()) < 1e-12, r["key"]
+
+
+def test_claude_md_quotes_the_per_site_budget():
+    rows = _site_rows()
+    for key in ("partition small anions", "partition C18", "conformer C18", "grid mean"):
+        assert rows[key] in TEXT["CLAUDE.md"], f"CLAUDE.md lacks {key} = {rows[key]}"
