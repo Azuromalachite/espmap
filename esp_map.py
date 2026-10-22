@@ -48,9 +48,12 @@ NEW IN v3 — the structure check (--check)
                 reachable tautomers, net charge, isotopes.
 
     The stereochemistry wording is measured, not assumed: threonine's two
-    diastereomers differ in ESP extrema by ~0.9 kcal/mol against a
-    0.4 kcal/mol conformer-selection noise floor. Stereochemistry changes the
-    SHAPE of the surface far more than the numbers on it.
+    diastereomers differ in mean ESP extrema by 1.6 (V_min) and 1.9 (V_max)
+    kcal/mol at def2-SVP, against a spread of up to 1.25 between MMFF seeds
+    of one diastereomer (bench/error_budget.jsonl; the earlier "0.9 against
+    0.4" had no data behind it and did not reproduce, review 3 H8).
+    Stereochemistry moves the numbers about as much as conformer choice does,
+    and the SHAPE of the surface more.
 
 NEW IN v3 — structure input from a drawing program
 
@@ -69,11 +72,13 @@ NEW IN v3 — SMILES input
 
         idealised bond lengths   +9.83 kcal/mol   (C-Cl 1.7400 A)
         SMILES + MMFF94s         +9.94            (C-Cl 1.7209 A)
-        B3LYP/def2-SVP optimised +9.59            (C-Cl 1.7512 A)
+        B3LYP/def2-SVP optimised +9.54
 
-    a 0.35 kcal/mol spread, an order of magnitude below the basis-set error.
-    A force-field geometry is therefore adequate for this quantity; --optimize
-    runs a DFT optimisation if you want it anyway.
+    a 0.40 kcal/mol spread, an order of magnitude below the basis-set error
+    (bench/error_budget.jsonl, def2-TZVP). A force-field geometry is adequate
+    for this quantity on this molecule. It is NOT for small anions: MMFF
+    puts nitrite's N-O at 1.42 A against 1.25 and moves V_min/V_max by up to
+    6.5 kcal/mol (bench/anion_geometry.jsonl). Use --optimize there.
 
     ETKDG is stochastic, so --seed is fixed by default: without it the same
     SMILES gives a different conformer every run. Measured conformer effect on
@@ -161,7 +166,7 @@ SMALL_BASIS = {"sto-3g", "3-21g", "6-31g", "6-31g*", "def2-svp", "def2-sv(p)"}
 
 # dielectric constants for --solvent. Measured effect on the chlorobenzene
 # sigma-hole: gas +9.83 -> chloroform +7.14 -> water +6.22 kcal/mol, i.e. the
-# solvent axis is CO-DOMINANT with the basis-set axis (+3.55). Do not quote a
+# solvent axis is CO-DOMINANT with the basis-set axis (+3.54). Do not quote a
 # condensed-phase number from a gas-phase run. That is the polarised-solute
 # convention; with the reaction field added the shifts are +0.05 (water) and
 # -0.34 (chloroform), bench/solvent_convention.jsonl (review 3 H7).
@@ -454,9 +459,9 @@ def check_structure(mol, basis="def2-tzvp", spin=0):
             msg = (f"{n} stereocentres drawn without wedges or hashes: "
                    f"{2 ** n} stereoisomers, and they are diastereomers, i.e. "
                    f"genuinely different molecules. Measured on threonine, the "
-                   f"ESP EXTREMA differ by only ~0.9 kcal/mol (against a "
-                   f"0.4 kcal/mol conformer-noise floor), but the SHAPE of the "
-                   f"surface and where the features sit on it do differ.")
+                   f"ESP EXTREMA differ by ~1.6-1.9 kcal/mol, about as much as "
+                   f"conformer choice moves them (up to 1.25), and the SHAPE of "
+                   f"the surface and where the features sit on it differ too.")
             sev = WARN
         out.append((sev, "UNSPECIFIED_TETRAHEDRAL",
                     msg + f" Atom index: {unspec_atoms}",
@@ -1723,7 +1728,7 @@ def main():
                     help="conformers to embed; the lowest-energy one is used")
     ap.add_argument("--optimize", action="store_true",
                     help="DFT geometry optimisation after the force field "
-                         "(slow; measured worth 0.35 kcal/mol on a sigma-hole)")
+                         "(slow; measured worth 0.40 kcal/mol on a sigma-hole, up to 6.5 on small anions)")
     ap.add_argument("--molecule", default="bromobenzene", choices=sorted(MOLECULES))
     ap.add_argument("--atoms", help="PySCF atom string; overrides --molecule")
     ap.add_argument("--charge", type=int, default=None,
@@ -2063,8 +2068,8 @@ def main():
                        **scale_provenance(kind, a.lim, a.vmin, a.vmax)),
             provenance=provenance(),
             caveat=("Measured error budget (README): basis def2-SVP -> "
-                    "def2-TZVPP moves the chlorobenzene sigma-hole by +3.55 "
-                    "kcal/mol; solvent gas -> water by -3.61. Quote numbers only "
+                    "def2-TZVPP moves the chlorobenzene sigma-hole by +3.54 "
+                    "kcal/mol; solvent gas -> water by -3.60. Quote numbers only "
                     "against those margins."))
         with open(a.json, "w") as f:
             json.dump(rec, f, indent=2)
