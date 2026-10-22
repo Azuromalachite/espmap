@@ -4,6 +4,8 @@ Every case here is a defect that actually shipped at some point, lifted from
 docs/adversarial-review-1.md and docs/adversarial-review-2.md. A test that was
 never red is not evidence, so each one names the finding it guards.
 """
+import sys
+
 import numpy as np
 import pytest
 
@@ -180,6 +182,43 @@ def test_real_3d_coordinates_are_used_as_is(tmp_path):
     assert "as-is" in info["source"]
 
 
+def _spec_xyz(spec):
+    return np.array([[float(x) for x in t.split()[1:]] for t in spec.split(";")])
+
+
+def test_supplied_hydrogens_are_frozen_when_others_are_added(tmp_path):
+    """A docking pose often keeps its polar hydrogens and drops the rest. Only
+    the added hydrogens may move: relaxing the supplied O-H in isolation
+    replaces an orientation set by the pocket with the gas-phase optimum."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem, rdMolTransforms
+    m = Chem.AddHs(Chem.MolFromSmiles("CCCO"))
+    ps = AllChem.ETKDGv3(); ps.randomSeed = 42
+    AllChem.EmbedMolecule(m, ps); AllChem.MMFFOptimizeMolecule(m)
+    o = next(a for a in m.GetAtoms() if a.GetSymbol() == "O")
+    h_o = next(n.GetIdx() for n in o.GetNeighbors() if n.GetSymbol() == "H")
+    c1 = next(n.GetIdx() for n in o.GetNeighbors() if n.GetSymbol() == "C")
+    c2 = next(n.GetIdx() for n in m.GetAtomWithIdx(c1).GetNeighbors()
+              if n.GetSymbol() == "C")
+    # an O-H rotamer the isolated molecule would not choose
+    rdMolTransforms.SetDihedralDeg(m.GetConformer(), c2, c1, o.GetIdx(), h_o, 120.0)
+    rw = Chem.RWMol(m)
+    for i in sorted((a.GetIdx() for a in m.GetAtoms() if a.GetSymbol() == "H"
+                     and a.GetNeighbors()[0].GetSymbol() == "C"), reverse=True):
+        rw.RemoveAtom(i)
+    pose = rw.GetMol()
+    p = tmp_path / "pose.mol"
+    p.write_text(Chem.MolToMolBlock(pose))
+
+    spec, info = em.from_file(str(p))
+    xyz = _spec_xyz(spec)
+    supplied = Chem.MolFromMolFile(str(p), removeHs=False).GetConformer().GetPositions()
+    assert len(xyz) == m.GetNumAtoms()
+    # every supplied atom, the O-H hydrogen included, is where the file put it
+    assert np.abs(xyz[:len(supplied)] - supplied).max() < 1e-5
+    assert "7 hydrogen(s) added" in info["source"]
+
+
 def test_xyz_connectivity_is_perceived(tmp_path):
     """Review 2, G3: xyz carries no bonds, so every xyz file was rejected as a
     salt with a remedy about counter-ions."""
@@ -189,6 +228,83 @@ def test_xyz_connectivity_is_perceived(tmp_path):
     mol, problems, _ = em.read_structure(str(p))
     assert mol is not None and not problems
     assert mol.GetNumBonds() == 2
+
+
+# chlorobenzene, all 12 atoms, docking-style HETATM records, no CONECT
+_CLPH_PDB = """\
+HETATM    1 Cl1  LIG A   1      -3.060  -0.000  -0.000  1.00  0.00          Cl
+HETATM    2 C2   LIG A   1      -1.339  -0.000  -0.000  1.00  0.00           C
+HETATM    3 C3   LIG A   1      -0.647   1.192   0.210  1.00  0.00           C
+HETATM    4 C4   LIG A   1       0.749   1.191   0.210  1.00  0.00           C
+HETATM    5 C5   LIG A   1       1.446   0.000  -0.000  1.00  0.00           C
+HETATM    6 C6   LIG A   1       0.749  -1.191  -0.210  1.00  0.00           C
+HETATM    7 C7   LIG A   1      -0.647  -1.192  -0.210  1.00  0.00           C
+HETATM    8 H8   LIG A   1      -1.186   2.121   0.374  1.00  0.00           H
+HETATM    9 H9   LIG A   1       1.293   2.118   0.373  1.00  0.00           H
+HETATM   10 H10  LIG A   1       2.533   0.000  -0.000  1.00  0.00           H
+HETATM   11 H11  LIG A   1       1.293  -2.118  -0.373  1.00  0.00           H
+HETATM   12 H12  LIG A   1      -1.186  -2.121  -0.374  1.00  0.00           H
+END
+"""
+
+
+def test_pdb_without_bond_records_is_read_as_the_right_molecule(tmp_path):
+    """Review 3, H1 (BLOCKER): proximity bonding made every bond single, so
+    chlorobenzene was read as chlorocyclohexane (ClC1CCCCC1), AddHs added six
+    hydrogens to a flat ring, and the gate reported nothing to flag."""
+    from rdkit import Chem
+    p = tmp_path / "clph.pdb"
+    p.write_text(_CLPH_PDB)
+    mol, problems, _ = em.read_structure(str(p))
+    assert not problems
+    assert Chem.MolToSmiles(Chem.RemoveHs(mol)) == "Clc1ccccc1"
+    _, info = em.from_file(str(p))
+    assert info["formula"] == "C6H5Cl"
+    assert "hydrogen(s) added" not in info["source"]
+
+
+def test_heavy_atom_only_pdb_is_refused_not_misread(tmp_path):
+    """Bond orders cannot be perceived without the hydrogens. Refusing is
+    correct; guessing reproduces H1."""
+    p = tmp_path / "heavy.pdb"
+    p.write_text("".join(l + "\n" for l in _CLPH_PDB.splitlines()
+                         if l.startswith("HETATM") and not l.endswith("H")) + "END\n")
+    mol, problems, _ = em.read_structure(str(p))
+    assert mol is None and problems[0][1] == "PDB_CONNECTIVITY"
+
+
+def test_h_count_guard_catches_a_reader_that_guesses_wrong(tmp_path, monkeypatch):
+    """Independent of the reader: replay the OLD PDB reader (proximity bonds,
+    all single) and check from_file refuses its output by hydrogen count."""
+    from rdkit import Chem
+    p = tmp_path / "clph.pdb"
+    p.write_text(_CLPH_PDB)
+
+    def old_reader(path, charge=0):
+        m = Chem.MolFromPDBFile(str(path), removeHs=False)
+        m.SetProp("_bonds", "perceived")
+        return m, [], 1
+    monkeypatch.setattr(em, "read_structure", old_reader)
+    with pytest.raises(ValueError, match="H_COUNT_MISMATCH"):
+        em.from_file(str(p))
+
+
+def test_file_bond_orders_with_only_polar_h_are_accepted(tmp_path):
+    """A docking pose may keep only its polar hydrogens. MOL/SDF carry their
+    own bond orders, so adding the rest is correct and must not be refused."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    full = Chem.AddHs(Chem.MolFromSmiles("OCc1ccccc1"))
+    AllChem.EmbedMolecule(full, randomSeed=1)
+    Chem.Kekulize(full, clearAromaticFlags=True)
+    rw = Chem.RWMol(full)
+    for a in sorted((a.GetIdx() for a in full.GetAtoms() if a.GetSymbol() == "H"
+                     and a.GetNeighbors()[0].GetSymbol() != "O"), reverse=True):
+        rw.RemoveAtom(a)
+    p = tmp_path / "polarH.mol"
+    Chem.MolToMolFile(rw.GetMol(), str(p))
+    _, info = em.from_file(str(p))
+    assert info["formula"] == "C7H8O" and "7 hydrogen(s) added" in info["source"]
 
 
 def test_charged_xyz_needs_and_accepts_the_charge(tmp_path):
@@ -202,6 +318,81 @@ def test_charged_xyz_needs_and_accepts_the_charge(tmp_path):
     assert em.read_structure(str(p), charge=0)[0] is None    # must fail
     mol, problems, _ = em.read_structure(str(p), charge=-1)  # must succeed
     assert mol is not None and not problems
+
+
+# ------------------------------------------------------- approved = computed
+# Review 3, H2: the assertion compared the input with itself and never read
+# the coordinates PySCF receives. These check the coordinates.
+@pytest.mark.parametrize("smiles", [
+    "CCO", "CC(=O)[O-]", r"C/C=C\C", "Clc1ccccc1",
+    "[N-]=C=S",           # perceived from geometry as N#C[S-]: bond orders are not checked
+    "CS(C)=O",            # likewise C[S+](C)[O-]
+    "CC(O)C(N)C(=O)O",    # stereo left open: any completion is the approved structure
+    "C[CH2]",             # radical
+    "[2H]OC",             # isotope: carried by the approval, invisible in coordinates
+])
+def test_computed_structure_matches_its_own_approval(smiles):
+    from rdkit import Chem
+    spec, _ = em.from_smiles(smiles)
+    ok, computed, reason = em.verify_computed(spec, Chem.MolFromSmiles(smiles))
+    assert ok, reason
+
+
+@pytest.mark.parametrize("approved, computed", [
+    ("CCO", "CC=O"),                        # another molecule (H count)
+    ("COC", "CCO"),                         # constitutional isomer, same formula
+    ("Oc1ncccc1", "O=c1[nH]cccc1"),         # tautomer
+    (r"C/C=C\C", "C/C=C/C"),                # E computed for a Z approval
+    ("C[C@@H](O)CC", "C[C@H](O)CC"),        # the other enantiomer
+])
+def test_computing_a_different_structure_is_detected(approved, computed):
+    from rdkit import Chem
+    spec, _ = em.from_smiles(computed)
+    ok, _, reason = em.verify_computed(spec, Chem.MolFromSmiles(approved))
+    assert not ok and reason
+
+
+class _ReachedCompute(Exception):
+    pass
+
+
+def _stop_before_scf(monkeypatch):
+    def stop(*a, **k):
+        raise _ReachedCompute
+    monkeypatch.setattr(em, "estimate_cost", stop)
+
+
+def test_main_refuses_coordinates_that_are_not_the_approved_structure(monkeypatch):
+    """Fault injection at the boundary the old check could not see: the gate
+    approves CCO, the geometry step hands PySCF acetaldehyde. Only the
+    coordinates are swapped; the info dict still describes CCO, so a check
+    that reads anything but the coordinates passes."""
+    real = em.from_smiles
+    monkeypatch.setattr(em, "from_smiles",
+                        lambda s, **k: (real("CC=O", **k)[0], real(s, **k)[1]))
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO"])
+    with pytest.raises(SystemExit, match="not the one about to be computed"):
+        em.main()
+
+
+def test_main_lets_a_healthy_structure_through_to_the_scf(monkeypatch):
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-]"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
+def test_a_forced_unverifiable_structure_warns_instead_of_refusing(monkeypatch, capsys):
+    """A salt is BLOCKed by the gate; --force computes it anyway, and distance
+    bonding ties Na+ to the carboxylate, so the identity cannot be confirmed.
+    The user has already overridden the gate: say so, do not refuse."""
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-].[Na+]",
+                                      "--force"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+    assert "could not be verified" in capsys.readouterr().err
 
 
 def test_smiles_geometry_is_deterministic():

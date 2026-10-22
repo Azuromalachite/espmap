@@ -24,7 +24,9 @@ FIXED IN v4 (adversarial review 2, see esp-adversarial-review-2.md)
     --lim on a SEQUENTIAL scale re-imposed (-lim, +lim) -- the exact symmetric
       range that branch exists to avoid. --vmin/--vmax added instead.
     The gate parsed one object while the SCF computed another; the approved
-      structure is now asserted against the computed one.
+      structure is now asserted against the computed one. (Review 3, H2: that
+      assertion compared the input with itself. verify_computed now checks
+      the coordinates PySCF receives.)
     Fluorine no longer reports a sigma-hole, because it does not form one.
 
 NEW IN v3 — the structure check (--check)
@@ -270,21 +272,38 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0):
         flat = max(abs(c.GetAtomPosition(i).z)
                    for i in range(mol.GetNumAtoms())) < 1e-6
     n_h_before = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H")
+    perceived = mol.HasProp("_bonds") and mol.GetProp("_bonds") == "perceived"
 
     if is3d and not flat:
+        n_supplied = mol.GetNumAtoms()
         mol = Chem.AddHs(mol, addCoords=True)
         n_h_added = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H") - n_h_before
+        # Independent of the reader: if bond orders were INFERRED from the
+        # coordinates and the file already had hydrogens, adding more means
+        # the inferred bonds disagree with the file (review 3 H1: 5 H in the
+        # file, 11 after AddHs). Files that carry their own bond orders
+        # (MOL/SDF/CDXML) may legitimately omit some H, e.g. a docking pose
+        # that kept only its polar hydrogens, so they are not refused here.
+        if perceived and n_h_before and n_h_added:
+            raise ValueError(
+                f"H_COUNT_MISMATCH: the file has {n_h_before} hydrogen(s) but the "
+                f"bonds perceived from its coordinates need {n_h_added} more. The "
+                f"perceived structure is not the file's molecule; supply MOL/SDF "
+                f"with explicit bond orders.")
         source = "file 3D coordinates used as-is"
         ff, spread, n_emb, n_conv = "none", 0.0, 1, 1
         if n_h_added:
             props = AllChem.MMFFGetMoleculeProperties(mol, mmffVariant="MMFF94s")
             if props is not None:
                 field = AllChem.MMFFGetMoleculeForceField(mol, props)
-                for a in mol.GetAtoms():
-                    if a.GetSymbol() != "H":
-                        field.AddFixedPoint(a.GetIdx())
+                # AddHs appends, so indices below n_supplied are the file's
+                # atoms. Freeze all of them, supplied H included: a pose's
+                # O-H orientation was set by its environment, and relaxing it
+                # here would replace that with the isolated-molecule optimum.
+                for i in range(n_supplied):
+                    field.AddFixedPoint(i)
                 field.Minimize(maxIts=500)
-                ff = "MMFF94s, hydrogens only (heavy atoms frozen)"
+                ff = "MMFF94s, added hydrogens only (supplied atoms frozen)"
             source += f"; {n_h_added} hydrogen(s) added"
         best = -1
     else:
@@ -513,6 +532,40 @@ def parse_for_check(smiles=None, path=None, charge=0):
     return mol, problems
 
 
+def _perceive_bonds(m, charge, fmt):
+    """Coordinates only -> mol with perceived connectivity and bond orders.
+
+    Rebuilds the molecule from elements and positions, so no bond the reader
+    guessed survives, then runs RDKit's xyz2mol. Marks the result
+    _bonds=perceived so from_file can tell orders read from a file apart from
+    orders inferred here. Returns the mol, or a list holding one BLOCK.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import rdDetermineBonds
+    rw = Chem.RWMol()
+    for a in m.GetAtoms():
+        rw.AddAtom(Chem.Atom(a.GetAtomicNum()))
+    conf = Chem.Conformer(m.GetNumAtoms())
+    src = m.GetConformer()
+    for i in range(m.GetNumAtoms()):
+        conf.SetAtomPosition(i, src.GetAtomPosition(i))
+    conf.Set3D(True)
+    rw.AddConformer(conf, assignId=True)
+    mol = rw.GetMol()
+    try:
+        rdDetermineBonds.DetermineBonds(mol, charge=charge)
+        Chem.SanitizeMol(mol)              # AddHs needs implicit valences
+    except Exception as e:
+        return [(BLOCK, f"{fmt}_CONNECTIVITY",
+                 f"could not perceive bonds from {fmt} coordinates at charge "
+                 f"{charge:+d}: {e}",
+                 "include every hydrogen in the file and pass --charge if the "
+                 "species is not neutral, or supply a format that carries bond "
+                 "orders (MOL/SDF/CDXML)")]
+    mol.SetProp("_bonds", "perceived")
+    return mol
+
+
 def read_structure(path, charge=0):
     """The single structure reader. Returns (mol or None, problems, n_found).
 
@@ -531,27 +584,24 @@ def read_structure(path, charge=0):
                     if m is not None]
         elif ext == "mol":
             mols = [Chem.MolFromMolFile(str(path), removeHs=False)]
-        elif ext == "xyz":
-            # An XYZ file has coordinates and NO connectivity. RDKit's reader
-            # returns a bondless mol, which every downstream check reads as
-            # one fragment per atom: v3 rejected EVERY xyz file as
-            # "MULTIPLE_FRAGMENTS", with a message about salts.
-            m = Chem.MolFromXYZFile(str(path))
+        elif ext in ("xyz", "pdb"):
+            # Neither format carries trustworthy bond ORDERS. XYZ has no bonds
+            # at all (v3 rejected every xyz as "MULTIPLE_FRAGMENTS"). PDB has
+            # proximity bonds, all single unless CONECT says otherwise: review 3
+            # H1 read chlorobenzene.pdb as chlorocyclohexane, AddHs filled the
+            # "missing" valences, and every check passed. Both now go through
+            # one route: keep the coordinates, discard any bonds, perceive
+            # connectivity and orders from geometry.
+            if ext == "xyz":
+                m = Chem.MolFromXYZFile(str(path))
+            else:
+                m = Chem.MolFromPDBFile(str(path), removeHs=False, sanitize=False,
+                                        proximityBonding=False)
             if m is not None:
-                from rdkit.Chem import rdDetermineBonds
-                try:
-                    rdDetermineBonds.DetermineBonds(m, charge=charge)
-                    Chem.SanitizeMol(m)      # AddHs needs implicit valences
-                except Exception as e:
-                    return None, [(BLOCK, "XYZ_CONNECTIVITY",
-                                   f"could not perceive bonds from coordinates "
-                                   f"at charge {charge:+d}: {e}",
-                                   f"pass --charge if the species is not neutral, "
-                                   f"or supply a format that carries connectivity "
-                                   f"(MOL/SDF/CDXML)")], 0
+                m = _perceive_bonds(m, charge, ext.upper())
+                if isinstance(m, list):              # a BLOCK finding
+                    return None, m, 0
             mols = [m]
-        elif ext == "pdb":
-            mols = [Chem.MolFromPDBFile(str(path), removeHs=False)]
         else:
             return None, [(BLOCK, "UNSUPPORTED_FORMAT",
                            f"'.{ext}' is not a format this reads",
@@ -565,6 +615,78 @@ def read_structure(path, charge=0):
                        "re-export from the drawing program; check for R-groups "
                        "or query atoms the exporter could not represent")], 0
     return mols[0], [], len(mols)
+
+
+def _skeleton(m):
+    """Elements and connectivity only: every bond single, no charge, no
+    radical, no isotope. What two Lewis structures of one molecule share."""
+    from rdkit import Chem
+    rw = Chem.RWMol()
+    for a in m.GetAtoms():
+        b = Chem.Atom(a.GetAtomicNum())
+        b.SetNoImplicit(True)
+        rw.AddAtom(b)
+    for bd in m.GetBonds():
+        rw.AddBond(bd.GetBeginAtomIdx(), bd.GetEndAtomIdx(), Chem.BondType.SINGLE)
+    s = rw.GetMol()
+    s.UpdatePropertyCache(strict=False)
+    Chem.FastFindRings(s)
+    return s
+
+
+def verify_computed(spec, approved, max_stereo=1024):
+    """Is the geometry PySCF will receive the structure the gate approved?
+    Returns (ok, computed_smiles, reason).
+
+    Review 3 H2: the old assertion compared the input string with itself (and,
+    for files, the reader with itself), and never read `spec`. This reads only
+    `spec`. The SCF sees nuclei, charge and spin, never bond orders, so what is
+    checked is what the coordinates fix:
+      - connectivity, hydrogens included: perceived from distances and matched
+        to the approval's skeleton. Catches another molecule, an isomer, a
+        tautomer, and a reader that guessed bond orders and so added the wrong
+        hydrogens;
+      - stereo: assigned from 3D on the matched approval, and accepted if it is
+        one completion of what the approval specified. Catches E for Z and the
+        wrong enantiomer; a centre the user left open may come out either way.
+    Bond orders and charge placement are taken from the approval, so another
+    resonance form ([N-]=C=S vs N#C[S-]) is not a false refusal. Isotope
+    positions cannot be checked: coordinates carry elements only.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import rdDetermineBonds
+    from rdkit.Chem.EnumerateStereoisomers import (EnumerateStereoisomers,
+                                                   StereoEnumerationOptions)
+    rows = [t.split() for t in spec.split(";")]
+    g = Chem.MolFromXYZBlock(f"{len(rows)}\n\n" + "\n".join(" ".join(r) for r in rows))
+    rdDetermineBonds.DetermineConnectivity(g)
+    tmpl = Chem.AddHs(approved)
+    if tmpl.GetNumAtoms() != g.GetNumAtoms():
+        return False, None, (f"{g.GetNumAtoms()} atoms in the geometry, "
+                             f"{tmpl.GetNumAtoms()} in the approved structure")
+    sk_t, sk_g = _skeleton(tmpl), _skeleton(g)
+    match = (sk_g.GetSubstructMatch(sk_t)
+             if sk_t.GetNumBonds() == sk_g.GetNumBonds() else ())
+    if not match:
+        return False, None, ("the connectivity perceived from the coordinates is "
+                             "not the approved structure's")
+    conf = Chem.Conformer(tmpl.GetNumAtoms())
+    for i, j in enumerate(match):
+        conf.SetAtomPosition(i, [float(x) for x in rows[j][1:4]])
+    conf.Set3D(True)
+    tmpl.RemoveAllConformers()
+    tmpl.AddConformer(conf, assignId=True)
+    Chem.AssignStereochemistryFrom3D(tmpl)
+    computed = Chem.MolToSmiles(Chem.RemoveHs(tmpl))
+    opts = StereoEnumerationOptions(onlyUnassigned=True, unique=True,
+                                    maxIsomers=max_stereo + 1)
+    allowed = {Chem.MolToSmiles(m) for m in EnumerateStereoisomers(approved, options=opts)}
+    if len(allowed) > max_stereo:
+        return True, computed, (f"more than {max_stereo} stereo completions; "
+                                f"connectivity verified, stereo not")
+    if computed not in allowed:
+        return False, computed, "the stereochemistry in the coordinates differs"
+    return True, computed, ""
 
 
 def estimate_cost(spec, basis, charge=0, spin=0):
@@ -1270,8 +1392,11 @@ def main():
         approved = _C.MolToSmiles(_C.RemoveHs(probe))
 
     if a.file:
-        spec, gi = from_file(a.file, n_confs=a.nconfs, seed=a.seed,
-                             charge=a.charge or 0)
+        try:
+            spec, gi = from_file(a.file, n_confs=a.nconfs, seed=a.seed,
+                                 charge=a.charge or 0)
+        except ValueError as e:              # e.g. H_COUNT_MISMATCH: refuse, no traceback
+            raise SystemExit(f"structure rejected: {e}") from None
         print(f"{a.file}  ->  {gi['formula']}, charge {gi['charge']:+d}")
         print(f"  SMILES as read: {gi['smiles']}")
         print(f"  geometry: {gi['source']}")
@@ -1289,18 +1414,26 @@ def main():
               f"{gi['forcefield']}")
         print(f"  {gi['n_converged']}/{gi['n_embedded']} conformers converged, "
               f"seed 0x{gi['seed']:x}")
+    verified, computed = None, None
     if gi is not None:
-        # The gate inspected a separately parsed object. Assert that the
-        # structure about to be computed is the one that was approved --
-        # otherwise the gate is a seal over a copy.
+        # The gate inspected a separately parsed object. Check that the
+        # COORDINATES about to be computed are the structure it approved --
+        # otherwise the gate is a seal over a copy. Comparing gi["smiles"]
+        # did not do this: it is the input string, or the reader's own output
+        # (review 3, H2).
         if approved is not None:
-            from rdkit import Chem as _C2
-            computed = _C2.CanonSmiles(gi["smiles"])
-            if computed != approved:
-                raise SystemExit(
-                    f"the structure that passed the check is not the one about "
-                    f"to be computed:\n  approved: {approved}\n  computing: "
-                    f"{computed}\nrefusing to continue")
+            verified, computed, why = verify_computed(spec, _C.RemoveHs(probe))
+            if not verified:
+                msg = (f"the structure that passed the check is not the one about "
+                       f"to be computed: {why}\n  approved:  {approved}\n  "
+                       f"computing: {computed or '(no match)'}")
+                if not a.force:
+                    raise SystemExit(msg + "\nrefusing to continue (--force "
+                                     "computes it anyway)")
+                print(f"WARNING: {msg}\nthe computed structure could not be "
+                      f"verified; continuing because of --force", file=sys.stderr)
+            elif why:
+                print(f"note: {why}", file=sys.stderr)
         if a.charge is None:
             charge = gi["charge"]
         elif a.charge != gi["charge"]:
@@ -1420,6 +1553,7 @@ def main():
                                     __file__))).stdout.strip() or None
         rec = dict(
             input=dict(smiles=a.smiles, file=a.file, approved_smiles=approved,
+                       computed_smiles=computed, structure_verified=verified,
                        formula=(gi or {}).get("formula"), charge=charge, spin=spin),
             settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
                           density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
