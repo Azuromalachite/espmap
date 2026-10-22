@@ -43,13 +43,16 @@ before and after any change to `esp_at_points`, `run_scf`, `total_dm` or
 | scale | `choose_scale`, `resolve_cmap`, `cmap_preflight`, `cmap_after_scf` | diverging only if the field changes sign; the map follows the scale |
 | render | `look_at`, `render`, `build_maps` | own z-buffer rasteriser, no VTK |
 
-### The one idea worth preserving
+### The implementation choice worth preserving
 
 `esp_at_points` is called on the **isosurface vertices**, never on a
 volumetric grid. ~10⁴ points instead of ~10⁶: about 100× cheaper, and it
 removes the cube-file interpolation error because the potential is computed
 exactly where it is drawn. If you ever find yourself writing a `.cube` file,
-stop and re-read this paragraph.
+stop and re-read this paragraph. It is an established approach to
+quantitative molecular surfaces (Bulat et al. 2010; Lu & Chen 2012), not an
+espmap invention: describe it that way, and keep `docs/prior-art.md` current
+when a feature builds on published methods.
 
 ## Invariants — do not regress these
 

@@ -1,0 +1,4 @@
+{"molecule": "water", "smiles": "O", "basis": "def2-tzvp", "xc": "b3lyp", "nelectron": 10, "integral_rho": 10.000000118764419, "code": "unknown", "inside_0.001": 0.9916072692960293, "inside_0.002": 0.9852719215857698}
+{"molecule": "chlorobenzene", "smiles": "Clc1ccccc1", "basis": "def2-tzvp", "xc": "b3lyp", "nelectron": 58, "integral_rho": 58.00002012004193, "code": "unknown", "inside_0.001": 0.9948403570147527, "inside_0.002": 0.9906058656185714}
+{"molecule": "acetate", "smiles": "CC(=O)[O-]", "basis": "def2-tzvp", "xc": "b3lyp", "nelectron": 32, "integral_rho": 31.999987033417256, "code": "unknown", "inside_0.001": 0.9936328920798734, "inside_0.002": 0.9882948430532447}
+{"molecule": "decanoic acid", "smiles": "CCCCCCCCCC(=O)O", "basis": "def2-tzvp", "xc": "b3lyp", "nelectron": 96, "integral_rho": 95.99984706171236, "code": "unknown", "inside_0.001": 0.9945074242676843, "inside_0.002": 0.9899891655029928}

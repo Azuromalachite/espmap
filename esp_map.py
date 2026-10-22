@@ -124,11 +124,13 @@ CHANGES IN v2 (all driven by the adversarial review, see esp-adversarial-review.
 WHAT IT DOES
     1. DFT single point (PySCF)
     2. electron density on a regular grid
-    3. marching cubes at rho = 0.002 e/bohr^3 (Bader surface, ~98% of rho)
+    3. marching cubes at rho = 0.002 e/bohr^3 (Bader et al. 1987; encloses
+       98.5-99.1 % of the electrons here, bench/isosurface_enclosed.jsonl)
     4. ESP evaluated ONLY at the isosurface vertices, not on a full grid
        -- ~10^4 points instead of ~10^6, so this costs seconds, and the
           potential is evaluated exactly where it is displayed rather than
-          interpolated onto the surface from a cube file
+          interpolated onto the surface from a cube file. An established
+          approach (Bulat et al. 2010; Lu & Chen 2012), see docs/prior-art.md
     5. z-buffered render with deliberately weak shading, so the colormap's
        lightness carries the data instead of fighting the lighting
 
@@ -902,9 +904,11 @@ def reaction_field_at_points(mf, pts):
     solvent's own response, the apparent surface charges on the cavity, is a
     second term. Review 3 H7: on the chlorobenzene sigma-hole the two
     conventions give solvent shifts of opposite sign, and only one was stated.
-    PySCF's charges are Gaussian-smeared (exponent charge_exp), so each
-    contributes q erf(zeta r) / r: finite at a vertex that sits near the
-    cavity, where a bare point charge would blow up.
+    PySCF's charges are Gaussian-smeared (exponent charge_exp; the
+    switching/Gaussian scheme of Lange & Herbert 2010 and York & Karplus 1999,
+    as cited in pyscf/solvent/pcm.py), so each contributes q erf(zeta r) / r:
+    finite at a vertex that sits near the cavity, where a bare point charge
+    would blow up.
     """
     from scipy.special import erf
     ws = mf.with_solvent
@@ -1616,6 +1620,10 @@ def render_fields(cmap, kind, vlim, elev, azim, size, ambient):
 
 def sigma_hole(verts, V, mol, i_sub=6, pr_min=0.3, pe_max=1.6, i_bond=None):
     """V_max on the outer cap of the substituent, along the X-to-neighbour axis.
+
+    The sigma-hole and its surface V_s,max are established (Clark et al.
+    2007; Murray, Lane & Politzer 2009; docs/prior-art.md). What is espmap's
+    own is this implementation: the cone around the bond axis, below.
 
     v3 took the axis as (X - mean of atoms 0..5), hard-coding "the first six
     atoms are the benzene ring". For any other molecule that reference point

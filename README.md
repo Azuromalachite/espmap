@@ -30,16 +30,22 @@ deuteranopia, greyscale.*
 
 1. DFT single point (PySCF)
 2. electron density on a regular grid
-3. marching cubes at ρ = 0.002 e·bohr⁻³ — the Bader surface, ~98 % of the density
+3. marching cubes at ρ = 0.002 e·bohr⁻³, the density surface of Bader et al.
+   (1987); for the molecules measured here it encloses 98.5–99.1 % of the
+   electrons (`bench/isosurface_enclosed.jsonl`)
 4. **the ESP evaluated only at the isosurface vertices**, not on a volumetric grid
 5. a z-buffered render with deliberately weak shading
 
-Step 4 is the one worth borrowing. The conventional route writes two cube
-files — density and potential — then interpolates the second onto an
-isosurface of the first. Evaluating the potential at the ~10⁴ surface vertices
-instead of ~10⁶ grid points is about 100× cheaper *and* removes the
-interpolation error entirely, because the potential is computed exactly where
-it is displayed. Bromobenzene, end to end, on one core:
+**Step 4 is an implementation choice, not an invention.** A common route
+writes two cube files, density and potential, then interpolates the second
+onto an isosurface of the first. Quantitative molecular-surface methods have
+long evaluated properties directly on a polygonal surface instead (Bulat et
+al., *J. Mol. Model.* 2010; Lu & Chen, *J. Mol. Graph. Model.* 2012; see
+[docs/prior-art.md](docs/prior-art.md)). espmap does the same inside a small
+PySCF pipeline. What it adds is the measurement: evaluating the potential at
+the ~10⁴ surface vertices instead of ~10⁶ grid points is about 100× cheaper,
+and there is no interpolation error, because the potential is computed exactly
+where it is displayed. Bromobenzene, end to end, on one core:
 
 | step | time |
 | --- | --- |
@@ -299,6 +305,20 @@ Built on [PySCF](https://pyscf.org), [RDKit](https://rdkit.org),
 [cmcrameri](https://github.com/callumrollo/cmcrameri). The `vik`, `broc`,
 `cork`, `lajolla` and `batlow` maps are Fabio Crameri's *Scientific colour
 maps*; please cite them if you use the figures.
+
+The chemistry is not new. The electrostatic potential on the ρ = 0.002
+surface, its extrema and statistics, and the σ-hole are established methods
+(Politzer, Murray, Clark and co-workers; Bader; Bulat et al.; Lu & Chen and
+Multiwfn). [docs/prior-art.md](docs/prior-art.md) lists what espmap uses,
+what it adapts and what may be specific to it, and
+[docs/references.bib](docs/references.bib) has the verified references. To
+cite espmap itself, see [CITATION.cff](CITATION.cff).
+
+AI-assisted coding tools (Claude, via Claude Code) were used for
+implementation and adversarial review; those commits carry a
+`Co-Authored-By` line. The scientific specification, acceptance criteria and
+interpretation are the author's, and every change is tested against the
+invariants in `CLAUDE.md` and the data in `bench/`.
 
 MIT licensed. If it is useful in published work, a link back is appreciated but
 not required.

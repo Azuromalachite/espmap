@@ -225,3 +225,57 @@ def test_small_basis_warning_quotes_the_basis_penalty():
 ], ids=lambda v: v if len(str(v)) < 40 else "")
 def test_retracted_wording_does_not_return(where, text, phrase):
     assert phrase not in text, f"{where} reintroduced a retracted claim: {phrase!r}"
+
+
+# ------------------------------------------------- prior art and citation
+PRIOR = (ROOT / "docs" / "prior-art.md").read_text(encoding="utf-8")
+BIB = (ROOT / "docs" / "references.bib").read_text(encoding="utf-8")
+
+
+def _bib_keys():
+    import re
+    return re.findall(r"^@\w+\{([^,\s]+),", BIB, flags=re.M)
+
+
+def test_every_reference_cited_in_prior_art_is_in_the_bibliography():
+    import re
+    keys = set(_bib_keys())
+    cited = set(re.findall(r"`([a-z_]+\d{4}[a-z0-9]*|rdkit|pyberny|crameri_scm)`", PRIOR))
+    assert cited, "prior-art.md cites nothing"
+    assert not cited - keys, f"cited but not in references.bib: {sorted(cited - keys)}"
+    assert not keys - cited, f"in references.bib but never cited: {sorted(keys - cited)}"
+
+
+def test_every_bibliography_entry_has_a_doi():
+    import re
+    entries = re.split(r"^@", BIB, flags=re.M)[1:]
+    missing = [e.split(",")[0] for e in entries if "doi" not in e]
+    assert not missing, f"no DOI: {missing}"
+
+
+def test_citation_cff_version_matches_the_package():
+    import re
+    cff = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    v_cff = re.search(r"^version: (\S+)", cff, re.M).group(1)
+    v_pkg = re.search(r'^version = "([^"]+)"', pyproject, re.M).group(1)
+    assert v_cff == v_pkg
+
+
+def test_enclosed_density_figure_matches_the_data():
+    """The README said "~98 %", which is Bader's figure for the 0.001 au
+    envelope (H in hydrocarbons). The 0.002 figure espmap quotes is its own."""
+    f = [r["inside_0.002"] for r in _jsonl("isosurface_enclosed.jsonl")]
+    rng = f"{100 * min(f):.1f}–{100 * max(f):.1f} %"
+    assert rng == "98.5–99.1 %"
+    assert rng in TEXT["README.md"] and rng in PRIOR
+    assert "~98 %" not in TEXT["README.md"].split("## Credit")[0]
+    assert "~98%" not in DOC
+
+
+@pytest.mark.parametrize("phrase", ["worth borrowing", "trick worth keeping",
+                                    "idea worth preserving"])
+def test_borrowed_method_is_not_presented_as_an_invention(phrase):
+    for name in ("README.md", "CLAUDE.md"):
+        assert phrase not in TEXT[name], name
+    assert phrase not in (ROOT / "docs" / "colormaps.md").read_text(encoding="utf-8")
