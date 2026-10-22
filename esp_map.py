@@ -394,7 +394,42 @@ TESTED_ELEMENTS = set("H B C N O F Si P S Cl Br I Se".split())
 BLOCK, WARN, INFO = "BLOCK", "WARN", "INFO"
 
 
-def check_structure(mol, basis="def2-tzvp", spin=0):
+def atom_map_findings(mol, smiles=None):
+    """Atom maps are all or nothing on heavy atoms, unique, and never on a
+    hydrogen (per-site-spec section 1, v1). A site table keyed by maps with
+    holes or repeats is worse than no maps. mol must still carry its
+    hydrogens (RemoveHs drops mapped ones), and for SMILES the string is
+    re-read with hydrogens kept: RDKit's parser merges [H:4] into an implicit
+    hydrogen and loses the map without a word."""
+    from rdkit import Chem
+    out = []
+    atoms = list(mol.GetAtoms())
+    if smiles:
+        ps = Chem.SmilesParserParams()
+        ps.removeHs = False
+        raw = Chem.MolFromSmiles(smiles, ps)
+        if raw is not None:
+            atoms = list(raw.GetAtoms())
+    h_maps = [a.GetAtomMapNum() for a in atoms if a.GetAtomicNum() == 1 and a.GetAtomMapNum()]
+    heavy = [a.GetAtomMapNum() for a in atoms if a.GetAtomicNum() > 1]
+    mapped = [m for m in heavy if m]
+    if h_maps:
+        out.append((BLOCK, "MAPPED_HYDROGEN",
+                    f"atom map(s) {h_maps} on hydrogen; in this version a hydrogen "
+                    f"belongs to its heavy atom's site and has no identity of its own",
+                    "remove the map numbers from the hydrogens"))
+    if mapped and len(mapped) < len(heavy):
+        out.append((BLOCK, "PARTIAL_ATOM_MAP",
+                    f"{len(mapped)} of {len(heavy)} heavy atoms carry an atom map",
+                    "map every heavy atom or none"))
+    dup = sorted({m for m in mapped if mapped.count(m) > 1})
+    if dup:
+        out.append((BLOCK, "DUPLICATE_ATOM_MAP", f"atom map(s) {dup} used more than once",
+                    "renumber the atom maps so each is unique"))
+    return out
+
+
+def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None):
     """Can this drawing be translated into SMILES unambiguously, and is the
     result a molecule this pipeline can compute?
 
@@ -402,12 +437,15 @@ def check_structure(mol, basis="def2-tzvp", spin=0):
     ambiguous to a machine. Each finding below names what to change IN THE
     DRAWING, because that is where the fix belongs.
 
+    maps_from: the parsed molecule WITH its hydrogens, for the atom-map rules
+    (callers pass RemoveHs(mol) here, which drops mapped hydrogens).
+
     Returns (verdict, findings) where findings is a list of
     (severity, code, message, remedy).
     """
     from rdkit import Chem
     from rdkit.Chem import AllChem
-    out = []
+    out = atom_map_findings(maps_from if maps_from is not None else mol, smiles)
 
     # --- 1. does it survive sanitisation at all ---
     probs = Chem.DetectChemistryProblems(mol)
@@ -740,11 +778,19 @@ def verify_computed(spec, approved, max_stereo=1024):
     Bond orders and charge placement are taken from the approval, so another
     resonance form ([N-]=C=S vs N#C[S-]) is not a false refusal. Isotope
     positions cannot be checked: coordinates carry elements only.
+
+    Atom maps are stripped first: this is CHEMICAL identity. Maps make
+    graph-equivalent groups distinct labels (isopropyl's two methyls), RDKit
+    then perceives a stereocentre the chemistry does not have, and a correctly
+    mapped isopropanol was refused. Which atom is which is verify_mapping's job.
     """
     from rdkit import Chem
     from rdkit.Chem import rdDetermineBonds
     from rdkit.Chem.EnumerateStereoisomers import (EnumerateStereoisomers,
                                                    StereoEnumerationOptions)
+    approved = Chem.Mol(approved)
+    for a in approved.GetAtoms():
+        a.SetAtomMapNum(0)
     rows = [t.split() for t in spec.split(";")]
     g = Chem.MolFromXYZBlock(f"{len(rows)}\n\n" + "\n".join(" ".join(r) for r in rows))
     rdDetermineBonds.DetermineConnectivity(g)
@@ -775,6 +821,51 @@ def verify_computed(spec, approved, max_stereo=1024):
     if computed not in allowed:
         return False, computed, "the stereochemistry in the coordinates differs"
     return True, computed, ""
+
+
+def verify_mapping(spec, probe, reference=False, tol=1e-3):
+    """Is spec atom i the approval's atom i? Returns (ok, reason).
+
+    verify_computed searches for SOME match between spec and the approval, so
+    it accepts a geometry whose atoms were reordered, and a site table keyed
+    by index (and by atom map) would then point at the wrong atoms. This
+    checks the correspondence itself (per-site-spec section 1, `mapped`):
+      - element and bonded neighbours of every atom, by index, hydrogens
+        included, against AddHs(probe), whose order is the spec's order;
+      - with reference=True (a file whose 3D coordinates were kept, e.g. a
+        docking pose), every atom the file supplied must still be where the
+        file put it: map 5 points at the coordinates the adapter wrote.
+    A consistent swap of graph-equivalent groups passes the first test and
+    only the second can catch it. Bond orders are not compared, as in
+    verify_computed: the SCF never sees them.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import rdDetermineBonds
+    rows = [t.split() for t in spec.split(";")]
+    tmpl = Chem.AddHs(probe)
+    if tmpl.GetNumAtoms() != len(rows):
+        return False, f"{len(rows)} atoms in the geometry, {tmpl.GetNumAtoms()} in the approval"
+    for i, a in enumerate(tmpl.GetAtoms()):
+        if a.GetSymbol() != rows[i][0]:
+            return False, (f"atom order differs: atom {i} is {rows[i][0]} in the geometry, "
+                           f"{a.GetSymbol()} in the approval")
+    g = Chem.MolFromXYZBlock(f"{len(rows)}\n\n" + "\n".join(" ".join(r) for r in rows))
+    rdDetermineBonds.DetermineConnectivity(g)
+    for i in range(len(rows)):
+        got = sorted(n.GetIdx() for n in g.GetAtomWithIdx(i).GetNeighbors())
+        want = sorted(n.GetIdx() for n in tmpl.GetAtomWithIdx(i).GetNeighbors())
+        if got != want:
+            return False, (f"atom order differs: atom {i} ({rows[i][0]}) is bonded to "
+                           f"{got} in the geometry, {want} in the approval")
+    if reference and probe.GetNumConformers():
+        P = probe.GetConformer().GetPositions()
+        X = np.array([[float(v) for v in r[1:4]] for r in rows[:len(P)]])
+        moved = np.linalg.norm(X - P, axis=1)
+        if moved.max() > tol:
+            i = int(moved.argmax())
+            return False, (f"atom {i} ({rows[i][0]}) is {moved[i]:.3f} A from where the "
+                           f"file put it; the file's atom order is not the computed one")
+    return True, ""
 
 
 def estimate_cost(spec, basis, charge=0, spin=0):
@@ -1722,11 +1813,63 @@ def _delta(nn, rs):
     return {k: None if nn[k] is None or rs[k] is None else rs[k] - nn[k] for k in _DELTA}
 
 
-def site_report(P, faces, V, coords, symbols, atom_maps=None, h_source=None):
-    """atoms and default reaction_sites under both partition rules (spec
-    sections 1-3). P and coords in A. Every atom is listed, a buried one with
-    area 0 and null potentials, so 'not on the surface' never reads as 'not
-    computed'."""
+def load_site_groups(path):
+    """--sites file: a JSON list of {"label": ..., "atoms": [...]}."""
+    import json
+    with open(path) as f:
+        groups = json.load(f)
+    if not isinstance(groups, list):
+        raise ValueError("a JSON list of {label, atoms} objects is expected")
+    return groups
+
+
+def resolve_site_groups(groups, symbols, coords, atom_maps):
+    """Caller-named reaction sites -> [(label, sorted atom indices)].
+
+    Atoms are named by atom-map number when the input is mapped, else by atom
+    index; "3+H" adds that atom's hydrogens (a C-H site is the unit a
+    desaturation or oxidation question is about, spec section 1). espmap only
+    checks that every named atom exists: it does not know what an enolate is.
+    Raises ValueError naming the group and atom at fault. Groups may overlap.
+    """
+    by_name = ({m: i for i, m in atom_maps.items()} if atom_maps
+               else {i: i for i in range(len(symbols))})
+    naming = "atom map" if atom_maps else "atom index"
+    parent = site_parents(coords, symbols)
+    out, seen = [], set()
+    for g in groups:
+        label = g.get("label") if isinstance(g, dict) else None
+        if not isinstance(label, str) or not label:
+            raise ValueError(f"group {g!r} has no label")
+        if label in seen:
+            raise ValueError(f"label {label!r} is used twice")
+        seen.add(label)
+        members = set()
+        for tok in g.get("atoms") or []:
+            name, with_h = tok, False
+            if isinstance(tok, str):
+                head, plus, tail = tok.partition("+")
+                if not head.isdigit() or (plus and tail != "H"):
+                    raise ValueError(f"{label!r}: {tok!r} is not an atom ('3' or '3+H')")
+                name, with_h = int(head), bool(plus)
+            if not isinstance(name, int) or name not in by_name:
+                raise ValueError(f"{label!r}: no {naming} {tok} in this molecule")
+            i = by_name[name]
+            members.add(i)
+            if with_h:
+                members.update(j for j, p in enumerate(parent) if p == i)
+        if not members:
+            raise ValueError(f"{label!r} names no atoms")
+        out.append((label, sorted(members)))
+    return out
+
+
+def site_report(P, faces, V, coords, symbols, atom_maps=None, h_source=None, groups=None):
+    """atoms and reaction_sites under both partition rules (spec sections
+    1-3). P and coords in A. Reaction sites are the caller's groups
+    [(label, atom indices)], or by default each heavy atom with its
+    hydrogens. Every atom is listed, a buried one with area 0 and null
+    potentials, so 'not on the surface' never reads as 'not computed'."""
     parent = site_parents(coords, symbols)
     owner = {r: partition_surface(P, faces, coords, symbols, r) for r in PARTITION_RULES}
 
@@ -1744,13 +1887,20 @@ def site_report(P, faces, V, coords, symbols, atom_maps=None, h_source=None):
                           parent=parent[i],
                           h_source=(h_source[i] if h_source and s == "H" else None),
                           **per_rule([i])))
+    if groups is None:
+        source = "default"
+        groups = [(f"{symbols[h]}{h}", [h] + [i for i, p in enumerate(parent) if p == h])
+                  for h, s in enumerate(symbols) if s != "H"]
+    else:
+        source = "caller"
     sites = []
-    for h in (i for i, s in enumerate(symbols) if s != "H"):
-        members = [h] + [i for i, p in enumerate(parent) if p == h]
-        polar_gen = (symbols[h] in _POLAR and h_source is not None and
-                     any(h_source[i] not in (None, "supplied") for i in members[1:]))
-        sites.append(dict(label=f"{symbols[h]}{h}", source="default", atoms=members,
-                          h_generated_polar=bool(polar_gen), **per_rule(members)))
+    for label, members in groups:
+        # a generated hydrogen in the group, on a polar atom of the group
+        polar_gen = h_source is not None and any(
+            symbols[i] == "H" and h_source[i] not in (None, "supplied")
+            and parent[i] in members and symbols[parent[i]] in _POLAR for i in members)
+        sites.append(dict(label=label, source=source, atoms=list(members),
+                          h_generated_polar=bool(polar_gen), **per_rule(list(members))))
     return dict(schema=SITES_SCHEMA,
                 partition=dict(primary="nearest_nucleus", unit="triangle",
                                radius_scaled=(None if owner["radius_scaled"] is None else
@@ -1944,6 +2094,9 @@ def main():
     ap.add_argument("--npz", help="also save the surface (verts, faces, V, atoms) "
                                   "so it can be re-rendered without an SCF")
     ap.add_argument("--json", help="also write the settings and results")
+    ap.add_argument("--sites", help="JSON list of {label, atoms}: reaction sites to report "
+                                    "instead of one per heavy atom; atoms by atom map "
+                                    "(or index if unmapped), '3+H' adds 3's hydrogens")
     a = ap.parse_args()
 
     if a.selftest:
@@ -1982,7 +2135,8 @@ def main():
             raise SystemExit(1)
         from rdkit import Chem
         verdict, findings = check_structure(Chem.RemoveHs(probe), a.basis,
-                                            spin=a.spin)
+                                            spin=a.spin, maps_from=probe,
+                                            smiles=a.smiles)
         print_check(verdict, findings, Chem.MolToSmiles(Chem.RemoveHs(probe)))
         if verdict == BLOCK and not a.force:
             raise SystemExit("structure rejected; fix the drawing, or pass "
@@ -2020,7 +2174,7 @@ def main():
               f"{gi['forcefield']}")
         print(f"  {gi['n_converged']}/{gi['n_embedded']} conformers converged, "
               f"seed 0x{gi['seed']:x}")
-    verified, computed = None, None
+    verified, computed, mapped_ok = None, None, None
     if gi is not None:
         # The gate inspected a separately parsed object. Check that the
         # COORDINATES about to be computed are the structure it approved --
@@ -2040,6 +2194,17 @@ def main():
                       f"verified; continuing because of --force", file=sys.stderr)
             elif why:
                 print(f"note: {why}", file=sys.stderr)
+            # Index by index, so per-site rows and atom maps point at the
+            # atoms the input named; against the file's own coordinates when
+            # they were kept (a pose).
+            kept = gi["source"].startswith("file 3D coordinates used as-is")
+            mapped_ok, why_m = verify_mapping(spec, probe, reference=kept)
+            if not mapped_ok and verified:
+                msg = f"atom order of the computed geometry is not the input's: {why_m}"
+                if not a.force:
+                    raise SystemExit(msg + "\nrefusing to continue (--force "
+                                     "computes it anyway)")
+                print(f"WARNING: {msg}; continuing because of --force", file=sys.stderr)
         if a.charge is None:
             charge = gi["charge"]
         elif a.charge != gi["charge"]:
@@ -2065,6 +2230,18 @@ def main():
     else:
         spec = monosubstituted_benzene(*MOLECULES[a.molecule])
         i_sub = None if a.molecule == "benzene" else 6
+
+    site_groups = None
+    if a.sites:                     # resolved now, so a bad file costs no SCF
+        rows = [t.split() for t in spec.split(";")]
+        maps = ({x.GetIdx(): x.GetAtomMapNum() for x in gi["mol"].GetAtoms()
+                 if x.GetAtomMapNum()} if gi is not None else None)
+        try:
+            site_groups = resolve_site_groups(
+                load_site_groups(a.sites), [r[0] for r in rows],
+                np.array([[float(v) for v in r[1:4]] for r in rows]), maps)
+        except (OSError, ValueError) as e:
+            raise SystemExit(f"--sites {a.sites}: {e}") from None
 
     natm, nao = estimate_cost(spec, a.basis, charge, spin)
     print(f"{natm} atoms, {nao} basis functions in {a.basis}")
@@ -2165,7 +2342,8 @@ def main():
     label = (gi or {}).get("formula") or a.smiles or a.file or a.molecule
     P_A, coords_A = verts * BOHR, mol.atom_coords() * BOHR
     surface = surface_report(diag, a.iso)
-    valid = validity(gate, verified, surface)
+    # an atom order forced past verify_mapping invalidates the input too
+    valid = validity(gate, False if mapped_ok is False else verified, surface)
     if gi is not None and not a.optimize:
         h_source = gi["h_source"]
         atom_maps = {x.GetIdx(): x.GetAtomMapNum() for x in gi["mol"].GetAtoms()
@@ -2175,7 +2353,8 @@ def main():
                     for s in symbols]
         atom_maps = None
     sites, sites_reason = sites_block(valid, P_A, faces, V, coords_A, symbols,
-                                      atom_maps=atom_maps, h_source=h_source)
+                                      atom_maps=atom_maps, h_source=h_source,
+                                      groups=site_groups)
     valid["sites"] = sites is not None
     if sites is not None:
         n_h = [x for x in h_source if x is not None]
@@ -2190,7 +2369,12 @@ def main():
                        "without any protein or other environment"),
             conformer_scope=(f"single conformer; {gi['n_rot']} rotatable bond(s)"
                              if gi is not None else "single geometry, as given"),
-            topology=dict(genus=surface["genus"], components=surface["components"]))
+            topology=dict(genus=surface["genus"], components=surface["components"]),
+            identity=dict(chemical_smiles=computed,
+                          # the input's mapped structure; verify_mapping checked
+                          # the geometry against it atom by atom
+                          mapped_smiles=approved if atom_maps else None,
+                          chemical_match=verified, mapped_match=mapped_ok))
     if a.html:
         esp_figure(verts, faces, V, symbols, mol.atom_coords(), cmaps[cmap_name],
                    vlim, title=f"{label} · {a.xc}/{a.basis}", kind=kind).write_html(
