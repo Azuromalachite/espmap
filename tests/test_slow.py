@@ -297,15 +297,16 @@ def test_other_record_branches_match_the_schema(tmp_path, monkeypatch, argv):
 
 def test_json_geometry_reproduces_the_run_through_atoms(tmp_path, monkeypatch):
     """Review 3 H14 validation: re-running a JSON's recorded geometry through
-    --atoms reproduces V_min/V_max to 1e-6."""
+    --atoms reproduces V_min/V_max to 1e-6. Review 5 R6: and the analysis_key,
+    which the test never compared (etkdg_mmff94s vs atoms_string)."""
     import json
     import sys
     recs = []
-    for i, src in enumerate([["--smiles", "CCO"], None]):
+    for i, src in enumerate([["--smiles", "CCO", "--basis", "sto-3g"], None]):
         js = tmp_path / f"r{i}.json"
         if src is None:
-            src = ["--atoms", em.atoms_from_geometry(recs[0]["geometry"])]
-        monkeypatch.setattr(sys, "argv", ["esp_map.py", *src, "--basis", "sto-3g",
+            src = em.reproduce_argv(recs[0])
+        monkeypatch.setattr(sys, "argv", ["esp_map.py", *src,
                                           "--size", "80", "--out", str(tmp_path / f"r{i}.png"),
                                           "--json", str(js)])
         em.main()
@@ -314,6 +315,8 @@ def test_json_geometry_reproduces_the_run_through_atoms(tmp_path, monkeypatch):
     assert abs(a["V_min_kcal_mol"] - b["V_min_kcal_mol"]) < 1e-6
     assert abs(a["V_max_kcal_mol"] - b["V_max_kcal_mol"]) < 1e-6
     assert recs[0]["geometry"]["sha1"] == recs[1]["geometry"]["sha1"]
+    assert recs[0]["analysis_key"] == recs[1]["analysis_key"]
+    assert recs[1]["key_fields"]["analysis"]["geometry_method"] == "etkdg_mmff94s"
     assert recs[0]["provenance"]["code"]
 
 

@@ -100,16 +100,18 @@ python esp_map.py --smiles "CCO" --out esp.png \
   centre of nuclear charge (an ion's dipole depends on the origin, so it is
   stated), the error-budget caveat, the **geometry actually computed**
   (`geometry.xyz_angstrom` in atom order, with a sha1 of the nuclei; pass it
-  back with `--atoms` to recompute the run) and `provenance`: espmap version,
+  back with `--atoms` to recompute the run; `em.reproduce_argv(record)` builds
+  the full command line, which keeps the `analysis_key`) and `provenance`: espmap version,
   `git describe --dirty` (or "unknown", never a guessed commit), the versions
   of Python, NumPy, SciPy, scikit-image, PySCF, RDKit and Matplotlib, and the
   thread count. Read
   `validity` before anything else. Compare **numbers** only between records
   whose `analysis_key` matches (method, solvent convention, surface, and how
   the geometry was made: `etkdg_mmff94s`, `dft:b3lyp/def2tzvp/water`,
-  `mmff94s`, or `file_frozen:undeclared` for a file that does not say; a
-  file declares its origin with an `espmap_geometry_origin` (or `geometry`)
-  SDF property, or `--geometry-origin`), and
+  `mmff94s`, `idealised` for `--molecule`, or `undeclared` for a file or
+  `--atoms` string that does not say; a file declares its origin with an
+  `espmap_geometry_origin` (or `geometry`) SDF property, or
+  `--geometry-origin`, which takes any of these labels), and
   **pictures** only when `render_key` matches as well (colormap, limits,
   camera). `key_fields` lists what each key hashes.
 

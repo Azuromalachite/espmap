@@ -166,12 +166,21 @@ ISO_BADER = 0.002
 def basis_key(name):
     """One spelling per basis set. PySCF resolves def2-TZVP, def2tzvp and
     DEF2_TZVP to the same basis; review 4 N9 found them giving three
-    analysis_keys, and --basis def2svp skipping the double-zeta warning."""
-    return "".join(c for c in name.lower() if c not in "-_ ")
+    analysis_keys, and --basis def2svp skipping the double-zeta warning.
+    Review 5 R13: Pople polarisation is spelled two ways, 6-31G(d) = 6-31G*
+    and 6-31G(d,p) = 6-31G** (same nao), so those are folded too."""
+    k = "".join(c for c in name.lower() if c not in "-_ ")
+    return k.replace("(d,p)", "**").replace("(d)", "*")
 
 
-SMALL_BASIS = {basis_key(b) for b in
-               ("sto-3g", "3-21g", "6-31g", "6-31g*", "def2-svp", "def2-sv(p)")}
+# Review 5 R13: the list stopped at six names, so cc-pVDZ, 6-31G** or
+# pcseg-1 ran without the double-zeta warning or the basis budget row.
+# tests/test_fast.py checks every name here resolves in PySCF (def2-SV(P),
+# listed before, does not, so no run could carry it).
+SMALL_BASIS_NAMES = ("sto-3g", "3-21g", "6-31g", "6-31g*", "6-31g**", "6-31+g*",
+                     "6-31+g**", "6-31++g**", "def2-svp", "def2-svpd", "cc-pvdz",
+                     "aug-cc-pvdz", "pcseg-1", "aug-pcseg-1")
+SMALL_BASIS = {basis_key(b) for b in SMALL_BASIS_NAMES}
 
 # dielectric constants for --solvent. Measured effect on the chlorobenzene
 # sigma-hole: gas +9.83 -> chloroform +7.14 -> water +6.22 kcal/mol, i.e. the
@@ -1753,6 +1762,25 @@ def atoms_from_geometry(geom):
                      for s, (x, y, z) in zip(geom["symbols"], geom["xyz_angstrom"]))
 
 
+def reproduce_argv(rec):
+    """Command-line arguments that recompute a JSON record from its own
+    coordinates under the same analysis_key (review 5 R6): the atoms, the
+    settings the key hashes, and the record's geometry_method declared with
+    --geometry-origin, since --atoms alone is keyed "undeclared"."""
+    s, inp = rec["settings"], rec["input"]
+    argv = ["--atoms", atoms_from_geometry(rec["geometry"]),
+            "--charge", str(inp["charge"]), "--spin", str(inp["spin"]),
+            "--xc", s["xc"], "--basis", s["basis"], "--solvent", s["solvent"],
+            "--iso", repr(s["iso"]), "--spacing", repr(s["spacing_bohr"]),
+            "--margin", repr(s["margin_bohr"]),
+            "--geometry-origin", rec["key_fields"]["analysis"]["geometry_method"]]
+    if s["density_fit"]:
+        argv.append("--density-fit")
+    if s["include_reaction_field"]:
+        argv.append("--include-reaction-field")
+    return argv
+
+
 def _sha1(text):
     import hashlib
     return hashlib.sha1(text.encode()).hexdigest()
@@ -1830,44 +1858,101 @@ def analysis_fields(xc, basis, solvent, iso, spacing, density_fit, geometry_meth
     made. Review 4 N2: it was absent, yet on small anions it is the largest
     measured axis (MMFF vs DFT up to 6.5 kcal/mol, above the basis row)."""
     solv = None if solvent is None or solvent.lower() == "vacuum" else solvent.lower()
-    return dict(xc=xc.lower(), basis=basis_key(basis), solvent=solv,
+    return dict(xc=xc_key(xc), basis=basis_key(basis), solvent=solv,
                 solvent_esp=SOLVENT_ESP[bool(reaction_field)] if solv else None,
                 spacing_bohr=float(spacing), density_fit=bool(density_fit),
                 geometry_method=geometry_method,
                 surface_definition=surface_definition(iso))
 
 
+# display name -> the PySCF spelling that defines it. "b3lyp" is pinned to
+# b3lypg (VWN-RPA, PySCF's default and Gaussian's B3LYP), so a site that sets
+# B3LYP_WITH_VWN5 records its "b3lyp" as "b3lyp5", not under our name.
+_XC_NAMES = (("hf", "hf"), ("b3lyp", "b3lypg"), ("b3lyp5", "b3lyp5"),
+             ("pbe0", "pbe0"), ("pbe", "pbe"), ("blyp", "blyp"), ("bp86", "bp86"),
+             ("tpss", "tpss"), ("m062x", "m06-2x"), ("m06", "m06"),
+             ("camb3lyp", "cam-b3lyp"), ("wb97x", "wb97x"))
+
+
+def _xc_resolved(xc):
+    """The functional PySCF will run for xc, in a hashable canonical form:
+    the hybrid coefficients and the sorted (libxc id, weight) terms."""
+    from pyscf.dft import libxc
+    hyb, fns = libxc.parse_xc(xc)
+    r = lambda v: round(float(v), 12)  # noqa: E731
+    return (tuple(r(h) for h in hyb), tuple(sorted((int(i), r(w)) for i, w in fns)))
+
+
+def xc_name(xc):
+    """The display name of the functional xc resolves to, or None."""
+    want = _xc_resolved(xc)
+    for name, spelling in _XC_NAMES:
+        try:
+            if _xc_resolved(spelling) == want:
+                return name
+        except Exception:               # a name this PySCF build lacks
+            continue
+    return None
+
+
+def xc_key(xc):
+    """One key per functional. Review 5 R6: the key hashed xc.lower(), so
+    b3lyp, b3lypg and HYB_GGA_XC_B3LYP (one functional, one energy) got three
+    keys, and B3LYP_WITH_VWN5 changed what "b3lyp" meant under one key.
+    A functional without a display name is keyed by its resolved libxc form."""
+    name = xc_name(xc)
+    if name:
+        return name
+    (a, b, w), fns = _xc_resolved(xc)
+    return f"libxc:hyb({a:g},{b:g},{w:g})" + "".join(f"+{i}*{c:g}" for i, c in fns)
+
+
 def _dft_label(xc, basis, solvent):
+    """dft:<xc>/<basis_key>[/<solvent>], or None if PySCF cannot read xc. A
+    display name is kept as written, so a label reads the same everywhere."""
     solv = None if solvent in (None, "vacuum") else solvent.lower()
+    if xc.lower() not in {n for n, _ in _XC_NAMES}:
+        try:
+            xc = xc_name(xc) or xc
+        except Exception:
+            return None
     return f"dft:{xc.lower()}/{basis_key(basis)}" + (f"/{solv}" if solv else "")
 
 
 _FORCE_FIELDS = {"mmff94s": "mmff94s", "mmff94": "mmff94", "uff": "uff"}
+# every label geometry_method() emits besides dft:..., each with an optional
+# hydrogen suffix for a file whose hydrogens were added here
+_BASE_LABELS = (*_FORCE_FIELDS, "etkdg_mmff94s", "etkdg_uff", "idealised", "undeclared")
+_H_SUFFIXES = ("+mmff94s_h", "+added_h")
 
 
 def declared_geometry_method(text):
     """Normalise a declared geometry origin to the geometry_method vocabulary,
     or None when it cannot be read.
 
-    Accepts the label itself ("dft:b3lyp/def2tzvp/water", "mmff94s") or the
-    free text bench/fixture_geometries.py writes ("B3LYP/def2-TZVP, PCM water,
-    Cartesian BFGS ..."; "MMFF94s conformer 4 of 100 ...")."""
+    Accepts every label geometry_method() emits ("dft:b3lyp/def2tzvp/water",
+    "mmff94s", "etkdg_mmff94s", "undeclared+mmff94s_h", "idealised"), so a
+    record re-run from its own coordinates keeps its key (reproduce_argv,
+    review 5 R6), and the free text bench/fixture_geometries.py writes
+    ("B3LYP/def2-TZVP, PCM water, Cartesian BFGS ..."; "MMFF94s conformer 4
+    of 100 ...")."""
     import re
     t = (text or "").strip()
     if not t:
         return None
     low = t.lower()
-    if re.fullmatch(r"dft:[a-z0-9_\-]+/[a-z0-9()*+_\-]+(/[a-z0-9_\-]+)?", low):
-        xc, rest = low[4:].split("/", 1)
+    suffix = next((s for s in _H_SUFFIXES if low.endswith(s)), "")
+    core = low[:len(low) - len(suffix)]
+    if re.fullmatch(r"dft:[a-z0-9_\-]+/[a-z0-9()*+,_\-]+(/[a-z0-9_\-]+)?", core):
+        xc, rest = core[4:].split("/", 1)
         basis, _, solv = rest.partition("/")
-        return _dft_label(xc, basis, solv or None)
+        lab = _dft_label(xc, basis, solv or None)
+        return lab + suffix if lab else None
+    if core in _BASE_LABELS:
+        return core + suffix
     first = re.split(r"[\s,;(]", low, 1)[0]
     if first in _FORCE_FIELDS:
         return _FORCE_FIELDS[first]
-    # an ETKDG conformer relaxed with a force field is what a --smiles run
-    # makes; declaring it so gives the file the same key as that run (R6)
-    if first in ("etkdg_mmff94s", "etkdg_uff"):
-        return first
     m = re.match(r"([a-z0-9\-]+)/([a-z0-9()*+_\-]+)(?:\s*,\s*pcm\s+([a-z0-9_\-]+))?", low)
     if m and not m.group(1).startswith(tuple(_FORCE_FIELDS)):
         return _dft_label(m.group(1), m.group(2), m.group(3))
@@ -1887,22 +1972,27 @@ def geometry_method(source=None, forcefield=None, atoms=False, molecule=None,
     Review 5 R1: every kept file geometry was "file_frozen", so a DFT-geometry
     fixture shared analysis_key with an MMFF file of the same molecule, on
     the axis worth up to 6.5 kcal/mol for anions. A file now says what made
-    it, or is "...:undeclared", which no declared label can equal. A file
-    declared as DFT and an --optimize run at the same level share "dft:..."."""
+    it, or is "undeclared". A file declared as DFT and an --optimize run at
+    the same level share "dft:...".
+
+    Review 5 R6: the label names the method, not the input channel. It was
+    "idealised_builtin" for --molecule and "atoms_string:undeclared" for the
+    same atoms through --atoms, one calculation under two keys; a record
+    re-run through --atoms declares its method with --geometry-origin."""
     if optimize is not None:
         return _dft_label(*optimize)
     # text that cannot be read counts as undeclared (main warns, and checks
     # --geometry-origin before any compute)
     label = declared_geometry_method(declared) if declared else None
     if atoms:
-        return label or "atoms_string:undeclared"
+        return label or "undeclared"
     if molecule is not None:
-        return "idealised_builtin"
+        return "idealised"
     if source is None:
         raise ValueError("geometry_method needs a source, --atoms or --molecule")
     if source.startswith("file 3D coordinates used as-is"):
-        base = label or "file_frozen:undeclared"
-        if "hydrogen(s) added" not in source:
+        base = label or "undeclared"
+        if "hydrogen(s) added" not in source or base.endswith(_H_SUFFIXES):
             return base
         return base + ("+mmff94s_h" if (forcefield or "").startswith("MMFF94s")
                        else "+added_h")
@@ -2451,10 +2541,11 @@ def main():
                          "without it such a file is refused")
     ap.add_argument("--geometry-origin", default=None, metavar="LABEL",
                     help="how a --file or --atoms geometry was made, e.g. "
-                         "'dft:b3lyp/def2-tzvp/water' or 'mmff94s'. It enters "
+                         "'dft:b3lyp/def2-tzvp/water', 'mmff94s', 'etkdg_mmff94s' "
+                         "or 'idealised' (any geometry_method label). It enters "
                          "analysis_key; an SDF declares it instead as an "
-                         "'espmap_geometry_origin' (or 'geometry') property; "
-                         "Undeclared geometries are keyed as such")
+                         "'espmap_geometry_origin' (or 'geometry') property. "
+                         "Undeclared geometries are keyed 'undeclared'")
     ap.add_argument("--seed", type=lambda s: int(s, 0), default=0xC0FFEE,
                     help="ETKDG random seed; fixed so runs are reproducible")
     ap.add_argument("--nconfs", type=int, default=20,
@@ -2552,8 +2643,9 @@ def main():
                              "generated here and labelled accordingly)")
         if declared_geometry_method(a.geometry_origin) is None:
             raise SystemExit(f"--geometry-origin {a.geometry_origin!r} is not a "
-                             f"recognised origin; use e.g. 'dft:b3lyp/def2-tzvp/water', "
-                             f"'mmff94s' or 'uff'")
+                             f"recognised origin; use a geometry_method label, e.g. "
+                             f"'dft:b3lyp/def2-tzvp/water', 'mmff94s', 'etkdg_mmff94s' "
+                             f"or 'idealised'")
     if a.include_reaction_field and a.solvent == "vacuum":
         raise SystemExit("--include-reaction-field needs --solvent: in the gas "
                          "phase there is no reaction field to add")
