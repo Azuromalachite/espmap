@@ -4,6 +4,8 @@ Every case here is a defect that actually shipped at some point, lifted from
 docs/adversarial-review-1.md and docs/adversarial-review-2.md. A test that was
 never red is not evidence, so each one names the finding it guards.
 """
+import sys
+
 import numpy as np
 import pytest
 
@@ -373,6 +375,81 @@ def test_charged_xyz_needs_and_accepts_the_charge(tmp_path):
     assert em.read_structure(str(p), charge=0)[0] is None    # must fail
     mol, problems, _ = em.read_structure(str(p), charge=-1)  # must succeed
     assert mol is not None and not problems
+
+
+# ------------------------------------------------------- approved = computed
+# Review 3, H2: the assertion compared the input with itself and never read
+# the coordinates PySCF receives. These check the coordinates.
+@pytest.mark.parametrize("smiles", [
+    "CCO", "CC(=O)[O-]", r"C/C=C\C", "Clc1ccccc1",
+    "[N-]=C=S",           # perceived from geometry as N#C[S-]: bond orders are not checked
+    "CS(C)=O",            # likewise C[S+](C)[O-]
+    "CC(O)C(N)C(=O)O",    # stereo left open: any completion is the approved structure
+    "C[CH2]",             # radical
+    "[2H]OC",             # isotope: carried by the approval, invisible in coordinates
+])
+def test_computed_structure_matches_its_own_approval(smiles):
+    from rdkit import Chem
+    spec, _ = em.from_smiles(smiles)
+    ok, computed, reason = em.verify_computed(spec, Chem.MolFromSmiles(smiles))
+    assert ok, reason
+
+
+@pytest.mark.parametrize("approved, computed", [
+    ("CCO", "CC=O"),                        # another molecule (H count)
+    ("COC", "CCO"),                         # constitutional isomer, same formula
+    ("Oc1ncccc1", "O=c1[nH]cccc1"),         # tautomer
+    (r"C/C=C\C", "C/C=C/C"),                # E computed for a Z approval
+    ("C[C@@H](O)CC", "C[C@H](O)CC"),        # the other enantiomer
+])
+def test_computing_a_different_structure_is_detected(approved, computed):
+    from rdkit import Chem
+    spec, _ = em.from_smiles(computed)
+    ok, _, reason = em.verify_computed(spec, Chem.MolFromSmiles(approved))
+    assert not ok and reason
+
+
+class _ReachedCompute(Exception):
+    pass
+
+
+def _stop_before_scf(monkeypatch):
+    def stop(*a, **k):
+        raise _ReachedCompute
+    monkeypatch.setattr(em, "estimate_cost", stop)
+
+
+def test_main_refuses_coordinates_that_are_not_the_approved_structure(monkeypatch):
+    """Fault injection at the boundary the old check could not see: the gate
+    approves CCO, the geometry step hands PySCF acetaldehyde. Only the
+    coordinates are swapped; the info dict still describes CCO, so a check
+    that reads anything but the coordinates passes."""
+    real = em.from_smiles
+    monkeypatch.setattr(em, "from_smiles",
+                        lambda s, **k: (real("CC=O", **k)[0], real(s, **k)[1]))
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CCO"])
+    with pytest.raises(SystemExit, match="not the one about to be computed"):
+        em.main()
+
+
+def test_main_lets_a_healthy_structure_through_to_the_scf(monkeypatch):
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-]"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
+def test_a_forced_unverifiable_structure_warns_instead_of_refusing(monkeypatch, capsys):
+    """A salt is BLOCKed by the gate; --force computes it anyway, and distance
+    bonding ties Na+ to the carboxylate, so the identity cannot be confirmed.
+    The user has already overridden the gate: say so, do not refuse."""
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-].[Na+]",
+                                      "--force"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+    assert "could not be verified" in capsys.readouterr().err
 
 
 def test_smiles_geometry_is_deterministic():

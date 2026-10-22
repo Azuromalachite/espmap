@@ -61,10 +61,16 @@ stop and re-read this paragraph.
 2. **Gate before compute.** Parse → check → embed → SCF. Checking after
    embedding wastes conformer generation on structures that were never
    computable and buries the real error under force-field complaints.
-3. **The approved structure is the computed structure.** `main` asserts the
-   canonical SMILES of what the SCF will run against what the gate passed.
-   Both sides go through `CanonSmiles`; comparing a canonical form against a
-   raw input string produced a false positive that blocked valid input.
+3. **The approved structure is the computed structure.** `verify_computed`
+   reads `spec`, the coordinates PySCF receives, and nothing else:
+   connectivity (hydrogens included) perceived from distances must match the
+   approval, and stereo assigned from 3D must be one completion of what the
+   approval specified. The check it replaced compared the input string with
+   itself (review 3, H2) and passed an injected acetaldehyde geometry under an
+   ethanol approval. Bond orders are deliberately not compared: the SCF never
+   sees them, and comparing them refused valid resonance forms (`[N-]=C=S`,
+   DMSO). A mismatch refuses; with `--force` it warns and the JSON records
+   `structure_verified: false`.
 4. **`int1e_grids` returns the positive Coulomb kernel**, so the electronic
    term is **subtracted**. A sign flip gives a smooth, structured, publishable,
    entirely wrong map. The far-field decay is the detector — a flipped kernel

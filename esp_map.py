@@ -24,7 +24,9 @@ FIXED IN v4 (adversarial review 2, see esp-adversarial-review-2.md)
     --lim on a SEQUENTIAL scale re-imposed (-lim, +lim) -- the exact symmetric
       range that branch exists to avoid. --vmin/--vmax added instead.
     The gate parsed one object while the SCF computed another; the approved
-      structure is now asserted against the computed one.
+      structure is now asserted against the computed one. (Review 3, H2: that
+      assertion compared the input with itself. verify_computed now checks
+      the coordinates PySCF receives.)
     Fluorine no longer reports a sigma-hole, because it does not form one.
 
 NEW IN v3 — the structure check (--check)
@@ -613,6 +615,78 @@ def read_structure(path, charge=0):
                        "re-export from the drawing program; check for R-groups "
                        "or query atoms the exporter could not represent")], 0
     return mols[0], [], len(mols)
+
+
+def _skeleton(m):
+    """Elements and connectivity only: every bond single, no charge, no
+    radical, no isotope. What two Lewis structures of one molecule share."""
+    from rdkit import Chem
+    rw = Chem.RWMol()
+    for a in m.GetAtoms():
+        b = Chem.Atom(a.GetAtomicNum())
+        b.SetNoImplicit(True)
+        rw.AddAtom(b)
+    for bd in m.GetBonds():
+        rw.AddBond(bd.GetBeginAtomIdx(), bd.GetEndAtomIdx(), Chem.BondType.SINGLE)
+    s = rw.GetMol()
+    s.UpdatePropertyCache(strict=False)
+    Chem.FastFindRings(s)
+    return s
+
+
+def verify_computed(spec, approved, max_stereo=1024):
+    """Is the geometry PySCF will receive the structure the gate approved?
+    Returns (ok, computed_smiles, reason).
+
+    Review 3 H2: the old assertion compared the input string with itself (and,
+    for files, the reader with itself), and never read `spec`. This reads only
+    `spec`. The SCF sees nuclei, charge and spin, never bond orders, so what is
+    checked is what the coordinates fix:
+      - connectivity, hydrogens included: perceived from distances and matched
+        to the approval's skeleton. Catches another molecule, an isomer, a
+        tautomer, and a reader that guessed bond orders and so added the wrong
+        hydrogens;
+      - stereo: assigned from 3D on the matched approval, and accepted if it is
+        one completion of what the approval specified. Catches E for Z and the
+        wrong enantiomer; a centre the user left open may come out either way.
+    Bond orders and charge placement are taken from the approval, so another
+    resonance form ([N-]=C=S vs N#C[S-]) is not a false refusal. Isotope
+    positions cannot be checked: coordinates carry elements only.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import rdDetermineBonds
+    from rdkit.Chem.EnumerateStereoisomers import (EnumerateStereoisomers,
+                                                   StereoEnumerationOptions)
+    rows = [t.split() for t in spec.split(";")]
+    g = Chem.MolFromXYZBlock(f"{len(rows)}\n\n" + "\n".join(" ".join(r) for r in rows))
+    rdDetermineBonds.DetermineConnectivity(g)
+    tmpl = Chem.AddHs(approved)
+    if tmpl.GetNumAtoms() != g.GetNumAtoms():
+        return False, None, (f"{g.GetNumAtoms()} atoms in the geometry, "
+                             f"{tmpl.GetNumAtoms()} in the approved structure")
+    sk_t, sk_g = _skeleton(tmpl), _skeleton(g)
+    match = (sk_g.GetSubstructMatch(sk_t)
+             if sk_t.GetNumBonds() == sk_g.GetNumBonds() else ())
+    if not match:
+        return False, None, ("the connectivity perceived from the coordinates is "
+                             "not the approved structure's")
+    conf = Chem.Conformer(tmpl.GetNumAtoms())
+    for i, j in enumerate(match):
+        conf.SetAtomPosition(i, [float(x) for x in rows[j][1:4]])
+    conf.Set3D(True)
+    tmpl.RemoveAllConformers()
+    tmpl.AddConformer(conf, assignId=True)
+    Chem.AssignStereochemistryFrom3D(tmpl)
+    computed = Chem.MolToSmiles(Chem.RemoveHs(tmpl))
+    opts = StereoEnumerationOptions(onlyUnassigned=True, unique=True,
+                                    maxIsomers=max_stereo + 1)
+    allowed = {Chem.MolToSmiles(m) for m in EnumerateStereoisomers(approved, options=opts)}
+    if len(allowed) > max_stereo:
+        return True, computed, (f"more than {max_stereo} stereo completions; "
+                                f"connectivity verified, stereo not")
+    if computed not in allowed:
+        return False, computed, "the stereochemistry in the coordinates differs"
+    return True, computed, ""
 
 
 def estimate_cost(spec, basis, charge=0, spin=0):
@@ -1392,18 +1466,26 @@ def main():
               f"{gi['forcefield']}")
         print(f"  {gi['n_converged']}/{gi['n_embedded']} conformers converged, "
               f"seed 0x{gi['seed']:x}")
+    verified, computed = None, None
     if gi is not None:
-        # The gate inspected a separately parsed object. Assert that the
-        # structure about to be computed is the one that was approved --
-        # otherwise the gate is a seal over a copy.
+        # The gate inspected a separately parsed object. Check that the
+        # COORDINATES about to be computed are the structure it approved --
+        # otherwise the gate is a seal over a copy. Comparing gi["smiles"]
+        # did not do this: it is the input string, or the reader's own output
+        # (review 3, H2).
         if approved is not None:
-            from rdkit import Chem as _C2
-            computed = _C2.CanonSmiles(gi["smiles"])
-            if computed != approved:
-                raise SystemExit(
-                    f"the structure that passed the check is not the one about "
-                    f"to be computed:\n  approved: {approved}\n  computing: "
-                    f"{computed}\nrefusing to continue")
+            verified, computed, why = verify_computed(spec, _C.RemoveHs(probe))
+            if not verified:
+                msg = (f"the structure that passed the check is not the one about "
+                       f"to be computed: {why}\n  approved:  {approved}\n  "
+                       f"computing: {computed or '(no match)'}")
+                if not a.force:
+                    raise SystemExit(msg + "\nrefusing to continue (--force "
+                                     "computes it anyway)")
+                print(f"WARNING: {msg}\nthe computed structure could not be "
+                      f"verified; continuing because of --force", file=sys.stderr)
+            elif why:
+                print(f"note: {why}", file=sys.stderr)
         if a.charge is None:
             charge = gi["charge"]
         elif a.charge != gi["charge"]:
@@ -1531,6 +1613,7 @@ def main():
                        gate_smiles=approved,
                        approved_smiles=approved if not (gate and gate["forced"]) else None,
                        gate=gate,
+                       computed_smiles=computed, structure_verified=verified,
                        formula=(gi or {}).get("formula"), charge=charge, spin=spin),
             settings=dict(xc=a.xc, basis=a.basis, solvent=a.solvent,
                           density_fit=a.density_fit, gpu=a.gpu, iso=a.iso,
