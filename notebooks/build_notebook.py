@@ -235,7 +235,7 @@ open(os.path.join(JOB, "README.txt"), "w").write(
     "results.json   settings, energies, V range, versions, error-budget caveat\\n"
     "settings.json  the notebook form values; log.txt the full run log\\n\\n"
     "Measured error budget (chlorobenzene sigma-hole): basis def2-SVP -> def2-TZVPP "
-    "+3.55 kcal/mol; solvent gas -> water -3.61. Quote numbers only against these margins.\\n")
+    "+3.54 kcal/mol; solvent gas -> water -3.60. Quote numbers only against these margins.\\n")
 zip_path = shutil.make_archive(JOB, "zip", JOB)
 print(f"packed {zip_path}")
 try:
@@ -360,8 +360,8 @@ md(f"""
 
 | change | effect on V_max (kcal/mol) |
 | --- | --- |
-| basis def2-SVP → def2-TZVPP | +3.55 |
-| solvent gas → water (PCM) | −3.61 |
+| basis def2-SVP → def2-TZVPP | +3.54 |
+| solvent gas → water (PCM) | −3.60 |
 | functional B3LYP / PBE0 / M06-2X / HF | 0.69 spread |
 | density fitting (this notebook's default) | ≤ 0.02 |
 
