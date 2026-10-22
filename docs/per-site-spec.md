@@ -139,8 +139,12 @@ O–C=O group are sites too. So espmap does not fix one chemistry-shaped
 definition.
 
 - **Default groups**, used when the caller gives none: one group per heavy
-  atom with its attached hydrogens, labelled by element and index. This keeps
-  the CLI output meaningful on its own.
+  atom with its attached hydrogens. On a mapped input the label is element
+  plus **atom map** (nitrite's O sites are `O2`, `O3`); on an unmapped input,
+  element plus atom index. `source` says which: `"default:map"` or
+  `"default:index"`. Review 5 (R5) found the fixtures mixing the two
+  conventions, with index-labelled `O1` (map 2) beside map-labelled `C3-H`
+  (map 3). This keeps the CLI output meaningful on its own.
 - **Caller groups** (`--sites groups.json`):
   `{"by": "map" | "index", "groups": [{label, atoms}, ...]}`. The file says
   how it counts atoms:
@@ -153,7 +157,12 @@ definition.
   (`{"label": "C3-H", "atoms": ["3+H"]}`). espmap checks only that every named
   atom exists. It does not know what an enolate is; Arrowfield's lessons
   define the groups. A site records how it was named in `source`
-  (`"caller:map"`, `"caller:index"` or `"default"`).
+  (`"caller:map"`, `"caller:index"`, `"default:map"` or `"default:index"`).
+  Caller groups may overlap or leave atoms out. Each site then lists the
+  sites it shares atoms with in `overlaps`, and `sites_tile_surface` is false
+  whenever the site areas do not sum to the surface. The C18 fixtures'
+  `acetyl` and `carbonyl O` share the carbonyl O and summed to 1.04 of the
+  surface with nothing saying so (review 5).
 
   Review 4 (N6) found the earlier format, a bare list read as maps when the
   input was mapped and as indices otherwise, silently changed meaning when
@@ -418,7 +427,7 @@ stderr, χ, a filename or console text:
 
 ```json
 "validity": {"input": true, "surface": true, "sites": true},
-"gate": {"verdict": "ACCEPT", "forced": false, "findings": []},
+"gate": {"verdict": "INFO", "forced": false, "findings": []},
 "surface": {
   "definition": {"property": "electron_density", "isovalue_e_bohr3": 0.002},
   "closed": true, "open_edges": 0, "nonmanifold_edges": 0,
@@ -426,6 +435,13 @@ stderr, χ, a filename or console text:
 }
 ```
 
+- `gate.verdict` is the gate's worst finding: `"INFO"` (accepted, notes
+  only), `"WARN"` or `"BLOCK"`. There is no `"ACCEPT"`: revision 3 of this
+  section showed one, which the code never wrote. Every closed vocabulary in
+  the record is an `enum:` in `docs/record-schema.json`, and the schema test
+  checks it (review 5 R10).
+- `surface.genus` is null when the surface is not closed (`--no-strict`):
+  null means "not a closed surface", not "unknown" (review 5 R4).
 - `validity.input` is false if the gate verdict was BLOCK (forced) or
   `structure_verified` is false.
 - `validity.surface` is false if `surface.problems` is non-empty.
@@ -481,14 +497,16 @@ The site block:
   "reaction_sites": [
     {
       "label": "O1",
-      "source": "default",
+      "source": "default:map",
       "atoms": [0],
+      "overlaps": [],
       "h_generated_polar": false,
       "nearest_nucleus": { "...": "same fields as an atom" },
       "radius_scaled": { "...": "same fields" },
       "delta": { "...": "same fields" }
     }
   ],
+  "sites_tile_surface": true,
   "conformer_scope": "single conformer; 0 rotatable bonds",
   "topology": {"genus": 0, "components": 1},
   "budget": [
@@ -512,7 +530,34 @@ replace them.
 
 `parent` is the heavy-atom index for a hydrogen, `null` otherwise; `h_source`
 is set for hydrogens only. Coordinates come from `geometry.xyz_angstrom` by
-`index`. `source` on a site is `"default"`, `"caller:map"` or `"caller:index"`.
+`index`.
+
+**Atom order is the input's** (review 5 A2). `index`, `geometry.symbols`,
+`geometry.xyz_angstrom`, `geometry.bonds` and the NPZ's `tri_atom_*` all use
+one order, and it is the order the input gave:
+- for `--smiles`, the SMILES atoms in order, then the hydrogens RDKit adds;
+- for `--file`, the file's own order, hydrogens wherever the file put them;
+- for `--atoms`, the string's order.
+
+It is **not** a canonical order. A consumer that rebuilds the molecule from a
+SMILES and assumes the record follows it gets a wrong atom-to-coordinate
+mapping on file inputs; Arrowfield's first prototype did exactly that on the
+C18 fixture. Match atoms by `atom_map` (heavy atoms) and `parent`
+(hydrogens), or use `geometry.bonds`.
+
+**`geometry.bonds`** (review 5 A1): the approved structure's bonds in that
+order, `[[i, j, order], …]` with `i < j`, hydrogens included, as one Kekulé
+structure (orders 1–3). It is written only when `verify_mapping` confirmed
+the atom order (`mapped_match`), and is `null` otherwise. The SCF never sees
+bond orders (invariant 3), so they are the approved drawing's, not a computed
+property: a resonance form is one of several. Before A1 a consumer could
+recover bonds only from a mapped SMILES, so an unmapped `--file` or `--atoms`
+record could not be drawn.
+
+**`results.gipf`** needs both signs: a sign covering less than
+`min_area_fraction` (5 %) of the surface has null statistics, `nu` is null,
+and `reason` says why. One triangle at +0.01 kcal/mol had turned `nu` from
+null into 0.0 (review 5 R14).
 
 **Budget rows** come from `esp_map.BUDGET`. Every row names a `bench/` file,
 and `test_claims.py` recomputes each `kcal_mol` from that file under the row's
