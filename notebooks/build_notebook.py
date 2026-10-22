@@ -97,8 +97,9 @@ t0 = time.time()
 if not os.path.isfile(os.path.join(WORK, "ESPMAP_READY")):
     if not os.path.isdir(REPO):
         _sh(f"git clone -q --depth 1 -b {{BRANCH}} https://github.com/Azuromalachite/espmap.git {{REPO}}")
-    # PySCF pinned: the measured error budget was taken with this version
-    _sh(f"pip install -q -e '{{REPO}}[viz]' 'pyscf==2.14.0'")
+    # PySCF and RDKit pinned to bench/env.json: the error budget was measured
+    # with these, and ETKDG geometries (so geometry hashes) depend on RDKit
+    _sh(f"pip install -q -e '{{REPO}}[viz]' 'pyscf==2.14.0' 'rdkit==2026.9.1'")
     out = _sh(f"cd {{REPO}} && {{sys.executable}} esp_map.py --selftest")
     if "selftest: PASS" not in out:
         raise RuntimeError("self-test FAILED; do not trust results from this install:\\n" + out)
@@ -318,6 +319,12 @@ if RUN_GPU_CHECK:
                V_min=-37.277894106462526, V_max=60.079848397342694, t_scf=97.4)
     spec, _ = em.from_smiles("CCCCCCCCCC(=O)O")
     sha = hashlib.sha1(spec.encode()).hexdigest()[:10]
+    if sha != REF["geom_sha"]:
+        # a different geometry makes every comparison below meaningless
+        raise RuntimeError(f"geometry hash {sha} != reference {REF['geom_sha']}: this "
+                           f"RDKit embeds a different decanoic acid, so GPU and CPU "
+                           f"would be compared on different molecules. Check the "
+                           f"rdkit pin in cell 3.")
     t = time.perf_counter()
     m, mf = em.run_scf(spec, basis="def2-tzvp", density_fit=True, gpu=True)
     t_scf = time.perf_counter() - t

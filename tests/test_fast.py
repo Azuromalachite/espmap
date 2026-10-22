@@ -987,3 +987,77 @@ def test_3d_colourbar_does_not_say_warm_is_negative_on_a_sequential_scale():
                         em.build_maps()["lajolla"], (-170.0, -80.0), kind="sequential")
     title = fig.data[0].colorbar.title.text
     assert "warm" not in title and "more negative" in title
+
+
+# ------------------------------------------------------------- provenance (H14)
+def _water(charge=0, spin=0):
+    from pyscf import gto
+    return gto.M(atom="O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692",
+                 basis="sto-3g", charge=charge, spin=spin, verbose=0)
+
+
+def test_geometry_record_hashes_the_nuclei_only():
+    """Review 3 H14: the JSON had no coordinates. The sha1 covers symbols and
+    positions, so an ion and a radical on the same nuclei share it."""
+    g0 = em.geometry_record(_water(), 0, 0)
+    g1 = em.geometry_record(_water(charge=1, spin=1), 1, 1)
+    assert g0["symbols"] == ["O", "H", "H"] and len(g0["xyz_angstrom"]) == 3
+    assert g0["sha1"] == g1["sha1"] and (g1["charge"], g1["spin"]) == (1, 1)
+    assert g0["xyz_angstrom"][1][1] == pytest.approx(0.7572, abs=1e-12)
+    assert "not charge or spin" in g0["sha1_covers"]
+
+
+def test_geometry_round_trips_through_atoms_exactly():
+    """The record is how to recompute a run: --atoms built from it must give
+    the same nuclei to float precision."""
+    from pyscf import gto
+    m = _water()
+    g = em.geometry_record(m, 0, 0)
+    m2 = gto.M(atom=em.atoms_from_geometry(g), basis="sto-3g", verbose=0)
+    assert np.abs(m2.atom_coords() - m.atom_coords()).max() < 1e-12
+    assert em.geometry_record(m2, 0, 0)["sha1"] == g["sha1"]
+
+
+def test_code_identity_is_unknown_outside_a_repo_that_tracks_this_file(tmp_path,
+                                                                        monkeypatch):
+    """`git rev-parse HEAD` reported whatever repository happened to enclose
+    the module, and a clean HEAD for an edited tree. Untracked -> "unknown"."""
+    fake = tmp_path / "esp_map.py"
+    fake.write_text("")
+    monkeypatch.setattr(em, "__file__", str(fake))
+    assert em.code_identity()["code"] == "unknown"
+
+
+def test_provenance_records_what_moves_results():
+    p = em.provenance()
+    for k in ("espmap_version", "code", "python", "numpy", "scipy", "scikit_image",
+              "pyscf", "rdkit", "threads"):
+        assert p[k] not in (None, ""), k
+    assert isinstance(p["threads"], int) and p["threads"] >= 1
+
+
+def test_notebook_pins_rdkit_and_stops_on_a_different_geometry():
+    """Review 3 H14: RDKit was unpinned, so the GPU check printed DIFFERENT on
+    the geometry hash and went on comparing energies of different molecules."""
+    from pathlib import Path
+    nb = (Path(__file__).resolve().parents[1] / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8")
+    assert "'rdkit==" in nb and "'pyscf==" in nb
+    gpu = nb[nb.index("GPU vs CPU check"):]
+    assert gpu.index("raise RuntimeError(f\"geometry hash") < gpu.index("em.run_scf(")
+
+
+def test_code_identity_matches_git_describe_inside_this_repo():
+    """The positive case: where git can read this checkout and tracks the
+    module, the identity is `git describe --dirty`, not "unknown"."""
+    import os
+    import subprocess
+    here = os.path.dirname(os.path.abspath(em.__file__))
+    try:
+        d = subprocess.run(["git", "describe", "--always", "--dirty", "--abbrev=12"],
+                           cwd=here, capture_output=True, text=True, timeout=10)
+    except OSError:
+        pytest.skip("no git")
+    if d.returncode != 0:
+        pytest.skip("git cannot read this checkout")
+    assert em.code_identity()["code"] == d.stdout.strip()
