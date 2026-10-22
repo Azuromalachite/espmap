@@ -332,3 +332,38 @@ def test_hydrogen_molecule_writes_its_record(tmp_path, monkeypatch, src):
     rec = json.loads(js.read_text())
     assert rec["sites"] is None and "no heavy atom" in rec["sites_reason"]
     assert rec["validity"]["sites"] is False and rec["validity"]["input"] is True
+
+
+def _npz_run(tmp_path, monkeypatch, *args):
+    import json
+    import sys
+    js, npz = tmp_path / "r.json", tmp_path / "r.npz"
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", *args, "--basis", "sto-3g",
+                                      "--size", "80", "--out", str(tmp_path / "r.png"),
+                                      "--json", str(js), "--npz", str(npz)])
+    em.main()
+    return json.loads(js.read_text()), np.load(npz)
+
+
+def test_npz_of_an_invalid_record_carries_its_validity_and_no_partition(tmp_path,
+                                                                        monkeypatch):
+    """Review 4 N8 validation: a clipped surface forced through with
+    --no-strict gave a JSON with validity.surface false and no sites, while
+    its NPZ still carried tri_atom_* and no validity at all."""
+    import json
+    rec, z = _npz_run(tmp_path, monkeypatch, "--smiles", "O", "--margin", "2.0",
+                      "--no-strict")
+    v = json.loads(str(z["validity"]))
+    assert v == rec["validity"] and v["surface"] is False
+    assert json.loads(str(z["surface_problems"])) == rec["results"]["surface"]["problems"]
+    assert not [k for k in z.files if k.startswith("tri_atom_")]
+
+
+def test_npz_of_a_valid_record_matches_its_json(tmp_path, monkeypatch):
+    import json
+    rec, z = _npz_run(tmp_path, monkeypatch, "--smiles", "[CH3:1][OH:2]")
+    assert json.loads(str(z["validity"])) == rec["validity"]
+    assert rec["validity"]["sites"] is True
+    assert [k for k in z.files if k.startswith("tri_atom_")]
+    assert str(z["geometry_sha1"]) == rec["geometry"]["sha1"]
+    assert sorted(int(m) for m in z["atom_maps"] if m) == [1, 2]
