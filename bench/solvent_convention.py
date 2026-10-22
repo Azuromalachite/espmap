@@ -1,6 +1,6 @@
 """Solvent error-budget row under both ESP conventions (review 3 H7).
 
-The "gas -> PCM water -3.61 kcal/mol" row was measured as the potential of
+The "gas -> PCM water -3.60 kcal/mol" row was measured as the potential of
 the PCM-polarised solute alone. The PCM surface charges have a potential of
 their own (the reaction field); adding it is the other legitimate convention,
 and review 3 measured it reversing the sign of the shift at def2-SVP. This

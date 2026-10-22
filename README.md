@@ -30,16 +30,22 @@ deuteranopia, greyscale.*
 
 1. DFT single point (PySCF)
 2. electron density on a regular grid
-3. marching cubes at ρ = 0.002 e·bohr⁻³ — the Bader surface, ~98 % of the density
+3. marching cubes at ρ = 0.002 e·bohr⁻³, the density surface of Bader et al.
+   (1987); for the molecules measured here it encloses 98.5–99.1 % of the
+   electrons (`bench/isosurface_enclosed.jsonl`)
 4. **the ESP evaluated only at the isosurface vertices**, not on a volumetric grid
 5. a z-buffered render with deliberately weak shading
 
-Step 4 is the one worth borrowing. The conventional route writes two cube
-files — density and potential — then interpolates the second onto an
-isosurface of the first. Evaluating the potential at the ~10⁴ surface vertices
-instead of ~10⁶ grid points is about 100× cheaper *and* removes the
-interpolation error entirely, because the potential is computed exactly where
-it is displayed. Bromobenzene, end to end, on one core:
+**Step 4 is an implementation choice, not an invention.** A common route
+writes two cube files, density and potential, then interpolates the second
+onto an isosurface of the first. Quantitative molecular-surface methods have
+long evaluated properties directly on a polygonal surface instead (Bulat et
+al., *J. Mol. Model.* 2010; Lu & Chen, *J. Mol. Graph. Model.* 2012; see
+[docs/prior-art.md](docs/prior-art.md)). espmap does the same inside a small
+PySCF pipeline. What it adds is the measurement: evaluating the potential at
+the ~10⁴ surface vertices instead of ~10⁶ grid points is about 100× cheaper,
+and there is no interpolation error, because the potential is computed exactly
+where it is displayed. Bromobenzene, end to end, on one core:
 
 | step | time |
 | --- | --- |
@@ -62,10 +68,12 @@ time only (`bench/`):
 | decanoic acid | 492 | 66 s | 211 s |
 | C18 pheromone acetate | 898 | 182 s | 875 s |
 
-- **`--basis def2-svp`** is the preview: right for pictures, about +2.7 kcal/mol
-  low on V<sub>max</sub> for these molecules, so do not quote numbers from it.
+- **`--basis def2-svp`** is the preview: right for pictures, but +1.53 to
+  +2.82 kcal/mol low on V<sub>max</sub> for these four molecules (and off by +0.29
+  to +2.37 on V<sub>min</sub>), so do not quote numbers from it.
 - **`--density-fit`** changed V<sub>min</sub>/V<sub>max</sub> by ≤ 0.02 kcal/mol in every pair
-  measured, and halves the SCF time up to ~600 basis functions. At 898 it was
+  measured. It halves the SCF time at def2-TZVP up to ~600 basis functions
+  (0.45–0.53 of the exact time) and saves 20–28 % at def2-SVP. At 898 it was
   *slower* (1,175 s vs 875 s), most likely because its integrals went to disk;
   time it on your machine before relying on it.
 - **`--gpu`** runs the SCF on an NVIDIA GPU via
@@ -193,25 +201,33 @@ figure will print in one colour, add a zero isoline rather than changing hue.
 A property computed to three decimals is worthless without one. Measured on
 the chlorobenzene σ-hole V<sub>max</sub>, B3LYP unless stated:
 
-| axis | effect | note |
-| --- | --- | --- |
-| **basis set** (def2-SVP → def2-TZVPP) | **+3.55** | +6.35 → +9.90; dominant |
-| **solvent** (gas → PCM water), polarised solute | **−3.61** | +9.83 → +6.22; co-dominant |
-| solvent (gas → chloroform), polarised solute | −2.69 | +7.14 |
-| solvent (gas → PCM water), solute + reaction field | +0.05 | +9.88; chloroform −0.34 (+9.49) |
-| functional (B3LYP / PBE0 / M06-2X / HF) | 0.69 | spread, +9.51 to +10.20 |
-| conformer (lowest vs highest MMFF) | ~1 | glycerol; C18 acetate: 1.1 over 8 extended conformers, **5.2** on V<sub>min</sub> once folded ones are included |
-| density fitting (`--density-fit`) | ≤ 0.02 | 7 pairs, always upward on V<sub>max</sub> |
-| GPU vs CPU (`--gpu`) | < 0.001 | decanoic acid, density-fitted |
-| stereochemistry (diastereomers) | ~0.9 | against a 0.4 noise floor |
-| geometry source (MMFF / idealised / DFT) | 0.35 | +9.59 to +9.94 |
-| grid spacing (0.26 → 0.16 bohr) | 0.04 | converged |
-| σ-hole region definition | 0.00 | max is interior to the cone |
+| axis | effect | note | data in `bench/` |
+| --- | --- | --- | --- |
+| **basis set** (def2-SVP → def2-TZVPP) | **+3.54** | +6.35 → +9.90; dominant | `error_budget.jsonl` |
+| **solvent** (gas → PCM water), polarised solute | **−3.60** | +9.83 → +6.22; co-dominant | `solvent_convention.jsonl` |
+| solvent (gas → chloroform), polarised solute | −2.69 | +7.14 | `solvent_convention.jsonl` |
+| solvent (gas → PCM water), solute + reaction field | +0.05 | +9.88; chloroform −0.34 (+9.49) | `solvent_convention.jsonl` |
+| functional (B3LYP / PBE0 / M06-2X / HF) | 0.69 | spread, +9.51 to +10.20 | `error_budget.jsonl` |
+| conformer (lowest vs highest MMFF) | ~1 | glycerol; C18 acetate: 1.1 over 8 extended conformers, **5.2** on V<sub>min</sub> once folded ones are included | `conformers.jsonl`, `f9_recheck.jsonl` (glycerol: prose) |
+| density fitting (`--density-fit`) | ≤ 0.02 | 7 pairs, always upward on V<sub>max</sub> | `results.jsonl` |
+| GPU vs CPU (`--gpu`) | < 0.001 | decanoic acid, density-fitted | `gpu_l4.json` |
+| stereochemistry (diastereomers) | 1.6–1.9 | threonine, def2-SVP, mean of 3 MMFF seeds; seeds of one diastereomer spread up to 1.25 | `error_budget.jsonl` |
+| geometry source (MMFF / idealised / DFT) | 0.40 | +9.54 to +9.94; **small anions: up to 6.5** (MMFF nitrite N–O 1.42 Å vs 1.25) | `error_budget.jsonl`, `anion_geometry.jsonl` |
+| grid spacing (0.26 → 0.16 bohr) | 0.04 | converged | `error_budget.jsonl` |
+| σ-hole region definition | 0.00 | 9 cones, all +9.83; max is interior to the cone | `error_budget.jsonl` |
+
+Two rows changed when they were re-measured into `bench/` (review 3 H8). The
+stereochemistry row had read "~0.9 against a 0.4 noise floor": threonine's
+diastereomers in fact differ about as much as its conformers do. The geometry
+row moved from 0.35 to 0.40 with a fresh DFT-optimised geometry, and it does
+not transfer to small anions. The basis and water rows are +3.54 and −3.60
+from the unrounded values; the old +3.55 and −3.61 were differences of
+rounded endpoints.
 
 **The solvent rows measure a convention.** With `--solvent`, the map is the
 potential of the solute *as polarised by* the continuum; the potential of the
 continuum's own surface charges (the reaction field) is left out. That is the
-default and the convention behind the −3.61. `--include-reaction-field` adds
+default and the convention behind the −3.60. `--include-reaction-field` adds
 the reaction field, and then the solvent shift is +0.05 in water and −0.34 in
 chloroform: the polarisation of the solute and the field of the solvent that
 caused it almost cancel on this surface. Both are legitimate quantities; they
@@ -221,9 +237,11 @@ def2-SVP the shifts are −3.10 and +0.57.
 
 **The basis-set error is molecule-specific and cannot be calibrated away**: the
 same def2-SVP → def2-TZVP change moves bromobenzene by **−0.76**, opposite in
-sign and a fifth the magnitude, and moves V<sub>max</sub> of decanoic acid, BDSF and a C18
-pheromone acetate by +2.65 to +2.82. Checking one molecule licenses nothing
-about another.
+sign and a fifth the magnitude. Across four target molecules in
+`bench/results.jsonl` it moves V<sub>max</sub> by **+1.53 to +2.82** (the C18 alcohol
++1.53; decanoic acid, BDSF and the C18 acetate +2.65 to +2.82) and V<sub>min</sub> by
++0.29 to +2.37, the alcohol again the outlier, this time the largest.
+Checking one molecule licenses nothing about another.
 
 **Conformation moves shape more than extrema, until the molecule folds.**
 Across eight extended conformers of the C18 acetate, V<sub>min</sub>/V<sub>max</sub> varied by
@@ -247,8 +265,9 @@ Two consequences for anyone quoting a number from this:
 - `ωB97X-D` is unavailable in this PySCF build, so range-separated functionals
   with dispersion are **untested**.
 - Geometries from `--smiles` are force-field (MMFF94s), adequate for local
-  electronic properties at 0.35 kcal/mol but **not** for conformational
-  energies or barriers. `--optimize` runs a DFT optimisation (needs
+  electronic properties at 0.40 kcal/mol on chlorobenzene, **not** for small
+  anions (up to 6.5 kcal/mol), and **not** for conformational energies or
+  barriers. `--optimize` runs a DFT optimisation (needs
   `pip install 'espmap[opt]'`, which adds pyberny) and is exercised on one
   molecule only.
 - The gate checks that a structure is *unambiguous*. It cannot tell you it is
@@ -286,6 +305,20 @@ Built on [PySCF](https://pyscf.org), [RDKit](https://rdkit.org),
 [cmcrameri](https://github.com/callumrollo/cmcrameri). The `vik`, `broc`,
 `cork`, `lajolla` and `batlow` maps are Fabio Crameri's *Scientific colour
 maps*; please cite them if you use the figures.
+
+The chemistry is not new. The electrostatic potential on the ρ = 0.002
+surface, its extrema and statistics, and the σ-hole are established methods
+(Politzer, Murray, Clark and co-workers; Bader; Bulat et al.; Lu & Chen and
+Multiwfn). [docs/prior-art.md](docs/prior-art.md) lists what espmap uses,
+what it adapts and what may be specific to it, and
+[docs/references.bib](docs/references.bib) has the verified references. To
+cite espmap itself, see [CITATION.cff](CITATION.cff).
+
+AI-assisted coding tools (Claude, via Claude Code) were used for
+implementation and adversarial review; those commits carry a
+`Co-Authored-By` line. The scientific specification, acceptance criteria and
+interpretation are the author's, and every change is tested against the
+invariants in `CLAUDE.md` and the data in `bench/`.
 
 MIT licensed. If it is useful in published work, a link back is appreciated but
 not required.
