@@ -25,7 +25,7 @@ Pipeline for bromobenzene, B3LYP/def2-SVP, on one CPU:
 
 Install is one line: `pip install pyscf scikit-image matplotlib cmcrameri colorspacious`. No Gaussian licence, no GaussView, no VMD, no cube files on disk.
 
-**The one trick worth keeping.** Do not compute the ESP on a volumetric grid and then interpolate it onto the surface, which is what the cube-file workflow does. Compute the density on a grid, extract the isosurface, then evaluate the ESP **only at the surface vertices** — 10⁴ points instead of 10⁶. That is the difference between 2.5 seconds and most of an hour, and it removes the interpolation error entirely, because the potential is evaluated exactly where it is displayed.
+**The implementation choice that matters most, borrowed rather than invented.** Do not compute the ESP on a volumetric grid and then interpolate it onto the surface, which is what the cube-file workflow does. Compute the density on a grid, extract the isosurface, then evaluate the ESP **only at the surface vertices** — 10⁴ points instead of 10⁶. Quantitative molecular-surface methods evaluate properties on polygonal surfaces in this way (Bulat et al. 2010; Lu & Chen 2012; see [prior-art.md](prior-art.md)); the measurement below is this project's. That is the difference between 2.5 seconds and most of an hour, and it removes the interpolation error entirely, because the potential is evaluated exactly where it is displayed.
 
 ### Validation
 
@@ -88,7 +88,7 @@ The three-stop RGB map's green midpoint is *not* its least-saturated colour; the
 
 > **RETRACTED.** This paragraph previously read: *"Chlorobenzene's σ-hole is +6.4 kcal/mol. The apparent neutral of the RGB map is +9.6. So the entire σ-hole of chlorobenzene sits below the perceived zero and renders as neutral-to-electron-rich… A convention that resolves a feature in one halide and inverts it in the next is not a convention worth keeping."*
 >
-> **It is not supported.** The +6.4 came from def2-SVP. Converged: **+9.83** (def2-TZVP), **+9.90** (def2-TZVPP) — a **+3.55** kcal/mol basis-set error against a claimed margin of 3.2. The σ-hole does not fall below the apparent neutral; it lands on it, within 0.3 kcal/mol.
+> **It is not supported.** The +6.4 came from def2-SVP. Converged: **+9.83** (def2-TZVP), **+9.90** (def2-TZVPP) — a **+3.54** kcal/mol basis-set error against a claimed margin of 3.2. The σ-hole does not fall below the apparent neutral; it lands on it, within 0.3 kcal/mol.
 >
 > **What survives:** the RGB map renders chlorobenzene's σ-hole in very nearly its *least saturated* colour — it paints the molecule's electrophilic site the colour the map uses for "nothing here". That is still damning and now robust, but it is a coincidence between **one molecule and one colormap**, not a general result. §2.1 is the general finding and needed no chemistry.
 
@@ -137,7 +137,7 @@ python esp_map.py --atoms "O 0 0 0.117; H 0 0.757 -0.469; H 0 -0.757 -0.469" \
 
 **`--check` gates every structure before any geometry or SCF work.** A drawing can be perfectly legible to a chemist and still be ambiguous to a machine, and the pipeline will otherwise compute a flawless map of a molecule you did not mean. **Rejected:** valence and charge errors, R-groups and query atoms, radicals unless `--spin` is given (then run unrestricted, UKS), and disconnected fragments — a salt has no single ESP surface and the counter-ion swamps it, sodium acetate forced through reaches **+113** kcal/mol against **+61** for acetic acid's own proton. **Warned:** undrawn E/Z geometry, two or more stereocentres with no wedges, untested elements. **Noted:** a single unspecified stereocentre, reachable tautomers, net charge, isotopes. Each finding names what to change *in the drawing*.
 
-The stereochemistry wording is measured rather than assumed: threonine's two diastereomers differ in ESP extrema by **~0.9 kcal/mol** against a **0.4 kcal/mol** conformer-selection noise floor, and enantiomers are mirror-identical by symmetry. Stereochemistry changes the *shape* of the surface far more than the numbers on it — the same pattern as conformers.
+The stereochemistry wording is measured rather than assumed: threonine's two diastereomers differ in mean ESP extrema by **1.6–1.9 kcal/mol** at def2-SVP, against a spread of up to **1.25** between MMFF seeds of one diastereomer (`bench/error_budget.jsonl`), and enantiomers are mirror-identical by symmetry. An earlier "0.9 against a 0.4 noise floor" had no data behind it and did not reproduce (review 3 H8). Stereochemistry moves the numbers about as much as conformer choice, and the *shape* of the surface more.
 
 `--file` reads `.mol .sdf .cdxml .xyz .pdb` — what ChemDraft, ChemDraw, Ketcher and MarvinSketch export — so you can draw a structure and map it. The load-bearing distinction is **2D vs 3D**: a drawn structure exported as MOL/SDF/CDXML is a flat picture with every *z* zero, and feeding it to an SCF would produce a planar molecule and a confidently wrong map. A 2D file therefore has its coordinates discarded, a conformer generated, and says so loudly; a file carrying real 3D coordinates is used as-is, with any missing hydrogens added and relaxed against frozen heavy atoms (verified to reproduce the all-atom result exactly, +6.61 either way).
 
