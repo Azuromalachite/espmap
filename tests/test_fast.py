@@ -90,6 +90,43 @@ def test_matching_explicit_colormap_is_kept(kind, cmap):
     assert em.resolve_cmap(kind, cmap) == cmap
 
 
+_MAPS = {"vik", "RdBu", "lajolla", "batlow", "viridis"}
+
+
+@pytest.mark.parametrize("scale, cmap, force, refused", [
+    ("sequential", "vik", False, True),    # kind known: refuse before the SCF
+    ("diverging", "lajolla", False, True),
+    ("sequential", "vik", True, False),    # --force-cmap
+    ("auto", "vik", False, False),         # kind unknown until the SCF: decide later
+    ("auto", "nonsense", False, True),     # unknown map: refuse before the SCF
+    ("sequential", None, False, False),
+])
+def test_cmap_preflight_refuses_what_it_can_before_the_scf(scale, cmap, force, refused):
+    """#11 follow-up: resolve_cmap ran after the SCF, so `--cmap vik` on an
+    ion did the whole calculation (15 min on a C18) and then wrote nothing."""
+    err = em.cmap_preflight(scale, cmap, force, available=_MAPS)
+    assert bool(err) is refused
+
+
+def test_mismatch_found_after_the_scf_falls_back_and_says_so():
+    name, warning = em.cmap_after_scf("sequential", "vik")
+    assert name == "lajolla" and "only known after the SCF" in warning
+    assert em.cmap_after_scf("sequential", "vik", force=True) == ("vik", None)
+    assert em.cmap_after_scf("diverging", None) == ("vik", None)
+
+
+def test_every_caption_uses_one_reading_rule():
+    """#11 follow-up: the notebook's static image kept 'warm = negative' on
+    ions after the 3D colourbar was fixed."""
+    from pathlib import Path
+    assert em.scale_caption("diverging") == "warm = negative"
+    assert "warm" not in em.scale_caption("sequential")
+    nb = (Path(__file__).resolve().parents[1] / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8")
+    display = nb[nb.index("5 · Display"):nb.index("6 · Package")]
+    assert "em.scale_caption(kind)" in display and "warm = negative" not in display
+
+
 def _diag(**over):
     d = dict(closed=True, open_edges=0, nonmanifold_edges=0, components=1, genus=0,
              chi=2, face_max_rho=1e-6, margin=5.0, strict=True, problems=[])

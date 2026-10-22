@@ -208,7 +208,7 @@ if VIEW in ("image", "both"):
     img = em.render(z["verts"], z["faces"], V, cmap, vlim, size=560,
                     elev=ELEVATION, azim=AZIMUTH)
     plt.figure(figsize=(5.6, 5.6)); plt.imshow(img); plt.axis("off")
-    plt.title(f"{NAME}   ({vlim[0]:+.0f} … {vlim[1]:+.0f} kcal/mol, warm = negative)", fontsize=9)
+    plt.title(f"{NAME}   ({vlim[0]:+.0f} … {vlim[1]:+.0f} kcal/mol, {em.scale_caption(kind)})", fontsize=9)
     plt.show()
 """)
 
