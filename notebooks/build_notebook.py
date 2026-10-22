@@ -136,6 +136,11 @@ heavy = mol0.GetNumHeavyAtoms()
 untested = sorted({a.GetSymbol() for a in mol0.GetAtoms()} - em.TESTED_ELEMENTS)
 if untested:
     print(f"WARNING: {', '.join(untested)} outside the validated element set; results untested.")
+if USE_GPU:
+    # GPU = auto puts every GPU runtime on --gpu; say when that leaves the validated path
+    for why in em.gpu_untested(SPIN, SOLVENT, DENSITY_FIT):
+        print(f"WARNING: GPU with {why} is untested (validated: closed shell, gas phase, "
+              f"density fitting). Set GPU = off to stay on the CPU path.")
 if heavy > 14 and not USE_GPU:
     print(f"note: {heavy} heavy atoms on a CPU runtime; expect several minutes "
           f"({'tens of minutes' if BASIS == 'def2-tzvp' else 'a few minutes'}).")

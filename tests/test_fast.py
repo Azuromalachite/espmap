@@ -773,6 +773,52 @@ def test_gpu_without_gpu4pyscf_fails_before_any_work():
         em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True)
 
 
+@pytest.mark.parametrize("spin, solvent, df, expect", [
+    (0, None, True, []),                                  # the validated path
+    (0, "vacuum", True, []),
+    (0, "water", True, ["PCM"]),
+    (2, None, True, ["open shell"]),
+    (0, None, False, ["exact integrals"]),
+    (1, "water", False, ["open shell", "PCM", "exact integrals"]),
+])
+def test_gpu_untested_names_each_unvalidated_part(spin, solvent, df, expect):
+    got = em.gpu_untested(spin, solvent, df)
+    assert len(got) == len(expect) and all(e in g for e, g in zip(expect, got))
+
+
+class _Stop(Exception):
+    pass
+
+
+def test_run_scf_warns_on_an_untested_gpu_path(monkeypatch, capsys):
+    """Review 3 H9 validation: with gpu4pyscf stubbed, run_scf(gpu=True,
+    solvent="water") must warn. The notebook's GPU = auto put every GPU
+    runtime with a solvent on this path silently."""
+    import types
+    from pyscf import gto
+    monkeypatch.setitem(sys.modules, "gpu4pyscf", types.ModuleType("gpu4pyscf"))
+
+    def stop(*a, **k):
+        raise _Stop
+    monkeypatch.setattr(gto, "M", stop)
+    with pytest.raises(_Stop):
+        em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True,
+                   solvent="water", density_fit=True)
+    err = capsys.readouterr().err
+    assert "WARNING: --gpu with a PCM solvent (water) is untested" in err
+    with pytest.raises(_Stop):
+        em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True, density_fit=True)
+    assert "WARNING" not in capsys.readouterr().err
+
+
+def test_notebook_warns_on_an_untested_gpu_path():
+    from pathlib import Path
+    nb = (Path(__file__).resolve().parents[1] / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8")
+    run = nb[nb.index("4 · Run"):]
+    assert run.index("em.gpu_untested(SPIN, SOLVENT, DENSITY_FIT)") < run.index("cmd = [")
+
+
 @pytest.mark.parametrize("kind, lim, vmin, vmax, comparable", [
     ("diverging", None, None, None, False),     # auto-scaled to this molecule
     ("diverging", 50.0, None, None, True),      # --lim fixes a diverging scale
