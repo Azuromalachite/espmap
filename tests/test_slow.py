@@ -20,7 +20,7 @@ def test_selftest_passes():
 
 
 def test_esp_sign_and_magnitude_on_water():
-    """Reference windows from the published range of water ESP extrema."""
+    """Reference windows asserted by --selftest (wide by design; not taken from a cited source)."""
     mol, mf = em.run_scf(WATER, basis="def2-svp")
     dm = em.total_dm(mf)
     b = 1.0 / em.BOHR
