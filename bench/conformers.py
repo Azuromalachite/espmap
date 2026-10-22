@@ -131,7 +131,8 @@ def main():
             row = dict(molecule=a.molecule, conf_id=cids[i], basis=a.basis,
                        density_fit=True, is_lowest_E=(i == best),
                        mmff_dE=float(energy[i] - energy[best]),
-                       rg=float(rg[i]), extent=float(extent[i]))
+                       rg=float(rg[i]), extent=float(extent[i]),
+                       code=em.code_identity()["code"])
             t = time.perf_counter()
             try:
                 m, mf = em.run_scf(spec, basis=a.basis, density_fit=True)

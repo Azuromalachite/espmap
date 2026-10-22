@@ -64,6 +64,28 @@ def test_ion_switches_to_a_sequential_scale():
     assert any("does not change sign" in n for n in notes)
 
 
+@pytest.mark.parametrize("ratio, expect", [
+    (0.01, "sequential"), (0.04, "sequential"), (0.05, "sequential"),
+    (0.06, "diverging"), (0.5, "diverging"),
+])
+@pytest.mark.parametrize("sign", [+1, -1])      # cation with a negative patch, and the mirror
+def test_a_sliver_of_the_other_sign_does_not_make_a_diverging_scale(ratio, expect, sign):
+    """Review 3 H11: -0.01..+120 was diverging and +0.01..+120 sequential, so
+    0.02 kcal/mol decided the picture. Now the minority sign must exceed 5 %
+    of the larger extremum, and the notes print the ratio."""
+    V = sign * np.array([-ratio * 120.0, 3.0, 120.0])
+    assert em.sign_change_ratio(V) == pytest.approx(ratio)
+    _, kind, notes = em.choose_scale(V, kind="auto")
+    assert kind == expect
+    if expect == "sequential":
+        assert any(f"{ratio:.3f}" in n for n in notes)
+
+
+def test_sign_change_ratio_is_zero_when_the_field_has_one_sign():
+    assert em.sign_change_ratio(_anion()) == 0.0
+    assert em.sign_change_ratio(np.array([0.0, 5.0, 120.0])) == 0.0
+
+
 def test_default_colormap_follows_the_scale_kind():
     """Review 3, H3: --cmap defaulted to vik on every scale, so an anion's
     sequential scale was drawn diverging and its -80 kcal/mol end came out
@@ -751,6 +773,52 @@ def test_gpu_without_gpu4pyscf_fails_before_any_work():
         em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True)
 
 
+@pytest.mark.parametrize("spin, solvent, df, expect", [
+    (0, None, True, []),                                  # the validated path
+    (0, "vacuum", True, []),
+    (0, "water", True, ["PCM"]),
+    (2, None, True, ["open shell"]),
+    (0, None, False, ["exact integrals"]),
+    (1, "water", False, ["open shell", "PCM", "exact integrals"]),
+])
+def test_gpu_untested_names_each_unvalidated_part(spin, solvent, df, expect):
+    got = em.gpu_untested(spin, solvent, df)
+    assert len(got) == len(expect) and all(e in g for e, g in zip(expect, got))
+
+
+class _Stop(Exception):
+    pass
+
+
+def test_run_scf_warns_on_an_untested_gpu_path(monkeypatch, capsys):
+    """Review 3 H9 validation: with gpu4pyscf stubbed, run_scf(gpu=True,
+    solvent="water") must warn. The notebook's GPU = auto put every GPU
+    runtime with a solvent on this path silently."""
+    import types
+    from pyscf import gto
+    monkeypatch.setitem(sys.modules, "gpu4pyscf", types.ModuleType("gpu4pyscf"))
+
+    def stop(*a, **k):
+        raise _Stop
+    monkeypatch.setattr(gto, "M", stop)
+    with pytest.raises(_Stop):
+        em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True,
+                   solvent="water", density_fit=True)
+    err = capsys.readouterr().err
+    assert "WARNING: --gpu with a PCM solvent (water) is untested" in err
+    with pytest.raises(_Stop):
+        em.run_scf("H 0 0 0; H 0 0 0.74", basis="sto-3g", gpu=True, density_fit=True)
+    assert "WARNING" not in capsys.readouterr().err
+
+
+def test_notebook_warns_on_an_untested_gpu_path():
+    from pathlib import Path
+    nb = (Path(__file__).resolve().parents[1] / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8")
+    run = nb[nb.index("4 · Run"):]
+    assert run.index("em.gpu_untested(SPIN, SOLVENT, DENSITY_FIT)") < run.index("cmd = [")
+
+
 @pytest.mark.parametrize("kind, lim, vmin, vmax, comparable", [
     ("diverging", None, None, None, False),     # auto-scaled to this molecule
     ("diverging", 50.0, None, None, True),      # --lim fixes a diverging scale
@@ -1249,3 +1317,76 @@ def test_main_refuses_coordinates_whose_atom_order_moved(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "[CH3:1][CH:2]([CH3:3])[OH:4]"])
     with pytest.raises(SystemExit, match="atom order"):
         em.main()
+
+# ------------------------------------------------------------- provenance (H14)
+def _water(charge=0, spin=0):
+    from pyscf import gto
+    return gto.M(atom="O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692",
+                 basis="sto-3g", charge=charge, spin=spin, verbose=0)
+
+
+def test_geometry_record_hashes_the_nuclei_only():
+    """Review 3 H14: the JSON had no coordinates. The sha1 covers symbols and
+    positions, so an ion and a radical on the same nuclei share it."""
+    g0 = em.geometry_record(_water(), 0, 0)
+    g1 = em.geometry_record(_water(charge=1, spin=1), 1, 1)
+    assert g0["symbols"] == ["O", "H", "H"] and len(g0["xyz_angstrom"]) == 3
+    assert g0["sha1"] == g1["sha1"] and (g1["charge"], g1["spin"]) == (1, 1)
+    assert g0["xyz_angstrom"][1][1] == pytest.approx(0.7572, abs=1e-12)
+    assert "not charge or spin" in g0["sha1_covers"]
+
+
+def test_geometry_round_trips_through_atoms_exactly():
+    """The record is how to recompute a run: --atoms built from it must give
+    the same nuclei to float precision."""
+    from pyscf import gto
+    m = _water()
+    g = em.geometry_record(m, 0, 0)
+    m2 = gto.M(atom=em.atoms_from_geometry(g), basis="sto-3g", verbose=0)
+    assert np.abs(m2.atom_coords() - m.atom_coords()).max() < 1e-12
+    assert em.geometry_record(m2, 0, 0)["sha1"] == g["sha1"]
+
+
+def test_code_identity_is_unknown_outside_a_repo_that_tracks_this_file(tmp_path,
+                                                                        monkeypatch):
+    """`git rev-parse HEAD` reported whatever repository happened to enclose
+    the module, and a clean HEAD for an edited tree. Untracked -> "unknown"."""
+    fake = tmp_path / "esp_map.py"
+    fake.write_text("")
+    monkeypatch.setattr(em, "__file__", str(fake))
+    assert em.code_identity()["code"] == "unknown"
+
+
+def test_provenance_records_what_moves_results():
+    p = em.provenance()
+    for k in ("espmap_version", "code", "python", "numpy", "scipy", "scikit_image",
+              "pyscf", "rdkit", "threads"):
+        assert p[k] not in (None, ""), k
+    assert isinstance(p["threads"], int) and p["threads"] >= 1
+
+
+def test_notebook_pins_rdkit_and_stops_on_a_different_geometry():
+    """Review 3 H14: RDKit was unpinned, so the GPU check printed DIFFERENT on
+    the geometry hash and went on comparing energies of different molecules."""
+    from pathlib import Path
+    nb = (Path(__file__).resolve().parents[1] / "notebooks" / "build_notebook.py").read_text(
+        encoding="utf-8")
+    assert "'rdkit==" in nb and "'pyscf==" in nb
+    gpu = nb[nb.index("GPU vs CPU check"):]
+    assert gpu.index("raise RuntimeError(f\"geometry hash") < gpu.index("em.run_scf(")
+
+
+def test_code_identity_matches_git_describe_inside_this_repo():
+    """The positive case: where git can read this checkout and tracks the
+    module, the identity is `git describe --dirty`, not "unknown"."""
+    import os
+    import subprocess
+    here = os.path.dirname(os.path.abspath(em.__file__))
+    try:
+        d = subprocess.run(["git", "describe", "--always", "--dirty", "--abbrev=12"],
+                           cwd=here, capture_output=True, text=True, timeout=10)
+    except OSError:
+        pytest.skip("no git")
+    if d.returncode != 0:
+        pytest.skip("git cannot read this checkout")
+    assert em.code_identity()["code"] == d.stdout.strip()

@@ -1,0 +1,92 @@
+{
+ "benzene": {
+  "espmap_fixture": "benzene",
+  "smiles": "c1ccccc1",
+  "geometry": "B3LYP/def2-TZVP, PCM water, Cartesian BFGS gtol 3e-4 Ha/A",
+  "converged": true,
+  "iterations": 3,
+  "bonds_mmff": {
+   "C0-C1": 1.3948,
+   "C0-C5": 1.3948,
+   "C1-C2": 1.3948,
+   "C2-C3": 1.3948,
+   "C3-C4": 1.3948,
+   "C4-C5": 1.3948
+  },
+  "bonds_dft": {
+   "C0-C1": 1.3927,
+   "C0-C5": 1.3926,
+   "C1-C2": 1.3926,
+   "C2-C3": 1.3926,
+   "C3-C4": 1.3927,
+   "C4-C5": 1.3926
+  },
+  "structure_verified": true,
+  "computed_smiles": "c1ccccc1",
+  "note": ""
+ },
+ "nitrite": {
+  "espmap_fixture": "nitrite",
+  "smiles": "N(=O)[O-]",
+  "geometry": "B3LYP/def2-TZVP, PCM water, Cartesian BFGS gtol 3e-4 Ha/A",
+  "converged": true,
+  "iterations": 4,
+  "bonds_mmff": {
+   "N0-O1": 1.4239,
+   "N0-O2": 1.4239
+  },
+  "bonds_dft": {
+   "N0-O1": 1.255,
+   "N0-O2": 1.2547
+  },
+  "structure_verified": true,
+  "computed_smiles": "O=N[O-]",
+  "note": ""
+ },
+ "thiocyanate": {
+  "espmap_fixture": "thiocyanate",
+  "smiles": "[S-]C#N",
+  "geometry": "B3LYP/def2-TZVP, PCM water, Cartesian BFGS gtol 3e-4 Ha/A",
+  "converged": true,
+  "iterations": 5,
+  "bonds_mmff": {
+   "S0-C1": 1.7983,
+   "C1-N2": 1.16
+  },
+  "bonds_dft": {
+   "S0-C1": 1.6521,
+   "C1-N2": 1.1725
+  },
+  "structure_verified": true,
+  "computed_smiles": "N#C[S-]",
+  "note": ""
+ },
+ "enolate": {
+  "espmap_fixture": "enolate",
+  "smiles": "C=C[O-]",
+  "geometry": "B3LYP/def2-TZVP, PCM water, Cartesian BFGS gtol 3e-4 Ha/A",
+  "converged": true,
+  "iterations": 9,
+  "bonds_mmff": {
+   "C0-C1": 1.3402,
+   "C1-O2": 1.2554
+  },
+  "bonds_dft": {
+   "C0-C1": 1.3703,
+   "C1-O2": 1.2812
+  },
+  "structure_verified": true,
+  "computed_smiles": "C=C[O-]",
+  "note": ""
+ },
+ "Z3Z13-18OAc_conf4": {
+  "espmap_fixture": "Z3Z13-18OAc_lowest_energy_extended",
+  "smiles": "CC(=O)OCC/C=C\\CCCCCCCC/C=C\\CCCC",
+  "geometry": "MMFF94s conformer 4 of 100 (from_smiles seed 0xC0FFEE), as bench/conformers.py"
+ },
+ "Z3Z13-18OAc_conf72": {
+  "espmap_fixture": "Z3Z13-18OAc_folded_genus3",
+  "smiles": "CC(=O)OCC/C=C\\CCCCCCCC/C=C\\CCCC",
+  "geometry": "MMFF94s conformer 72 of 100 (from_smiles seed 0xC0FFEE), as bench/conformers.py"
+ }
+}
