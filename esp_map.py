@@ -1104,6 +1104,44 @@ def resolve_cmap(kind, requested=None, force=False):
     return requested
 
 
+def scale_caption(kind):
+    """How to read the colours, for every caption: one source, so the 3D
+    colourbar and the notebook image cannot disagree (the image kept saying
+    'warm = negative' on ions after the colourbar was fixed)."""
+    return "warm = negative" if kind == "diverging" else "darker = more negative"
+
+
+def cmap_after_scf(kind, requested=None, force=False):
+    """(cmap, warning or None) once the scale kind is known from the data.
+
+    With --scale auto the kind is only known after the SCF, which can take 15
+    minutes on a C18 molecule. Refusing then would throw that work away with
+    no image, JSON or NPZ written, so a mismatch falls back to the map that
+    fits, says so, and the JSON records both. Where the kind IS known up front
+    (--scale given), main refuses before the SCF instead (cmap_preflight).
+    """
+    try:
+        return resolve_cmap(kind, requested, force), None
+    except ValueError as e:
+        fallback = DEFAULT_CMAP[kind]
+        return fallback, (f"WARNING: {e}. The surface turned out {kind}, which was "
+                          f"only known after the SCF, so it is drawn with "
+                          f"{fallback} instead (recorded in --json).")
+
+
+def cmap_preflight(scale, requested=None, force=False, available=None):
+    """Every colour-map check that does not need the SCF, run before it.
+    Returns an error message, or None."""
+    if requested is not None and available is not None and requested not in available:
+        return f"--cmap must be one of {sorted(available)}"
+    if requested is not None and scale in ("diverging", "sequential"):
+        try:
+            resolve_cmap(scale, requested, force)
+        except ValueError as e:
+            return str(e)
+    return None
+
+
 # ------------------------------------------------------------------ molecules
 MOLECULES = {"bromobenzene": ("Br", 1.890), "chlorobenzene": ("Cl", 1.740),
              "iodobenzene": ("I", 2.095), "fluorobenzene": ("F", 1.354),
@@ -1189,9 +1227,7 @@ def esp_figure(verts, faces, V, symbols, coords, cmap, vlim, title="",
         i=faces[:, 0], j=faces[:, 1], k=faces[:, 2],
         intensity=V, intensitymode="vertex",
         colorscale=plotly_colorscale(cmap), cmin=vlim[0], cmax=vlim[1],
-        colorbar=dict(title="V (kcal/mol)<br>" + ("warm = negative" if kind == "diverging"
-                                                  else "darker = more negative"),
-                      len=0.75),
+        colorbar=dict(title="V (kcal/mol)<br>" + scale_caption(kind), len=0.75),
         lighting=dict(ambient=0.62, diffuse=0.38, specular=0.0,
                       roughness=1.0, fresnel=0.0),
         hovertemplate="V = %{intensity:+.1f} kcal/mol<extra></extra>",
@@ -1413,6 +1449,11 @@ def main():
             import plotly  # noqa: F401
         except ImportError:
             raise SystemExit("--html needs plotly: pip install plotly") from None
+    if a.lim == 0.0:
+        raise SystemExit("--lim 0 is not a range")
+    err = cmap_preflight(a.scale, a.cmap, a.force_cmap, available=set(build_maps()))
+    if err:
+        raise SystemExit(err)
 
     charge, spin, i_sub = a.charge or 0, a.spin, 6
     gi = None
@@ -1556,14 +1597,11 @@ def main():
         sh, ns = sigma_hole(verts, V, mol, i_sub=i_sub)
         print(f"sigma-hole V_max = {sh:+.2f} kcal/mol  ({ns} vertices in the cap)")
 
-    if a.lim == 0.0:
-        raise SystemExit("--lim 0 is not a range")
     vlim, kind, notes = choose_scale(V, lim=a.lim, kind=a.scale,
                                      vmin=a.vmin, vmax=a.vmax)
-    try:
-        cmap_name = resolve_cmap(kind, a.cmap, a.force_cmap)
-    except ValueError as e:
-        raise SystemExit(str(e)) from None
+    cmap_name, cmap_warning = cmap_after_scf(kind, a.cmap, a.force_cmap)
+    if cmap_warning:
+        notes.append(cmap_warning)
     for n in notes:
         print(("WARNING: " if n.startswith("WARNING") else "note: ")
               + n.removeprefix("WARNING: "), file=sys.stderr)
@@ -1625,7 +1663,9 @@ def main():
                          V_min=float(V.min()), V_max=float(V.max()),
                          n_verts=int(diag["n_verts"]), surface=surface_report(diag)),
             scale=dict(kind=kind, vmin=float(vlim[0]), vmax=float(vlim[1]),
-                       cmap=cmap_name, cmap_forced=bool(a.cmap and a.force_cmap),
+                       cmap=cmap_name, cmap_requested=a.cmap,
+                       cmap_substituted=bool(cmap_warning),
+                       cmap_forced=bool(a.cmap and a.force_cmap),
                        **scale_provenance(kind, a.lim, a.vmin, a.vmax)),
             versions=dict(pyscf=pyscf.__version__, rdkit=rdkit.__version__,
                           espmap_commit=commit),
