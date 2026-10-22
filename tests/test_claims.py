@@ -426,7 +426,7 @@ def test_record_budget_rows_are_the_recomputed_ones():
     """Review 4 N5: the record's sites.budget rows carry the same numbers the
     README quotes, each recomputed here from its bench/ file."""
     data = {**_rows(), **_site_rows()}
-    rows = em.budget_rows(basis="def2-svp", solvent=None, charge=-1, n_rot=None)
+    rows = em.budget_rows(basis="def2-svp", solvent=None, charge=-1, n_rot=None, geometry_method="etkdg_mmff94s")
     assert len({r["id"] for r in rows}) == len(rows) == len(em.BUDGET)
     for r in rows:
         got = float(data[r["id"]].replace("−", "-"))

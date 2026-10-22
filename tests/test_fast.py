@@ -871,8 +871,8 @@ def test_one_calculation_gets_one_analysis_key(change):
 
 @pytest.mark.parametrize("change", [
     {"solvent": "water"}, {"iso": 0.001}, {"spacing": 0.16}, {"density_fit": True},
-    {"xc": "pbe0"}, {"geometry_method": "dft_opt:b3lyp/def2-svp"},
-    {"geometry_method": "file_frozen"},
+    {"xc": "pbe0"}, {"geometry_method": "dft:b3lyp/def2svp"},
+    {"geometry_method": "file_frozen:undeclared"},
 ])
 def test_every_method_axis_changes_the_analysis_key(change):
     assert _keys(a=change)[0] != _keys()[0]
@@ -883,8 +883,8 @@ _EX = __import__("pathlib").Path(__file__).resolve().parents[1] / "examples"
 
 @pytest.mark.parametrize("make, expect", [
     (lambda: em.from_smiles("CCO")[1], "etkdg_mmff94s"),
-    (lambda: em.from_file(str(_EX / "real_3d.mol"))[1], "file_frozen"),
-    (lambda: em.from_file(str(_EX / "real_3d_noH.mol"))[1], "file_frozen+mmff94s_h"),
+    (lambda: em.from_file(str(_EX / "real_3d.mol"))[1], "file_frozen:undeclared"),
+    (lambda: em.from_file(str(_EX / "real_3d_noH.mol"))[1], "file_frozen:undeclared+mmff94s_h"),
     (lambda: em.from_file(str(_EX / "drawn_2d.mol"))[1], "etkdg_mmff94s"),
 ])
 def test_geometry_method_names_how_the_coordinates_were_made(make, expect):
@@ -895,13 +895,13 @@ def test_geometry_method_names_how_the_coordinates_were_made(make, expect):
 
 
 def test_geometry_method_for_cli_only_sources():
-    assert em.geometry_method(atoms=True) == "atoms_string"
+    assert em.geometry_method(atoms=True) == "atoms_string:undeclared"
     assert em.geometry_method(molecule="chlorobenzene") == "idealised_builtin"
     opt = ("B3LYP", "def2-TZVP", "Water")
     assert em.geometry_method("3D generated from SMILES by ETKDGv3",
-                              optimize=opt) == "dft_opt:b3lyp/def2tzvp/water"
+                              optimize=opt) == "dft:b3lyp/def2tzvp/water"
     assert em.geometry_method(atoms=True, optimize=("b3lyp", "sto-3g", "vacuum")) \
-        == "dft_opt:b3lyp/sto3g"
+        == "dft:b3lyp/sto3g"
     with pytest.raises(ValueError):
         em.geometry_method("from a source nobody wrote down")
 
@@ -1344,21 +1344,21 @@ def _budget_ids(**kw):
 
 
 def test_budget_rows_follow_the_run_settings():
-    gas = _budget_ids(basis="def2-SVP", solvent=None, charge=0, n_rot=0)
+    gas = _budget_ids(basis="def2-SVP", solvent=None, charge=0, n_rot=0, geometry_method="etkdg_mmff94s")
     assert {"basis", "solvent water", "solvent chloroform", "partition C18",
             "partition small anions", "grid mean"} <= set(gas)
     assert "conformer C18" not in gas and "anion geometry" not in gas
-    wet = _budget_ids(basis="def2-tzvpp", solvent="water", charge=-1, n_rot=3)
+    wet = _budget_ids(basis="def2-tzvpp", solvent="water", charge=-1, n_rot=3, geometry_method="etkdg_mmff94s")
     assert "basis" not in wet and not any(i.startswith("solvent") for i in wet)
     # N9: any spelling PySCF resolves to def2-TZVPP drops the basis row too
-    assert "basis" not in _budget_ids(basis="DEF2_TZVPP", solvent=None, charge=0, n_rot=0)
+    assert "basis" not in _budget_ids(basis="DEF2_TZVPP", solvent=None, charge=0, n_rot=0, geometry_method="etkdg_mmff94s")
     assert {"conformer C18", "anion geometry"} <= set(wet)
     # --atoms: the rotatable-bond count is unknown, so the conformer row stays
-    assert "conformer C18" in _budget_ids(basis="sto-3g", solvent=None, charge=0, n_rot=None)
+    assert "conformer C18" in _budget_ids(basis="sto-3g", solvent=None, charge=0, n_rot=None, geometry_method="atoms_string:undeclared")
 
 
 def test_every_budget_row_names_a_bench_source():
-    for r in em.budget_rows(basis="def2-svp", solvent=None, charge=-1, n_rot=None):
+    for r in em.budget_rows(basis="def2-svp", solvent=None, charge=-1, n_rot=None, geometry_method="etkdg_mmff94s"):
         assert set(r) == {"id", "axis", "statistic", "kcal_mol", "measured_on", "source"}
         assert r["source"].startswith("bench/") and isinstance(r["kcal_mol"], float)
 
@@ -1377,7 +1377,7 @@ def test_the_site_block_matches_the_committed_schema():
         relaxation="none", n_rot=None, surface=dict(genus=0, components=1),
         identity=dict(chemical_smiles="C=O", mapped_smiles="[CH2:1]=[O:2]",
                       chemical_match=True, mapped_match=True),
-        budget=em.budget_rows(basis="sto-3g", solvent=None, charge=0, n_rot=None)))
+        budget=em.budget_rows(basis="sto-3g", solvent=None, charge=0, n_rot=None, geometry_method="atoms_string:undeclared")))
     assert tree_problems(load_schema()["record"]["sites"], block, "sites") == []
 
 
@@ -2007,3 +2007,137 @@ def test_double_zeta_is_recognised_however_it_is_spelled(name):
     """--basis def2svp skipped the +3.5 kcal/mol double-zeta warning."""
     assert em.basis_key(name) in em.SMALL_BASIS
     assert em.basis_key("def2-tzvp") not in em.SMALL_BASIS
+
+
+# --------------------------------------- declared geometry origin (review 5 R1)
+@pytest.mark.parametrize("text, label", [
+    ("dft:b3lyp/def2-tzvp/water", "dft:b3lyp/def2tzvp/water"),
+    ("DFT:B3LYP/def2-SVP", "dft:b3lyp/def2svp"),
+    ("B3LYP/def2-TZVP, PCM water, Cartesian BFGS gtol 3e-4 Ha/A", "dft:b3lyp/def2tzvp/water"),
+    ("PBE0/def2-SVP", "dft:pbe0/def2svp"),
+    ("MMFF94s conformer 4 of 100 (from_smiles seed 0xC0FFEE)", "mmff94s"),
+    ("mmff94s", "mmff94s"), ("UFF", "uff"), ("etkdg_mmff94s", "etkdg_mmff94s"),
+    ("ETKDG_UFF", "etkdg_uff"),
+    ("drawn by hand", None), ("", None), (None, None),
+])
+def test_declared_geometry_origin_is_normalised(text, label):
+    """The fixture SDFs' own free text and the label vocabulary both read."""
+    assert em.declared_geometry_method(text) == label
+
+
+def _nitrite_files(tmp_path):
+    """One nitrite geometry, written twice: an SDF that declares a DFT origin
+    and an XYZ that cannot declare anything."""
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    m = Chem.AddHs(Chem.MolFromSmiles("N(=O)[O-]"))
+    AllChem.EmbedMolecule(m, randomSeed=1)
+    c = m.GetConformer()
+    for i in range(m.GetNumAtoms()):           # tilt out of z = 0 (DIMENSION_AMBIGUOUS)
+        p = c.GetAtomPosition(i)
+        c.SetAtomPosition(i, (p.x, p.y + 0.3 * p.x, p.z + 0.4 * p.x))
+    sdf = tmp_path / "nitrite.sdf"
+    m.SetProp("geometry", "B3LYP/def2-TZVP, PCM water, Cartesian BFGS")
+    w = Chem.SDWriter(str(sdf)); w.write(m); w.close()
+    xyz = tmp_path / "nitrite.xyz"
+    Chem.MolToXYZFile(m, str(xyz))
+    return sdf, xyz
+
+
+def test_a_declared_dft_file_and_an_undeclared_file_get_different_keys(tmp_path):
+    """Review 5 R1 validation: a DFT-geometry nitrite SDF and an XYZ of the
+    same atoms were both file_frozen and shared analysis_key 85d0b5cbef."""
+    sdf, xyz = _nitrite_files(tmp_path)
+    labels = []
+    for f in (sdf, xyz):
+        info = em.from_file(str(f), charge=-1)[1]
+        labels.append(em.geometry_method(info["source"], info["forcefield"],
+                                         declared=info["declared_geometry"]))
+    assert labels == ["dft:b3lyp/def2tzvp/water", "file_frozen:undeclared"]
+    keys = {em.record_key(em.analysis_fields(**{**_A, "geometry_method": g})) for g in labels}
+    assert len(keys) == 2
+
+
+def test_a_dft_file_and_optimize_at_that_level_share_a_label():
+    assert (em.geometry_method("file 3D coordinates used as-is",
+                               declared="B3LYP/def2-TZVP, PCM water")
+            == em.geometry_method(optimize=("b3lyp", "def2-tzvp", "water")))
+
+
+@pytest.mark.parametrize("method, has_anion_row", [
+    ("etkdg_mmff94s", True), ("file_frozen:undeclared", True), ("mmff94s", True),
+    ("atoms_string:undeclared", True), ("dft:b3lyp/def2tzvp/water", False),
+    ("dft:b3lyp/def2tzvp/water+mmff94s_h", False),
+])
+def test_the_anion_geometry_row_follows_the_geometry_method(method, has_anion_row):
+    """Review 5 R1: the DFT-geometry anion fixtures carried the MMFF -> DFT
+    6.5 kcal/mol row, an uncertainty they do not have."""
+    ids = _budget_ids(basis="def2-tzvp", solvent="water", charge=-1, n_rot=0,
+                      geometry_method=method)
+    assert ("anion geometry" in ids) is has_anion_row
+
+
+@pytest.mark.parametrize("basis, has_basis_row", [
+    ("def2-svp", True), ("STO-3G", True), ("def2-tzvp", False), ("def2-tzvpp", False),
+])
+def test_the_basis_row_is_for_double_zeta_runs(basis, has_basis_row):
+    """It measures def2-SVP -> def2-TZVPP; review 5 found it on def2-TZVP runs."""
+    ids = _budget_ids(basis=basis, solvent=None, charge=0, n_rot=0,
+                      geometry_method="etkdg_mmff94s")
+    assert ("basis" in ids) is has_basis_row
+
+
+@pytest.mark.parametrize("args, match", [
+    (["--smiles", "CCO", "--geometry-origin", "mmff94s"], "needs --file or --atoms"),
+    (["--atoms", "O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692",
+      "--geometry-origin", "a guess"], "not a recognised origin"),
+])
+def test_geometry_origin_flag_is_checked_before_compute(monkeypatch, args, match):
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", *args])
+    with pytest.raises(SystemExit, match=match):
+        em.main()
+
+
+def test_atoms_with_a_declared_origin_reach_compute(monkeypatch):
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--atoms",
+                                      "O 0 0 0.1173; H 0 0.7572 -0.4692; H 0 -0.7572 -0.4692",
+                                      "--geometry-origin", "dft:b3lyp/def2-tzvp"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
+def test_a_flag_that_contradicts_the_file_is_refused_before_compute(tmp_path, monkeypatch):
+    """The file's own declaration wins; a disagreeing --geometry-origin is an
+    error, not a silent override. An agreeing one is accepted."""
+    sdf, _ = _nitrite_files(tmp_path)
+    _stop_before_scf(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--file", str(sdf),
+                                      "--geometry-origin", "mmff94s"])
+    with pytest.raises(SystemExit, match="contradicts the file"):
+        em.main()
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--file", str(sdf),
+                                      "--geometry-origin", "dft:b3lyp/def2-tzvp/water"])
+    with pytest.raises(_ReachedCompute):
+        em.main()
+
+
+def test_the_explicit_property_is_read(tmp_path):
+    from rdkit import Chem
+    sdf, _ = _nitrite_files(tmp_path)
+    m = next(iter(Chem.SDMolSupplier(str(sdf), removeHs=False)))
+    m.ClearProp("geometry")
+    m.SetProp("espmap_geometry_origin", "mmff94s")
+    p = tmp_path / "declared.sdf"
+    w = Chem.SDWriter(str(p)); w.write(m); w.close()
+    info = em.from_file(str(p), charge=-1)[1]
+    assert em.geometry_method(info["source"], declared=info["declared_geometry"]) == "mmff94s"
+
+
+def test_a_declared_etkdg_file_shares_the_smiles_label():
+    """The C18 fixtures are ETKDG + MMFF94s conformers, what --smiles makes;
+    declared so, they get the same label, hence the same key (review 5 R6)."""
+    info = em.from_smiles("CCO")[1]
+    assert (em.geometry_method("file 3D coordinates used as-is", declared="etkdg_mmff94s")
+            == em.geometry_method(info["source"], info["forcefield"]))

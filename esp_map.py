@@ -336,6 +336,10 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0, record=None):
 
     has_conf = mol.GetNumConformers() > 0
     drawing = mol.GetProp("_coords") == "drawing"
+    # how the file's coordinates were made, if it says (review 5 R1); read
+    # before AddHs, which does not carry SDF data fields over
+    declared = next((mol.GetProp(k) for k in ("espmap_geometry_origin", "geometry")
+                     if mol.HasProp(k)), None)
     n_h_before = sum(1 for a in mol.GetAtoms() if a.GetSymbol() == "H")
     perceived = mol.HasProp("_bonds") and mol.GetProp("_bonds") == "perceived"
 
@@ -390,7 +394,8 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0, record=None):
                 source=source, n_found=n_found,
                 record=dict(index=record or 1, of=n_found),
                 smiles=Chem.MolToSmiles(Chem.RemoveHs(mol)), mol=mol,
-                h_source=h_source)
+                h_source=h_source,
+                declared_geometry=None if drawing or not has_conf else declared)
     return _mol_to_spec(mol, best), info
 
 
@@ -1793,29 +1798,75 @@ def analysis_fields(xc, basis, solvent, iso, spacing, density_fit, geometry_meth
                 surface_definition=surface_definition(iso))
 
 
+def _dft_label(xc, basis, solvent):
+    solv = None if solvent in (None, "vacuum") else solvent.lower()
+    return f"dft:{xc.lower()}/{basis_key(basis)}" + (f"/{solv}" if solv else "")
+
+
+_FORCE_FIELDS = {"mmff94s": "mmff94s", "mmff94": "mmff94", "uff": "uff"}
+
+
+def declared_geometry_method(text):
+    """Normalise a declared geometry origin to the geometry_method vocabulary,
+    or None when it cannot be read.
+
+    Accepts the label itself ("dft:b3lyp/def2tzvp/water", "mmff94s") or the
+    free text bench/fixture_geometries.py writes ("B3LYP/def2-TZVP, PCM water,
+    Cartesian BFGS ..."; "MMFF94s conformer 4 of 100 ...")."""
+    import re
+    t = (text or "").strip()
+    if not t:
+        return None
+    low = t.lower()
+    if re.fullmatch(r"dft:[a-z0-9_\-]+/[a-z0-9()*+_\-]+(/[a-z0-9_\-]+)?", low):
+        xc, rest = low[4:].split("/", 1)
+        basis, _, solv = rest.partition("/")
+        return _dft_label(xc, basis, solv or None)
+    first = re.split(r"[\s,;(]", low, 1)[0]
+    if first in _FORCE_FIELDS:
+        return _FORCE_FIELDS[first]
+    # an ETKDG conformer relaxed with a force field is what a --smiles run
+    # makes; declaring it so gives the file the same key as that run (R6)
+    if first in ("etkdg_mmff94s", "etkdg_uff"):
+        return first
+    m = re.match(r"([a-z0-9\-]+)/([a-z0-9()*+_\-]+)(?:\s*,\s*pcm\s+([a-z0-9_\-]+))?", low)
+    if m and not m.group(1).startswith(tuple(_FORCE_FIELDS)):
+        return _dft_label(m.group(1), m.group(2), m.group(3))
+    return None
+
+
 def geometry_method(source=None, forcefield=None, atoms=False, molecule=None,
-                    optimize=None):
+                    optimize=None, declared=None):
     """How the computed coordinates were made, as one normalised label.
 
     source/forcefield are from_smiles/from_file's info["source"] and
     info["forcefield"]; atoms and molecule mark --atoms and --molecule
     runs; optimize is (xc, basis, solvent) when --optimize replaced the
-    coordinates, which then decides the label on its own."""
+    coordinates, which then decides the label on its own; declared is a
+    file's or --geometry-origin's declared origin (declared_geometry_method).
+
+    Review 5 R1: every kept file geometry was "file_frozen", so a DFT-geometry
+    fixture shared analysis_key with an MMFF file of the same molecule, on
+    the axis worth up to 6.5 kcal/mol for anions. A file now says what made
+    it, or is "...:undeclared", which no declared label can equal. A file
+    declared as DFT and an --optimize run at the same level share "dft:..."."""
     if optimize is not None:
-        xc, basis, solvent = optimize
-        solv = None if solvent in (None, "vacuum") else solvent.lower()
-        return f"dft_opt:{xc.lower()}/{basis_key(basis)}" + (f"/{solv}" if solv else "")
+        return _dft_label(*optimize)
+    # text that cannot be read counts as undeclared (main warns, and checks
+    # --geometry-origin before any compute)
+    label = declared_geometry_method(declared) if declared else None
     if atoms:
-        return "atoms_string"
+        return label or "atoms_string:undeclared"
     if molecule is not None:
         return "idealised_builtin"
     if source is None:
         raise ValueError("geometry_method needs a source, --atoms or --molecule")
     if source.startswith("file 3D coordinates used as-is"):
+        base = label or "file_frozen:undeclared"
         if "hydrogen(s) added" not in source:
-            return "file_frozen"
-        return ("file_frozen+mmff94s_h" if (forcefield or "").startswith("MMFF94s")
-                else "file_frozen+added_h")
+            return base
+        return base + ("+mmff94s_h" if (forcefield or "").startswith("MMFF94s")
+                       else "+added_h")
     if "ETKDG" in source:
         # _embed_and_minimise falls back to UFF where MMFF94s has no parameters
         return "etkdg_uff" if (forcefield or "").startswith("UFF") else "etkdg_mmff94s"
@@ -2189,14 +2240,21 @@ BUDGET = (
 )
 
 
-def budget_rows(*, basis, solvent, charge, n_rot):
+def budget_rows(*, basis, solvent, charge, n_rot, geometry_method):
     """The BUDGET rows that apply to a run with these settings: the basis
-    row unless the basis is the one it was measured against, solvent rows
-    for a gas-phase run, the anion-geometry row for an anion, and the
-    conformer row unless the molecule is known to be rigid."""
-    keep = {"basis": basis_key(basis) != basis_key("def2-tzvpp"),
+    row for a double-zeta run (it measures def2-SVP -> def2-TZVPP), solvent
+    rows for a gas-phase run, the anion-geometry row for an anion whose
+    geometry is not a DFT one, and the conformer row unless the molecule is
+    known to be rigid.
+
+    Review 5 R1: the anion row ("MMFF -> DFT geometry, up to 6.5") was
+    attached on charge alone, so the DFT-geometry P3 fixtures carried an
+    uncertainty they do not have; the basis row was attached to def2-TZVP
+    runs, which it does not describe."""
+    keep = {"basis": basis_key(basis) in SMALL_BASIS,
             "solvent water": solvent is None, "solvent chloroform": solvent is None,
-            "anion geometry": charge < 0, "conformer C18": n_rot is None or n_rot > 0}
+            "anion geometry": charge < 0 and not geometry_method.startswith("dft:"),
+            "conformer C18": n_rot is None or n_rot > 0}
     return [dict(r) for r in BUDGET if keep.get(r["id"], True)]
 
 
@@ -2304,6 +2362,12 @@ def main():
     ap.add_argument("--record", type=int, default=None,
                     help="1-based record to compute from a multi-record SDF/CDXML; "
                          "without it such a file is refused")
+    ap.add_argument("--geometry-origin", default=None, metavar="LABEL",
+                    help="how a --file or --atoms geometry was made, e.g. "
+                         "'dft:b3lyp/def2-tzvp/water' or 'mmff94s'. It enters "
+                         "analysis_key; an SDF declares it instead as an "
+                         "'espmap_geometry_origin' (or 'geometry') property; "
+                         "Undeclared geometries are keyed as such")
     ap.add_argument("--seed", type=lambda s: int(s, 0), default=0xC0FFEE,
                     help="ETKDG random seed; fixed so runs are reproducible")
     ap.add_argument("--nconfs", type=int, default=20,
@@ -2394,6 +2458,15 @@ def main():
         except ImportError:
             raise SystemExit("--optimize needs pyberny: pip install 'espmap[opt]' "
                              "(or pip install pyberny)") from None
+    if a.geometry_origin is not None:
+        if not (a.file or a.atoms) or a.smiles:
+            raise SystemExit("--geometry-origin describes supplied coordinates; it "
+                             "needs --file or --atoms (SMILES geometries are "
+                             "generated here and labelled accordingly)")
+        if declared_geometry_method(a.geometry_origin) is None:
+            raise SystemExit(f"--geometry-origin {a.geometry_origin!r} is not a "
+                             f"recognised origin; use e.g. 'dft:b3lyp/def2-tzvp/water', "
+                             f"'mmff94s' or 'uff'")
     if a.include_reaction_field and a.solvent == "vacuum":
         raise SystemExit("--include-reaction-field needs --solvent: in the gas "
                          "phase there is no reaction field to add")
@@ -2447,6 +2520,19 @@ def main():
                  if gi["record"]["of"] > 1 else ""))
         print(f"  SMILES as read: {gi['smiles']}")
         print(f"  geometry: {gi['source']}")
+        d = gi.get("declared_geometry")
+        d_label = declared_geometry_method(d) if d else None
+        if a.geometry_origin and d_label and \
+                d_label != declared_geometry_method(a.geometry_origin):
+            # the file's own declaration wins; a disagreeing flag is refused,
+            # before any compute, rather than silently overriding it
+            raise SystemExit(f"--geometry-origin {a.geometry_origin!r} contradicts the "
+                             f"file's own declaration {d!r} ({d_label}); drop the flag, "
+                             f"or fix the file's property")
+        if d and not a.geometry_origin and d_label is None:
+            print(f"note: the file declares its geometry as {d!r}, which is not a "
+                  f"recognised origin; it is keyed as undeclared. Pass "
+                  f"--geometry-origin to state it.", file=sys.stderr)
         if "DISCARDED" in gi["source"]:
             print("WARNING: this file is a FLAT 2D depiction, not a geometry. The "
                   "drawn layout has been replaced by a generated 3D conformer, so "
@@ -2620,7 +2706,11 @@ def main():
         source=(gi or {}).get("source"), forcefield=(gi or {}).get("forcefield"),
         atoms=bool(a.atoms and gi is None),
         molecule=a.molecule if gi is None and not a.atoms else None,
-        optimize=(a.xc, a.basis, a.solvent) if a.optimize else None)
+        optimize=(a.xc, a.basis, a.solvent) if a.optimize else None,
+        # the file's readable declaration, else the flag (a contradiction was
+        # refused above); unreadable file text does not mask a valid flag
+        declared=next((x for x in ((gi or {}).get("declared_geometry"), a.geometry_origin)
+                       if x and declared_geometry_method(x)), None))
     a_fields = analysis_fields(a.xc, a.basis, a.solvent, a.iso, a.spacing,
                                a.density_fit, g_method, reaction_field=rf_added)
     r_fields = render_fields(cmap_name, kind, vlim, a.elev, a.azim, a.size, a.ambient)
@@ -2672,7 +2762,8 @@ def main():
                           # the geometry against it atom by atom
                           mapped_smiles=approved if atom_maps else None,
                           chemical_match=verified, mapped_match=mapped_ok),
-            budget=budget_rows(basis=a.basis, solvent=solv, charge=charge, n_rot=n_rot)))
+            budget=budget_rows(basis=a.basis, solvent=solv, charge=charge, n_rot=n_rot,
+                               geometry_method=g_method)))
     if a.html:
         esp_figure(verts, faces, V, symbols, mol.atom_coords(), cmaps[cmap_name],
                    vlim, title=f"{label} · {a.xc}/{a.basis}", kind=kind).write_html(
