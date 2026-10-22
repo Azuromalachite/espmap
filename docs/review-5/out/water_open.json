@@ -1,0 +1,205 @@
+{
+  "schema": "espmap.record/1",
+  "validity": {
+    "input": true,
+    "surface": false,
+    "sites": false
+  },
+  "analysis_key": "7dd2ab84f1d130b41510613d9d642b3c91e6d552",
+  "render_key": "a1960ff4cd0486f3c128ddf9a2e719be3baaef44",
+  "key_fields": {
+    "analysis": {
+      "xc": "b3lyp",
+      "basis": "sto3g",
+      "solvent": null,
+      "solvent_esp": null,
+      "spacing_bohr": 0.26,
+      "density_fit": false,
+      "geometry_method": "etkdg_mmff94s",
+      "surface_definition": {
+        "property": "electron_density",
+        "isovalue_e_bohr3": 0.002
+      }
+    },
+    "render": {
+      "cmap": "vik",
+      "kind": "diverging",
+      "vmin": -43.831816,
+      "vmax": 43.831816,
+      "elev": 20.0,
+      "azim": 172.0,
+      "size": 80,
+      "ambient": 0.62
+    }
+  },
+  "geometry": {
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ],
+    "xyz_angstrom": [
+      [
+        0.001923,
+        0.39781,
+        0.0
+      ],
+      [
+        0.762498,
+        -0.202595,
+        0.0
+      ],
+      [
+        -0.76442,
+        -0.195215,
+        0.0
+      ]
+    ],
+    "sha1": "8557ddd0772d77fdf551ad8aab83dacc49b3ff3d",
+    "sha1_covers": "symbols and xyz_angstrom at %.8f, one 'Sym x y z' line per atom, newline-joined; not charge or spin",
+    "charge": 0,
+    "spin": 0,
+    "optimised_from_sha1": null
+  },
+  "input": {
+    "smiles": "O",
+    "file": null,
+    "record": null,
+    "gate_smiles": "O",
+    "approved_smiles": "O",
+    "gate": {
+      "verdict": "INFO",
+      "forced": false,
+      "findings": []
+    },
+    "computed_smiles": "O",
+    "structure_verified": true,
+    "formula": "H2O",
+    "charge": 0,
+    "spin": 0
+  },
+  "settings": {
+    "xc": "b3lyp",
+    "basis": "sto-3g",
+    "solvent": "vacuum",
+    "solvent_esp": null,
+    "include_reaction_field": false,
+    "density_fit": false,
+    "gpu": false,
+    "gpu_validated": null,
+    "iso": 0.002,
+    "spacing_bohr": 0.26,
+    "margin_bohr": 2.0,
+    "grids_level": 3,
+    "conv_tol": 1e-09,
+    "seed": 12648430,
+    "nconfs": 20,
+    "optimize": false,
+    "geometry": "3D generated from SMILES by ETKDGv3"
+  },
+  "results": {
+    "e_tot_Ha": -75.31542872790246,
+    "nao": 7,
+    "dipole": {
+      "vector_D": [
+        -0.008034858719976697,
+        -1.6624076060396962,
+        7.81028590289105e-17
+      ],
+      "magnitude_D": 1.6624270232323834,
+      "origin": {
+        "kind": "centre_of_nuclear_charge",
+        "xyz_angstrom": [
+          0.0013461999999999975,
+          0.278467,
+          0.0
+        ]
+      }
+    },
+    "V_min_kcal_mol": -43.83181618945805,
+    "V_max_kcal_mol": 37.39025628447468,
+    "sigma_hole": null,
+    "sigma_hole_reason": "no Cl/Br/I",
+    "n_verts": 1515,
+    "surface": {
+      "definition": {
+        "property": "electron_density",
+        "isovalue_e_bohr3": 0.002
+      },
+      "closed": false,
+      "open_edges": 294,
+      "nonmanifold_edges": 0,
+      "components": 1,
+      "genus": null,
+      "chi": -3,
+      "face_max_rho": 0.04005384034898158,
+      "margin_bohr": 2.0,
+      "strict": false,
+      "problems": [
+        "density on a grid-box face is 4.01e-02 > iso=0.002; the isosurface is CLIPPED (raise --margin)",
+        "the mesh is OPEN (294 edges belong to one triangle only): not a single closed surface"
+      ],
+      "valid": false
+    },
+    "surface_stats": {
+      "area_A2": 16.646666682055127,
+      "area_pos_A2": 12.247483080299837,
+      "area_neg_A2": 4.39918360175529,
+      "V_area_mean_kcal_mol": 13.591339700972963,
+      "V_area_sd_kcal_mol": 21.603533946613073,
+      "V_p05_kcal_mol": -28.62905679375439,
+      "V_p50_kcal_mol": 22.687353889006996,
+      "V_p95_kcal_mol": 35.71318464653058,
+      "V_min_kcal_mol": -43.83181618945805,
+      "V_min_at_A": [
+        -0.034155514536553,
+        1.3531857780532055,
+        -1.0555320620942645
+      ],
+      "V_max_kcal_mol": 37.39025628447468,
+      "V_max_at_A": [
+        -1.1151833597479275,
+        -1.2609494218400001,
+        0.04233413650058281
+      ]
+    },
+    "gipf": {
+      "V_pos_mean_kcal_mol": 25.00188616781652,
+      "V_neg_mean_kcal_mol": -18.176026119785373,
+      "sigma2_pos_kcal2_mol2": 99.83168285011385,
+      "sigma2_neg_kcal2_mol2": 116.47384162441563,
+      "sigma2_tot_kcal2_mol2": 216.30552447452948,
+      "nu": 0.24852012815468558,
+      "weighting": "triangle area, V averaged per triangle"
+    }
+  },
+  "sites": null,
+  "sites_reason": "surface not valid (see results.surface.problems)",
+  "scale": {
+    "kind": "diverging",
+    "vmin": -43.83181618945805,
+    "vmax": 43.83181618945805,
+    "sign_change_ratio": 0.8530391741665355,
+    "sign_change_threshold": 0.05,
+    "cmap": "vik",
+    "cmap_requested": null,
+    "cmap_substituted": false,
+    "cmap_forced": false,
+    "source": "auto",
+    "colour_scale_fixed": false
+  },
+  "provenance": {
+    "espmap_version": "0.1.0",
+    "code": "unknown",
+    "python": "3.12.15",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "scikit_image": "0.26.0",
+    "pyscf": "2.14.0",
+    "rdkit": "2026.9.1",
+    "matplotlib": "3.11.2",
+    "threads": 4,
+    "blas": null
+  },
+  "caveat": "Measured error budget (README): basis def2-SVP -> def2-TZVPP moves the chlorobenzene sigma-hole by +3.54 kcal/mol; solvent gas -> water by -3.60. Quote numbers only against those margins."
+}

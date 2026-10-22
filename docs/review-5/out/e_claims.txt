@@ -1,0 +1,12 @@
+row                          value   substr(file) token(file) token(para)  passes if removed from para?
+partition small anions       3.0          1            1           1       False
+partition C18                3.95         1            1           1       False
+conformer C18                5.1          2            1           1       True
+grid mean                    0.15         1            1           1       False
+conformer C18 extended       2.69         2            2           1       True
+conformer C18 extended max   5.16         1            1           1       False
+partition atoms              11.9         1            1           1       False
+partition atoms C18          8.7          1            1           1       False
+atoms buried C18             14–15        1            1           1       False
+
+C18 rows by genus: [(0, 'c18|Z3Z13-18OAc|28'), (0, 'c18|Z3Z13-18OAc|34'), (0, 'c18|Z3Z13-18OAc|4'), (0, 'c18|Z3Z13-18OAc|53'), (0, 'c18|Z3Z13-18OAc|54'), (0, 'c18|Z3Z13-18OAc|57'), (0, 'c18|Z3Z13-18OAc|67'), (0, 'c18|Z3Z13-18OAc|82'), (2, 'c18|Z3Z13-18OAc|40'), (3, 'c18|Z3Z13-18OAc|72')]

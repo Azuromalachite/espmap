@@ -1,0 +1,14 @@
+wrote /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/review5-work/out/forced_glycine.png  (diverging scale -49.1 to +49.1 kcal/mol, cmap vik)
+wrote /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/review5-work/out/forced_glycine.json
+
+RECORD glycine
+  validity {'input': False, 'surface': True, 'sites': False}
+  sites_reason input not valid (forced past the gate, or structure not verified)
+  gate INFO forced False
+  approved_smiles [NH3+]CC(=O)[O-] | computed_smiles None | structure_verified False
+  geometry_method dft_opt:b3lyp/sto3g | optimised_from 51a3b6ed5ac527b5ee978b7890a681e04063aabc
+  any field recording the mapping result: []
+  V -49.00899727566228 49.0547922642108
+peak 469764 kB, 74.28 s
+WARNING: after --optimize: the structure that passed the check is not the one about to be computed: the connectivity perceived from the coordinates is not the approved structure's
+peak 469764 kB, 74.28 s

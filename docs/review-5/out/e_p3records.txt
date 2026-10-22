@@ -1,0 +1,79 @@
+provenance (code, espmap_version, pyscf, rdkit, numpy, threads):
+  benzene                v0.1.2-82-g878332291704      0.1.0   2.14.0 2026.9.1 2.5.4 4
+  nitrite                v0.1.2-82-g878332291704      0.1.0   2.14.0 2026.9.1 2.5.4 4
+  thiocyanate            v0.1.2-82-g878332291704      0.1.0   2.14.0 2026.9.1 2.5.4 4
+  enolate                v0.1.2-82-g878332291704      0.1.0   2.14.0 2026.9.1 2.5.4 4
+  Z3Z13-18OAc_extended   v0.1.2-82-g878332291704      0.1.0   2.14.0 2026.9.1 2.5.4 4
+  Z3Z13-18OAc_folded     v0.1.2-82-g878332291704      0.1.0   2.14.0 2026.9.1 2.5.4 4
+
+== benzene: schema problems none; npz files == schema: True
+   validity {'input': True, 'surface': True, 'sites': True}  verified True  gate INFO []
+   key 85d0b5cbef recomputes True; geometry_method file_frozen; basis def2tzvp solvent water df False
+   settings.geometry: file 3D coordinates used as-is
+   V -18.411 .. +21.501; genus 0; nu 0.24998892991075153; scale diverging
+   budget ['basis', 'functional', 'grid', 'partition small anions', 'partition C18', 'grid mean']
+   sites (6): [('C0', [1]), ('C1', [2]), ('C2', [3]), ('C3', [4]), ('C4', [5]), ('C5', [6])] ...
+   atoms in >1 site: none; sum(site areas)/surface = 1.0000
+   heavy atoms buried (nearest_nucleus): 0; identity {'chemical_smiles': 'c1ccccc1', 'mapped_smiles': '[cH:1]1[cH:2][cH:3][cH:4][cH:5][cH:6]1', 'chemical_match': True, 'mapped_match': True}
+== nitrite: schema problems none; npz files == schema: True
+   validity {'input': True, 'surface': True, 'sites': True}  verified True  gate INFO ['CHARGED']
+   key 85d0b5cbef recomputes True; geometry_method file_frozen; basis def2tzvp solvent water df False
+   settings.geometry: file 3D coordinates used as-is
+   V -167.752 .. -132.135; genus 0; nu None; scale sequential
+   budget ['basis', 'functional', 'grid', 'anion geometry', 'partition small anions', 'partition C18', 'grid mean']
+   sites (3): [('N0', [1]), ('O1', [2]), ('O2', [3])] ...
+   atoms in >1 site: none; sum(site areas)/surface = 1.0000
+   heavy atoms buried (nearest_nucleus): 0; identity {'chemical_smiles': 'O=N[O-]', 'mapped_smiles': '[N:1](=[O:2])[O-:3]', 'chemical_match': True, 'mapped_match': True}
+== thiocyanate: schema problems none; npz files == schema: True
+   validity {'input': True, 'surface': True, 'sites': True}  verified True  gate INFO ['CHARGED']
+   key 85d0b5cbef recomputes True; geometry_method file_frozen; basis def2tzvp solvent water df False
+   settings.geometry: file 3D coordinates used as-is
+   V -141.263 .. -94.828; genus 0; nu None; scale sequential
+   budget ['basis', 'functional', 'grid', 'anion geometry', 'partition small anions', 'partition C18', 'grid mean']
+   sites (3): [('S0', [1]), ('C1', [2]), ('N2', [3])] ...
+   atoms in >1 site: none; sum(site areas)/surface = 1.0000
+   heavy atoms buried (nearest_nucleus): 0; identity {'chemical_smiles': 'N#C[S-]', 'mapped_smiles': '[S-:1][C:2]#[N:3]', 'chemical_match': True, 'mapped_match': True}
+== enolate: schema problems none; npz files == schema: True
+   validity {'input': True, 'surface': True, 'sites': True}  verified True  gate INFO ['CHARGED']
+   key 85d0b5cbef recomputes True; geometry_method file_frozen; basis def2tzvp solvent water df False
+   settings.geometry: file 3D coordinates used as-is
+   V -166.672 .. -78.276; genus 0; nu None; scale sequential
+   budget ['basis', 'functional', 'grid', 'anion geometry', 'partition small anions', 'partition C18', 'grid mean']
+   sites (3): [('C0', [1]), ('C1', [2]), ('O2', [3])] ...
+   atoms in >1 site: none; sum(site areas)/surface = 1.0000
+   heavy atoms buried (nearest_nucleus): 0; identity {'chemical_smiles': 'C=C[O-]', 'mapped_smiles': '[CH2:1]=[CH:2][O-:3]', 'chemical_match': True, 'mapped_match': True}
+== Z3Z13-18OAc_extended: schema problems none; npz files == schema: True
+   validity {'input': True, 'surface': True, 'sites': True}  verified True  gate INFO ['TAUTOMERS']
+   key 49feb9f5e5 recomputes True; geometry_method file_frozen; basis def2svp solvent None df True
+   settings.geometry: file 3D coordinates used as-is
+   V -40.737 .. +19.871; genus 0; nu 0.08626526721426792; scale diverging
+   budget ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'partition small anions', 'partition C18', 'conformer C18', 'grid mean']
+   sites (21): [('C1-H', [1]), ('C2-H', [2]), ('C3-H', [3]), ('C4-H', [4]), ('C5-H', [5]), ('C6-H', [6])] ...
+   atoms in >1 site: {2: 2}; sum(site areas)/surface = 1.0413
+   heavy atoms buried (nearest_nucleus): 15; identity {'chemical_smiles': 'CCCC/C=C\\CCCCCCCC/C=C\\CCOC(C)=O', 'mapped_smiles': '[CH2:1]([CH2:2]/[CH:3]=[CH:4]\\[CH2:5][CH2:6][CH2:7][CH2:8][CH2:9][CH2:10][CH2:11][CH2:12]/[CH:13]=[CH:14]\\[CH2:15][CH2:16][CH2:17][CH3:18])[O:31][C:22]([CH3:21])=[O:32]', 'chemical_match': True, 'mapped_match': True}
+== Z3Z13-18OAc_folded: schema problems none; npz files == schema: True
+   validity {'input': True, 'surface': True, 'sites': True}  verified True  gate INFO ['TAUTOMERS']
+   key 49feb9f5e5 recomputes True; geometry_method file_frozen; basis def2svp solvent None df True
+   settings.geometry: file 3D coordinates used as-is
+   V -35.702 .. +22.209; genus 3; nu 0.17058433105726487; scale diverging
+   budget ['basis', 'solvent water', 'solvent chloroform', 'functional', 'grid', 'partition small anions', 'partition C18', 'conformer C18', 'grid mean']
+   sites (21): [('C1-H', [1]), ('C2-H', [2]), ('C3-H', [3]), ('C4-H', [4]), ('C5-H', [5]), ('C6-H', [6])] ...
+   atoms in >1 site: {2: 2}; sum(site areas)/surface = 1.0271
+   heavy atoms buried (nearest_nucleus): 15; identity {'chemical_smiles': 'CCCC/C=C\\CCCCCCCC/C=C\\CCOC(C)=O', 'mapped_smiles': '[CH2:1]([CH2:2]/[CH:3]=[CH:4]\\[CH2:5][CH2:6][CH2:7][CH2:8][CH2:9][CH2:10][CH2:11][CH2:12]/[CH:13]=[CH:14]\\[CH2:15][CH2:16][CH2:17][CH3:18])[O:31][C:22]([CH3:21])=[O:32]', 'chemical_match': True, 'mapped_match': True}
+
+benzene C-site range 0.0753 (claim 0.075); nitrite |O1-O2| 0.0073 (claim 0.007)
+radius_scaled: benzene 0.0753; nitrite 0.0027
+analysis_keys: {'benzene': '85d0b5cbef', 'nitrite': '85d0b5cbef', 'thiocyanate': '85d0b5cbef', 'enolate': '85d0b5cbef', 'Z3Z13-18OAc_extended': '49feb9f5e5', 'Z3Z13-18OAc_folded': '49feb9f5e5'}
+
+installed espmap metadata version: 0.1.0
+  dist location: /home/austintw/.venvs/espmap/lib/python3.12/site-packages/espmap-0.1.0.dist-info
+  esp_map imported from: /home/austintw/p3copy/esp_map.py
+  pyproject (P3): ['version = "0.1.2"']
+  pyproject (main repo): ['version = "0.1.2"']
+  code_identity() here: {'espmap_version': '0.1.0', 'code': 'unknown'}
+.........................................................                [100%]
+57 passed in 0.33s
+__editable__.espmap-0.1.0.pth
+__editable___espmap_0_1_0_finder.py
+espmap-0.1.0.dist-info
+{"url":"file:///mnt/c/Users/user/Documents/espmap","dir_info":{"editable":true}}
