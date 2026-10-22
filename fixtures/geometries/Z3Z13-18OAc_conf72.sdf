@@ -130,4 +130,7 @@ MMFF94s conformer 72 of 100 (from_smiles seed 0xC0FFEE), as bench/conformers.py
 >  <atom_maps>  (1) 
 chain numbering: map n = Cn; acetyl CH3 21, C=O 22; ester O 31, carbonyl O 32 (fixtures/make_records.py)
 
+>  <espmap_geometry_origin>  (1) 
+etkdg_mmff94s
+
 $$$$

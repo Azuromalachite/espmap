@@ -108,6 +108,7 @@ def test_fixture_npz_is_the_same_record(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
+@pytest.mark.skipif(DRY, reason="a dry run's basis override selects the basis row")
 def test_fixture_budget_is_the_one_its_settings_select(name):
     """Explicit row ids per fixture, not budget_rows() recomputed: review 5 R1
     found the old test checking the producer against itself, so it passed
@@ -189,12 +190,14 @@ def test_symmetry_tolerances_come_from_the_noise_bench():
     assert _noise_tolerance("benzene") == pytest.approx(0.1215, abs=1e-3)
 
 
+@pytest.mark.skipif(DRY, reason="the tolerance is calibrated at the fixtures' own basis")
 def test_benzene_six_carbon_sites_agree():
     """Equivalent by symmetry; the independent check on the partition (N12)."""
     m = _site_means("benzene", "C")
     assert len(m) == 6 and max(m.values()) - min(m.values()) < _noise_tolerance("benzene")
 
 
+@pytest.mark.skipif(DRY, reason="the tolerance is calibrated at the fixtures' own basis")
 def test_nitrite_two_oxygen_sites_agree():
     a, b = _site_means("nitrite", "O").values()      # labels come from the maps (R5)
     assert abs(a - b) < _noise_tolerance("nitrite")
