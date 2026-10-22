@@ -342,6 +342,18 @@ def test_site_areas_conserve_the_surface_in_every_row():
         assert max(abs(v) for v in r["sites"]["conservation"].values()) < 1e-12, r["key"]
 
 
+def test_record_budget_rows_are_the_recomputed_ones():
+    """Review 4 N5: the record's sites.budget rows carry the same numbers the
+    README quotes, each recomputed here from its bench/ file."""
+    data = {**_rows(), **_site_rows()}
+    rows = em.budget_rows(basis="def2-svp", solvent=None, charge=-1, n_rot=None)
+    assert len({r["id"] for r in rows}) == len(rows) == len(em.BUDGET)
+    for r in rows:
+        got = float(data[r["id"]].replace("−", "-"))
+        assert r["kcal_mol"] == got, f"{r['id']}: record {r['kcal_mol']}, bench {got}"
+        assert (ROOT / r["source"]).exists()
+
+
 def test_claude_md_quotes_the_per_site_budget():
     rows = _site_rows()
     for key in ("partition small anions", "partition C18", "conformer C18", "grid mean"):

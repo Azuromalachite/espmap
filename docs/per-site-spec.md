@@ -1,6 +1,9 @@
 # Per-site output: specification
 
-Status: **draft, revision 3. P0 is done; P2 (#24), P1 (#27) and caller-defined sites (#28) are in review.** This is the
+Status: **revision 4. P0, P2 (#24), P1 (#27) and caller-defined sites (#28)
+are merged; §6 now describes the record as written, and
+`docs/record-schema.json` is its key tree, checked against a real record in
+both directions (review 4 N5).** This is the
 contract that espmap's `--json` will grow into and that Arrowfield's v0.0
 fixtures are written against. It extends item 1 of `docs/roadmap-review.md`
 ("extend `--json` with shape descriptors") from whole-molecule numbers to
@@ -280,15 +283,22 @@ Each record carries a summary:
 ```json
 "geometry_provenance": {
   "heavy_atoms": "supplied_frozen",
-  "hydrogens": {"supplied": 2, "generated": 34, "generated_relaxed": 34},
-  "relaxation": "MMFF94s, generated hydrogens only, isolated molecule",
-  "caveat": "heavy-atom pose from the input; generated hydrogens placed without any protein environment"
+  "hydrogens": {"supplied": 2, "generated": 0, "generated_relaxed": 34, "optimised": 0},
+  "relaxation": "MMFF94s, added hydrogens only (supplied atoms frozen), isolated molecule",
+  "caveat": "hydrogens not supplied were placed for the isolated molecule, without any protein or other environment"
 }
 ```
 
-and every hydrogen in `atoms` carries `h_source`: `"supplied"`,
-`"generated"` or `"generated_relaxed"`. `heavy_atoms` is `"generated"` on the
-SMILES path.
+`hydrogens` always has all four keys, zeros included; before N5 it held only
+the sources that occurred, so a consumer had to guess that an absent key meant
+zero. Every hydrogen in `atoms` carries `h_source`: `"supplied"`,
+`"generated"`, `"generated_relaxed"` or, after `--optimize`, `"optimised"`.
+`heavy_atoms` is `"supplied_frozen"`, `"generated"` (SMILES, or a file with no
+usable 3D coordinates) or `"optimised"`. `relaxation` is `"none"` when nothing
+moved (`--atoms`, `--molecule`, a complete 3D file), `"ETKDGv3 + MMFF94s, all
+atoms, isolated molecule"` on the generated path, the force-field note for a
+file whose added hydrogens were relaxed, and `"<xc>/<basis> (pyberny), all
+atoms, isolated molecule"` after `--optimize`.
 
 **Hydrogen sensitivity is flagged per site.** A site containing a polar
 hydrogen (on O, N or S) that was generated, not supplied, gets
@@ -345,14 +355,29 @@ the comparison question to these keys.
 
 ## 6. JSON schema (v1)
 
-The record as a whole moves towards one versioned shape, `espmap.record/1`:
+The record carries `"schema": "espmap.record/1"` at its top level, outside
+`analysis_key` for the reason `sites.schema` is (§5). Its top-level keys are
+the ones `main` writes:
 
 ```
-identity · geometry · calculation · validity · surface · properties · sites · uncertainty · provenance
+schema · validity · analysis_key · render_key · key_fields · geometry · input · settings · results · sites · sites_reason · scale · provenance · caveat
 ```
 
-The existing `input` / `settings` / `results` keys are mapped into it when H4,
-H6 and H14 land. This spec fixes the parts the site block reads.
+**One source of truth.** `docs/record-schema.json` is the complete key tree
+of version 1, nullability included, plus the NPZ array names. A slow test
+runs `main` on mapped chloromethane (STO-3G: σ-hole, atom maps, sites, NPZ)
+and compares the record with the file in both directions: a key the schema
+declares and the code never writes fails, and so does a key the code writes
+and the schema does not declare. A fast test does the same for the site block
+on a synthetic mesh. A change to the record changes that file in the same
+commit. Where this section and the file disagree, the file is right and this
+section is a bug.
+
+Revision 3 planned a reshape into `identity · geometry · calculation · …`.
+Review 4 (N5) found the record had stayed `input` / `settings` / `results`
+while the spec described the reshape. Version 1 freezes the shape that
+exists. A reshape would change every key a consumer reads and give it nothing
+new to read, so it waits for a version 2 with a reason of its own.
 
 **Validity first.** A consumer reads one field and never infers validity from
 stderr, χ, a filename or console text:
@@ -371,7 +396,10 @@ stderr, χ, a filename or console text:
   `structure_verified` is false.
 - `validity.surface` is false if `surface.problems` is non-empty.
 - `validity.sites` is false if either is, or the site block failed its own
-  checks. `"sites"` is then `null` with a reason.
+  checks (`site_checks`): every atom listed once in index order, the atoms'
+  areas adding up to the surface under each rule, and potentials null exactly
+  when an entry's area is zero. `"sites"` is then `null` and `sites_reason`
+  says which check failed.
 - `surface.definition` states that every area here is on the ρ = 0.002 e·bohr⁻³
   electron-density isosurface. **It is not a solvent-accessible surface.** A
   large site area means much of that atom's density boundary is exposed; it
@@ -387,8 +415,8 @@ The site block:
 "sites": {
   "schema": "espmap.sites/1",
   "identity": {
-    "chemical_smiles": "<computed, maps stripped>",
-    "mapped_smiles": "<computed, maps kept>",
+    "chemical_smiles": "<computed from the coordinates, maps stripped>",
+    "mapped_smiles": "<the approved input, maps kept; null if unmapped>",
     "chemical_match": true,
     "mapped_match": true
   },
@@ -405,8 +433,8 @@ The site block:
       "h_source": null,
       "nearest_nucleus": {
         "area_A2": 0.0, "area_pos_A2": 0.0, "area_neg_A2": 0.0,
-        "V_area_mean_kcal_mol": 0.0,
-        "V_p05_kcal_mol": 0.0, "V_p95_kcal_mol": 0.0,
+        "V_area_mean_kcal_mol": 0.0, "V_area_sd_kcal_mol": 0.0,
+        "V_p05_kcal_mol": 0.0, "V_p50_kcal_mol": 0.0, "V_p95_kcal_mol": 0.0,
         "V_min_kcal_mol": 0.0, "V_min_at_A": [0.0, 0.0, 0.0],
         "V_max_kcal_mol": 0.0, "V_max_at_A": [0.0, 0.0, 0.0]
       },
@@ -430,16 +458,19 @@ The site block:
   "conformer_scope": "single conformer; 0 rotatable bonds",
   "topology": {"genus": 0, "components": 1},
   "budget": [
-    {"axis": "basis def2-SVP -> def2-TZVP", "V_max_kcal_mol": [1.53, 2.82],
-     "measured_on": "decanoic acid, BDSF, Z3Z13-18:OAc, Z3Z13-18:OH",
-     "source": "bench/results.jsonl"},
-    {"axis": "solvent gas -> PCM water, polarised solute", "V_max_kcal_mol": -3.60,
+    {"id": "solvent water", "axis": "solvent gas -> PCM water, polarised solute only",
+     "statistic": "shift, sigma-hole V_max", "kcal_mol": -3.60,
      "measured_on": "chlorobenzene", "source": "bench/solvent_convention.jsonl"},
-    {"axis": "partition rule, site means", "kcal_mol": 3.95,
+    {"id": "partition C18", "axis": "partition rule, radius_scaled - nearest_nucleus",
+     "statistic": "max |delta|, site area-weighted mean", "kcal_mol": 3.95,
      "measured_on": "Z3Z13-18:OAc, 10 conformers", "source": "bench/site_partition.jsonl"}
   ]
 }
 ```
+
+`mapped_smiles` is the approved input with its maps, not a SMILES rebuilt
+from the coordinates. Coordinates carry no maps, and `verify_mapping` has
+already checked them against this structure atom by atom (`mapped_match`).
 
 The zeros are **placeholders for type and shape only**. Arrowfield's v0.0
 fixtures use this shape with values marked as fabricated until real runs
@@ -449,21 +480,31 @@ replace them.
 is set for hydrogens only. Coordinates come from `geometry.xyz_angstrom` by
 `index`. `source` on a site is `"default"` or `"caller"`.
 
-**Budget rows.** Each row names its source: a `bench/` file, or `"prose"` for
-a figure with no data behind it. Since H8 (#25) every row of the σ-hole
-budget has a `bench/` file and `test_claims.py` recomputes each one from it;
-the per-site rows (partition, conformer, grid) do the same from
-`bench/site_partition.jsonl`. Arrowfield must display a `"prose"` row as
-unbacked. Rows are selected by the run's settings: the basis row appears for
-a def2-SVP run, the solvent row for a gas-phase run, and so on, and every
-solvent row names its convention (`solvent_esp`). The rows above illustrate
-the shape with the current measured values.
+**Budget rows** come from `esp_map.BUDGET`. Every row names a `bench/` file,
+and `test_claims.py` recomputes each `kcal_mol` from that file under the row's
+`id`, the same id the README table uses. A `"prose"` source, a figure with no
+data behind it, is allowed by the schema but none exists today; Arrowfield
+must display one as unbacked. `budget_rows` selects rows by the run's
+settings:
 
-**NPZ.** `--npz` gains `tri_atom` and `tri_atom_compared`: the atom index of
-every triangle under each rule. Sites are unions of atoms, so this is enough
-to colour a render by site, to regroup with other sites, or for Arrowfield to
-redo a partition, all without another SCF. Units and method go in the NPZ as
-H6 requires.
+- the basis row unless the basis is def2-TZVPP;
+- the solvent rows for a gas-phase run, each naming its convention in `axis`;
+- the anion-geometry row for a negative charge;
+- the conformer row unless the molecule is known to have no rotatable bond
+  (`--atoms` does not know, so it gets the row);
+- the functional, grid and partition rows always.
+
+A row is evidence about the method, measured on the molecule it names. It is
+not an error bar on this run's sites.
+
+**NPZ.** `--npz` carries `tri_atom_nearest_nucleus` and
+`tri_atom_radius_scaled`: the atom index of every triangle under each rule,
+−1 throughout when a rule is unavailable. (Revision 3 called them `tri_atom`
+and `tri_atom_compared`; the code's names say which rule and were kept.)
+Sites are unions of atoms, so this is enough to colour a render by site, to
+regroup with other sites, or for Arrowfield to redo a partition, all without
+another SCF. Units and method go in the NPZ as H6 requires. The full array
+list is `npz` in `docs/record-schema.json`.
 
 ## 7. Acceptance tests
 

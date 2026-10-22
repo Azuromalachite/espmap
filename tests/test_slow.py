@@ -256,7 +256,21 @@ def test_a_generated_polar_hydrogen_is_flagged_on_its_site(tmp_path, monkeypatch
     rec = _run_json(tmp_path, monkeypatch, ["--smiles", "CCO"])
     flags = {s["label"]: s["h_generated_polar"] for s in rec["sites"]["reaction_sites"]}
     assert flags == {"C0": False, "C1": False, "O2": True}
-    assert rec["sites"]["geometry_provenance"]["hydrogens"] == {"generated_relaxed": 6}
+    assert rec["sites"]["geometry_provenance"]["hydrogens"] == {
+        "supplied": 0, "generated": 0, "generated_relaxed": 6, "optimised": 0}
+
+
+def test_record_matches_the_committed_schema_in_both_directions(tmp_path, monkeypatch):
+    """Review 4 N5: the spec and the record had drifted (budget, compared,
+    radii, relaxation). One mapped chloromethane run fills nearly every
+    optional branch: sigma-hole, atom maps, sites, NPZ."""
+    from record_tree import load_schema, tree_problems
+    npz = tmp_path / "m.npz"
+    rec = _run_json(tmp_path, monkeypatch, ["--smiles", "[CH3:1][Cl:2]", "--npz", str(npz)])
+    schema = load_schema()
+    assert rec["schema"] == em.RECORD_SCHEMA
+    assert tree_problems(schema["record"], rec) == []
+    assert sorted(np.load(npz).files) == sorted(schema["npz"])
 
 def test_json_geometry_reproduces_the_run_through_atoms(tmp_path, monkeypatch):
     """Review 3 H14 validation: re-running a JSON's recorded geometry through

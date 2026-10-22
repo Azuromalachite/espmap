@@ -1225,7 +1225,7 @@ def test_radius_scaled_is_null_for_an_element_without_a_radius():
     X = [[0.0, 0.0, 0.0], [1.8, 0.0, 0.0]]
     P, faces = _blob_mesh(X)
     rep = em.site_report(P, faces, _field(P), X, sym)
-    assert rep["partition"]["radius_scaled"] is None
+    assert rep["partition"]["compared"] is None and rep["partition"]["radii"] is None
     assert all(a["radius_scaled"] is None and a["delta"] is None for a in rep["atoms"])
     assert rep["atoms"][0]["nearest_nucleus"]["area_A2"] > 0
 
@@ -1239,6 +1239,119 @@ def test_site_block_is_withheld_from_an_invalid_record():
     block, reason = em.sites_block(dict(input=True, surface=True, sites=False),
                                    P, faces, _field(P), X, sym)
     assert block["schema"] == em.SITES_SCHEMA and reason is None
+
+
+# ------------------------------------------- review 4 N5: one record contract
+def test_partition_names_its_primary_and_compared_rules():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    rep = em.site_report(P, faces, _field(P), X, sym)
+    assert rep["partition"] == {"primary": "nearest_nucleus", "compared": "radius_scaled",
+                                "unit": "triangle", "radii": "Bondi; Mantina 2009 for B"}
+
+
+def test_a_site_block_that_fails_its_own_checks_is_withheld(monkeypatch):
+    """validity.sites was just 'a block exists'; conservation and nullability
+    were asserted only in tests. A triangle lost from one atom must now
+    withhold the block with a reason."""
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    good = em.site_report(P, faces, _field(P), X, sym)
+    assert em.site_checks(good, P, faces, _field(P)) == []
+    real = em.site_report
+
+    def lossy(*a, **k):
+        rep = real(*a, **k)
+        rep["atoms"][1]["nearest_nucleus"]["area_A2"] *= 0.9
+        return rep
+    monkeypatch.setattr(em, "site_report", lossy)
+    block, reason = em.sites_block(dict(input=True, surface=True, sites=False),
+                                   P, faces, _field(P), X, sym)
+    assert block is None and "conserve" in reason
+
+
+def test_site_checks_catch_a_value_on_a_zero_area_atom():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    rep = em.site_report(P, faces, _field(P), X, sym)
+    rep["atoms"][0]["nearest_nucleus"]["area_A2"] = 0.0
+    assert any("null" in p for p in em.site_checks(rep, P, faces, _field(P)))
+
+
+def test_geometry_provenance_counts_every_hydrogen_source():
+    """Only the keys that occurred were written ({'generated_relaxed': 6}),
+    so a consumer had to guess that an absent key meant zero."""
+    ctx = em.site_context(solvent_esp=None, heavy_atoms="generated",
+                          h_source=[None, "generated_relaxed", "generated_relaxed"],
+                          relaxation="ETKDGv3 + MMFF94s, all atoms, isolated molecule",
+                          n_rot=0, surface=dict(genus=0, components=1),
+                          identity={}, budget=[])
+    gp = ctx["geometry_provenance"]
+    assert gp["hydrogens"] == {"supplied": 0, "generated": 0, "generated_relaxed": 2,
+                               "optimised": 0}
+    assert gp["relaxation"].startswith("ETKDGv3") and gp["caveat"]
+    assert ctx["conformer_scope"].startswith("single conformer; 0 rotatable")
+
+
+def _budget_ids(**kw):
+    return [r["id"] for r in em.budget_rows(**kw)]
+
+
+def test_budget_rows_follow_the_run_settings():
+    gas = _budget_ids(basis="def2-SVP", solvent=None, charge=0, n_rot=0)
+    assert {"basis", "solvent water", "solvent chloroform", "partition C18",
+            "partition small anions", "grid mean"} <= set(gas)
+    assert "conformer C18" not in gas and "anion geometry" not in gas
+    wet = _budget_ids(basis="def2-tzvpp", solvent="water", charge=-1, n_rot=3)
+    assert "basis" not in wet and not any(i.startswith("solvent") for i in wet)
+    # N9: any spelling PySCF resolves to def2-TZVPP drops the basis row too
+    assert "basis" not in _budget_ids(basis="DEF2_TZVPP", solvent=None, charge=0, n_rot=0)
+    assert {"conformer C18", "anion geometry"} <= set(wet)
+    # --atoms: the rotatable-bond count is unknown, so the conformer row stays
+    assert "conformer C18" in _budget_ids(basis="sto-3g", solvent=None, charge=0, n_rot=None)
+
+
+def test_every_budget_row_names_a_bench_source():
+    for r in em.budget_rows(basis="def2-svp", solvent=None, charge=-1, n_rot=None):
+        assert set(r) == {"id", "axis", "statistic", "kcal_mol", "measured_on", "source"}
+        assert r["source"].startswith("bench/") and isinstance(r["kcal_mol"], float)
+
+
+def test_the_site_block_matches_the_committed_schema():
+    """The sites subtree, both directions, without an SCF; the slow suite
+    checks the whole record from main()."""
+    from record_tree import load_schema, tree_problems
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    hs = [None, None, "supplied", "supplied"]
+    block, _ = em.sites_block(dict(input=True, surface=True, sites=False),
+                              P, faces, _field(P), X, sym, atom_maps={0: 1, 1: 2}, h_source=hs)
+    block.update(em.site_context(
+        solvent_esp=None, heavy_atoms="supplied_frozen", h_source=hs,
+        relaxation="none", n_rot=None, surface=dict(genus=0, components=1),
+        identity=dict(chemical_smiles="C=O", mapped_smiles="[CH2:1]=[O:2]",
+                      chemical_match=True, mapped_match=True),
+        budget=em.budget_rows(basis="sto-3g", solvent=None, charge=0, n_rot=None)))
+    assert tree_problems(load_schema()["record"]["sites"], block, "sites") == []
+
+
+def test_the_schema_comparison_runs_in_both_directions():
+    from record_tree import tree_problems
+    schema = {"a": "int", "b": {"$nullable": True, "c": ["str?"]}}
+    assert tree_problems(schema, {"a": 1, "b": None}) == []
+    assert tree_problems(schema, {"a": 1, "b": {"c": ["x", None]}}) == []
+    assert tree_problems(schema, {"b": None}) == [
+        "record.a: declared by the schema, absent from the record"]
+    assert tree_problems(schema, {"a": 1, "b": None, "z": 0}) == [
+        "record.z: written by the code, absent from the schema"]
+    assert tree_problems(schema, {"a": True, "b": None}) == ["record.a: bool, expected int"]
+
+
+def test_record_schema_names_its_version():
+    from record_tree import load_schema
+    s = load_schema()
+    assert s["schema"] == em.RECORD_SCHEMA == "espmap.record/1"
+    assert s["record"]["schema"] == "str" and s["record"]["sites"]["schema"] == "str"
 
 
 def test_h_source_records_which_hydrogens_the_file_supplied(tmp_path):

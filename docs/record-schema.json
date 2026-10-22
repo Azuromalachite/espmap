@@ -1,0 +1,136 @@
+{
+  "$comment": [
+    "The key tree of espmap's --json record and the arrays of its --npz, version espmap.record/1.",
+    "Source of truth for docs/per-site-spec.md section 6 (review 4 N5). tests/record_tree.py compares a",
+    "real record against it in BOTH directions: a key declared here and never written fails, and so does",
+    "a key written and not declared. Notation: an object lists its keys exactly; [x] is a list of x;",
+    "{\"$list\": x, \"$nullable\": true} is a list of x or null; leaves are str | num | int | bool | xyz",
+    "(three numbers) | any, a trailing ? meaning nullable; \"#name\" is $defs.name, \"#name?\" the same or null.",
+    "Change this file in the same commit as the code that changes the record.",
+    "npz lists the arrays of a valid run; tri_atom_* are present only when validity.input and",
+    "validity.surface are both true (review 4 N8), the conditions under which sites_block runs."
+  ],
+  "schema": "espmap.record/1",
+  "$defs": {
+    "stats": {
+      "area_A2": "num", "area_pos_A2": "num", "area_neg_A2": "num",
+      "V_area_mean_kcal_mol": "num?", "V_area_sd_kcal_mol": "num?",
+      "V_p05_kcal_mol": "num?", "V_p50_kcal_mol": "num?", "V_p95_kcal_mol": "num?",
+      "V_min_kcal_mol": "num?", "V_min_at_A": "xyz?",
+      "V_max_kcal_mol": "num?", "V_max_at_A": "xyz?"
+    },
+    "delta": {
+      "area_A2": "num?", "V_area_mean_kcal_mol": "num?", "V_p05_kcal_mol": "num?",
+      "V_p95_kcal_mol": "num?", "V_min_kcal_mol": "num?", "V_max_kcal_mol": "num?"
+    },
+    "surface_definition": {"property": "str", "isovalue_e_bohr3": "num"}
+  },
+  "record": {
+    "schema": "str",
+    "validity": {"input": "bool", "surface": "bool", "sites": "bool"},
+    "analysis_key": "str",
+    "render_key": "str",
+    "key_fields": {
+      "analysis": {
+        "xc": "str", "basis": "str", "solvent": "str?", "solvent_esp": "str?",
+        "spacing_bohr": "num", "density_fit": "bool", "geometry_method": "str",
+        "surface_definition": "#surface_definition"
+      },
+      "render": {
+        "cmap": "str", "kind": "str", "vmin": "num", "vmax": "num",
+        "elev": "num", "azim": "num", "size": "int", "ambient": "num"
+      }
+    },
+    "geometry": {
+      "symbols": ["str"], "xyz_angstrom": ["xyz"], "sha1": "str", "sha1_covers": "str",
+      "charge": "int", "spin": "int", "optimised_from_sha1": "str?"
+    },
+    "input": {
+      "smiles": "str?", "file": "str?",
+      "record": {"$nullable": true, "index": "int", "of": "int"},
+      "gate_smiles": "str?", "approved_smiles": "str?",
+      "gate": {"$nullable": true, "verdict": "str", "forced": "bool", "findings": [["str"]]},
+      "computed_smiles": "str?", "structure_verified": "bool?",
+      "formula": "str?", "charge": "int", "spin": "int"
+    },
+    "settings": {
+      "xc": "str", "basis": "str", "solvent": "str", "solvent_esp": "str?",
+      "include_reaction_field": "bool", "density_fit": "bool", "gpu": "bool",
+      "gpu_validated": "bool?", "iso": "num", "spacing_bohr": "num", "margin_bohr": "num",
+      "grids_level": "int", "conv_tol": "num", "seed": "int", "nconfs": "int",
+      "optimize": "bool", "geometry": "str"
+    },
+    "results": {
+      "e_tot_Ha": "num", "nao": "int",
+      "dipole": {
+        "vector_D": "xyz", "magnitude_D": "num",
+        "origin": {"kind": "str", "xyz_angstrom": "xyz"}
+      },
+      "V_min_kcal_mol": "num", "V_max_kcal_mol": "num",
+      "sigma_hole": {
+        "$nullable": true,
+        "V_max_kcal_mol": "num?", "n_cap_vertices": "int", "i_sub": "int", "i_bond": "int"
+      },
+      "sigma_hole_reason": "str?",
+      "n_verts": "int",
+      "surface": {
+        "definition": "#surface_definition",
+        "closed": "bool", "open_edges": "int", "nonmanifold_edges": "int",
+        "components": "int", "genus": "int", "chi": "int", "face_max_rho": "num",
+        "margin_bohr": "num", "strict": "bool", "problems": ["str"], "valid": "bool"
+      },
+      "surface_stats": "#stats"
+    },
+    "sites": {
+      "$nullable": true,
+      "schema": "str",
+      "partition": {"primary": "str", "compared": "str?", "unit": "str", "radii": "str?"},
+      "atoms": [{
+        "index": "int", "atom_map": "int?", "element": "str", "parent": "int?",
+        "h_source": "str?",
+        "nearest_nucleus": "#stats", "radius_scaled": "#stats?", "delta": "#delta?"
+      }],
+      "reaction_sites": [{
+        "label": "str", "source": "str", "atoms": ["int"], "h_generated_polar": "bool",
+        "nearest_nucleus": "#stats", "radius_scaled": "#stats?", "delta": "#delta?"
+      }],
+      "solvent_esp": "str?",
+      "geometry_provenance": {
+        "heavy_atoms": "str",
+        "hydrogens": {"supplied": "int", "generated": "int", "generated_relaxed": "int",
+                      "optimised": "int"},
+        "relaxation": "str", "caveat": "str"
+      },
+      "conformer_scope": "str",
+      "topology": {"genus": "int", "components": "int"},
+      "identity": {
+        "chemical_smiles": "str?", "mapped_smiles": "str?",
+        "chemical_match": "bool?", "mapped_match": "bool?"
+      },
+      "budget": [{
+        "id": "str", "axis": "str", "statistic": "str", "kcal_mol": "num",
+        "measured_on": "str", "source": "str"
+      }]
+    },
+    "sites_reason": "str?",
+    "scale": {
+      "kind": "str", "vmin": "num", "vmax": "num",
+      "sign_change_ratio": "num", "sign_change_threshold": "num",
+      "cmap": "str", "cmap_requested": "str?", "cmap_substituted": "bool",
+      "cmap_forced": "bool", "source": "str", "colour_scale_fixed": "bool"
+    },
+    "provenance": {
+      "espmap_version": "str", "code": "str", "python": "str", "numpy": "str",
+      "scipy": "str?", "scikit_image": "str?", "pyscf": "str?", "rdkit": "str?",
+      "matplotlib": "str?", "threads": "int",
+      "blas": {"$nullable": true, "$list": {"api": "str?", "version": "str?", "threads": "int?"}}
+    },
+    "caveat": "str"
+  },
+  "npz": [
+    "V", "analysis_key", "atom_maps", "basis", "cmap", "coords", "faces", "geometry_sha1",
+    "iso", "kind", "render_key", "solvent", "solvent_esp", "surface_problems", "symbols",
+    "tri_atom_nearest_nucleus", "tri_atom_radius_scaled", "units", "validity", "verts",
+    "vlim", "xc"
+  ]
+}

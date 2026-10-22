@@ -1846,6 +1846,10 @@ def render_fields(cmap, kind, vlim, elev, azim, size, ambient):
 # reaction sites arrive with P1; here sites are the default groups (each heavy
 # atom with its hydrogens) and atoms carry whatever map the input had.
 SITES_SCHEMA = "espmap.sites/1"
+# The whole --json record (review 4 N5). Its key tree is docs/record-schema.json,
+# checked in both directions by the slow suite; outside analysis_key, like
+# SITES_SCHEMA, so a schema bump never makes two calculations incomparable.
+RECORD_SCHEMA = "espmap.record/1"
 PARTITION_RULES = ("nearest_nucleus", "radius_scaled")
 # Bondi van der Waals radii (A), with Mantina et al. 2009 for B, which Bondi
 # does not list. Every TESTED_ELEMENTS entry has one; an element outside gets
@@ -2022,17 +2026,45 @@ def site_report(P, faces, V, coords, symbols, atom_maps=None, h_source=None, gro
             and parent[i] in members and symbols[parent[i]] in _POLAR for i in members)
         sites.append(dict(label=label, source=source, atoms=list(members),
                           h_generated_polar=bool(polar_gen), **per_rule(list(members))))
+    compared = owner["radius_scaled"] is not None
     return dict(schema=SITES_SCHEMA,
-                partition=dict(primary="nearest_nucleus", unit="triangle",
-                               radius_scaled=(None if owner["radius_scaled"] is None else
-                                              "Bondi; Mantina 2009 for B")),
+                partition=dict(primary="nearest_nucleus",
+                               compared="radius_scaled" if compared else None,
+                               unit="triangle",
+                               radii="Bondi; Mantina 2009 for B" if compared else None),
                 atoms=atoms, reaction_sites=sites)
+
+
+def site_checks(rep, P, faces, V):
+    """What validity.sites now rests on (review 4 N5): the atoms' areas add
+    up to the surface under each rule, every atom is listed once, and a
+    zero-area entry has null potentials while a non-zero one has values.
+    Returns the problems found; empty means the block passed."""
+    out = []
+    total = float(triangle_areas(P, faces).sum())
+    if [a["index"] for a in rep["atoms"]] != list(range(len(rep["atoms"]))):
+        out.append("atoms are not listed once each, in index order")
+    for r in PARTITION_RULES:
+        rows = [a[r] for a in rep["atoms"] if a[r] is not None]
+        if not rows:
+            continue
+        s = sum(x["area_A2"] for x in rows)
+        if abs(s - total) > 1e-9 * max(total, 1.0):
+            out.append(f"{r}: atom areas {s:.6f} do not conserve the surface {total:.6f} A^2")
+    for e in rep["atoms"] + rep["reaction_sites"]:
+        for r in PARTITION_RULES:
+            x = e[r]
+            if x is not None and (x["area_A2"] == 0) != (x["V_area_mean_kcal_mol"] is None):
+                name = e.get("label", e.get("index"))
+                out.append(f"{name} {r}: potentials must be null exactly when the area is 0")
+    return out
 
 
 def sites_block(valid, P, faces, V, coords, symbols, **kw):
     """(site report, None), or (None, reason) when the record is not valid:
     per-site values near a clipped box face, or for a forced-through
-    structure, would be worse than the global ones (spec section 3)."""
+    structure, would be worse than the global ones (spec section 3). A block
+    that fails its own checks is withheld the same way."""
     if not valid["input"]:
         return None, "input not valid (forced past the gate, or structure not verified)"
     if not valid["surface"]:
@@ -2040,7 +2072,82 @@ def sites_block(valid, P, faces, V, coords, symbols, **kw):
     if all(s == "H" for s in symbols):
         return None, ("no heavy atom: sites are heavy atoms with their hydrogens, "
                       "and this molecule has none")
-    return site_report(P, faces, V, coords, symbols, **kw), None
+    rep = site_report(P, faces, V, coords, symbols, **kw)
+    problems = site_checks(rep, P, faces, V)
+    if problems:
+        return None, "site block failed its own checks: " + "; ".join(problems)
+    return rep, None
+
+
+H_SOURCES = ("supplied", "generated", "generated_relaxed", "optimised")
+
+
+def site_context(*, solvent_esp, heavy_atoms, h_source, relaxation, n_rot, surface,
+                 identity, budget):
+    """The run-level fields main() adds to a site block (spec sections 4-6).
+    Every hydrogen source is counted, zeros included: an absent key read as
+    zero only if the consumer guessed so (review 4 N5)."""
+    n_h = [x for x in h_source if x is not None]
+    return dict(
+        solvent_esp=solvent_esp,
+        geometry_provenance=dict(
+            heavy_atoms=heavy_atoms,
+            hydrogens={k: n_h.count(k) for k in H_SOURCES},
+            relaxation=relaxation,
+            caveat="hydrogens not supplied were placed for the isolated molecule, "
+                   "without any protein or other environment"),
+        conformer_scope=(f"single conformer; {n_rot} rotatable bond(s)"
+                         if n_rot is not None else "single geometry, as given"),
+        topology=dict(genus=surface["genus"], components=surface["components"]),
+        identity=identity, budget=budget)
+
+
+# Measured sensitivities a record points to (spec section 5). Each value is
+# recomputed from its bench/ file by tests/test_claims.py, under the same id
+# the README table uses. A row is evidence about the method on the molecule
+# named, not an error bar on this run's sites.
+BUDGET = (
+    dict(id="basis", axis="basis def2-SVP -> def2-TZVPP", statistic="shift, sigma-hole V_max",
+         kcal_mol=3.54, measured_on="chlorobenzene", source="bench/error_budget.jsonl"),
+    dict(id="solvent water", axis="solvent gas -> PCM water, polarised solute only",
+         statistic="shift, sigma-hole V_max", kcal_mol=-3.60, measured_on="chlorobenzene",
+         source="bench/solvent_convention.jsonl"),
+    dict(id="solvent chloroform", axis="solvent gas -> PCM chloroform, polarised solute only",
+         statistic="shift, sigma-hole V_max", kcal_mol=-2.69, measured_on="chlorobenzene",
+         source="bench/solvent_convention.jsonl"),
+    dict(id="functional", axis="functional B3LYP / PBE0 / M06-2X / HF",
+         statistic="spread, sigma-hole V_max", kcal_mol=0.69, measured_on="chlorobenzene",
+         source="bench/error_budget.jsonl"),
+    dict(id="grid", axis="grid spacing 0.26 -> 0.16 bohr", statistic="shift, sigma-hole V_max",
+         kcal_mol=0.04, measured_on="chlorobenzene", source="bench/error_budget.jsonl"),
+    dict(id="anion geometry", axis="geometry MMFF -> DFT, PCM water",
+         statistic="max |shift|, V_min and V_max", kcal_mol=6.5,
+         measured_on="nitrite, thiocyanate, enolate", source="bench/anion_geometry.jsonl"),
+    dict(id="partition small anions", axis="partition rule, radius_scaled - nearest_nucleus",
+         statistic="max |delta|, site area-weighted mean", kcal_mol=3.0,
+         measured_on="nitrite, thiocyanate, enolate", source="bench/site_partition.jsonl"),
+    dict(id="partition C18", axis="partition rule, radius_scaled - nearest_nucleus",
+         statistic="max |delta|, site area-weighted mean", kcal_mol=3.95,
+         measured_on="Z3Z13-18:OAc, 10 conformers", source="bench/site_partition.jsonl"),
+    dict(id="conformer C18", axis="conformer, extended and folded",
+         statistic="median site range, site area-weighted mean", kcal_mol=5.1,
+         measured_on="Z3Z13-18:OAc, 10 conformers", source="bench/site_partition.jsonl"),
+    dict(id="grid mean", axis="grid spacing 0.26 -> 0.16 bohr",
+         statistic="max |shift|, site area-weighted mean", kcal_mol=0.15,
+         measured_on="nitrite, thiocyanate, enolate, chlorobenzene",
+         source="bench/site_partition.jsonl"),
+)
+
+
+def budget_rows(*, basis, solvent, charge, n_rot):
+    """The BUDGET rows that apply to a run with these settings: the basis
+    row unless the basis is the one it was measured against, solvent rows
+    for a gas-phase run, the anion-geometry row for an anion, and the
+    conformer row unless the molecule is known to be rigid."""
+    keep = {"basis": basis_key(basis) != basis_key("def2-tzvpp"),
+            "solvent water": solvent is None, "solvent chloroform": solvent is None,
+            "anion geometry": charge < 0, "conformer C18": n_rot is None or n_rot > 0}
+    return [dict(r) for r in BUDGET if keep.get(r["id"], True)]
 
 
 def sigma_hole(verts, V, mol, i_sub=6, pr_min=0.3, pe_max=1.6, i_bond=None):
@@ -2494,24 +2601,27 @@ def main():
                                       groups=site_groups)
     valid["sites"] = sites is not None
     if sites is not None:
-        n_h = [x for x in h_source if x is not None]
-        sites.update(
+        generated = gi is not None and "generated" in gi["source"]
+        if a.optimize:
+            relaxation = f"{a.xc}/{a.basis} (pyberny), all atoms, isolated molecule"
+        elif generated:
+            relaxation = f"ETKDGv3 + {gi['forcefield']}, all atoms, isolated molecule"
+        elif gi is not None and gi["forcefield"] not in (None, "none"):
+            relaxation = f"{gi['forcefield']}, isolated molecule"
+        else:
+            relaxation = "none"
+        n_rot = gi["n_rot"] if gi is not None else None
+        sites.update(site_context(
             solvent_esp=a_fields["solvent_esp"],
-            geometry_provenance=dict(
-                heavy_atoms=("optimised" if a.optimize else
-                             "generated" if gi is not None and "generated" in gi["source"]
-                             else "supplied_frozen"),
-                hydrogens={k: n_h.count(k) for k in sorted(set(n_h))},
-                caveat="hydrogens not supplied were placed for the isolated molecule, "
-                       "without any protein or other environment"),
-            conformer_scope=(f"single conformer; {gi['n_rot']} rotatable bond(s)"
-                             if gi is not None else "single geometry, as given"),
-            topology=dict(genus=surface["genus"], components=surface["components"]),
+            heavy_atoms=("optimised" if a.optimize else
+                         "generated" if generated else "supplied_frozen"),
+            h_source=h_source, relaxation=relaxation, n_rot=n_rot, surface=surface,
             identity=dict(chemical_smiles=computed,
                           # the input's mapped structure; verify_mapping checked
                           # the geometry against it atom by atom
                           mapped_smiles=approved if atom_maps else None,
-                          chemical_match=verified, mapped_match=mapped_ok))
+                          chemical_match=verified, mapped_match=mapped_ok),
+            budget=budget_rows(basis=a.basis, solvent=solv, charge=charge, n_rot=n_rot)))
     if a.html:
         esp_figure(verts, faces, V, symbols, mol.atom_coords(), cmaps[cmap_name],
                    vlim, title=f"{label} · {a.xc}/{a.basis}", kind=kind).write_html(
@@ -2546,6 +2656,7 @@ def main():
     if a.json:
         import json
         rec = dict(
+            schema=RECORD_SCHEMA,           # docs/record-schema.json; not hashed
             validity=valid,
             analysis_key=record_key(a_fields), render_key=record_key(r_fields),
             key_fields=dict(analysis=a_fields, render=r_fields),
