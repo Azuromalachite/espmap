@@ -426,7 +426,7 @@ new to read, so it waits for a version 2 with a reason of its own.
 stderr, χ, a filename or console text:
 
 ```json
-"validity": {"input": true, "surface": true, "sites": true},
+"validity": {"input": true, "surface": true, "electronic": true, "sites": true},
 "gate": {"verdict": "INFO", "forced": false, "findings": []},
 "surface": {
   "definition": {"property": "electron_density", "isovalue_e_bohr3": 0.002},
@@ -445,7 +445,12 @@ stderr, χ, a filename or console text:
 - `validity.input` is false if the gate verdict was BLOCK (forced) or
   `structure_verified` is false.
 - `validity.surface` is false if `surface.problems` is non-empty.
-- `validity.sites` is false if either is, or the site block failed its own
+- `validity.electronic` is false if `results.electronic.problems` is
+  non-empty. Each problem starts with a stable code; today the only one is
+  `UNBOUND_ANION_GAS`, an anion in the gas phase whose HOMO
+  (`results.electronic.homo_eV`) is above zero, so its outer electron is held
+  only by the basis and the map tracks the basis set (review 5 R3).
+- `validity.sites` is false if any of these is, or the site block failed its own
   checks (`site_checks`): every atom listed once in index order, the atoms'
   areas adding up to the surface under each rule, and potentials null exactly
   when an entry's area is zero. `"sites"` is then `null` and `sites_reason`

@@ -197,7 +197,7 @@ def test_json_record_carries_sigma_hole_keys_and_validity(tmp_path, monkeypatch)
     assert rec["results"]["sigma_hole_reason"] is None
     assert "V_min_kcal_mol" in rec["results"] and "V_min" not in rec["results"]
     # sites became True with P2: a valid record now carries a site block
-    assert rec["validity"] == {"input": True, "surface": True, "sites": True}
+    assert rec["validity"] == {"input": True, "surface": True, "electronic": True, "sites": True}
     assert rec["sites"]["schema"] == em.SITES_SCHEMA and rec["sites_reason"] is None
     assert rec["analysis_key"] == em.record_key(rec["key_fields"]["analysis"])
     assert rec["render_key"] == em.record_key(rec["key_fields"]["render"])
@@ -239,7 +239,10 @@ def test_sites_end_to_end_on_a_symmetric_nitrite(tmp_path, monkeypatch):
     h = np.radians(116.4) / 2
     atoms = (f"N 0 0 0; O {-1.2577 * np.sin(h):.6f} {-1.2577 * np.cos(h):.6f} 0; "
              f"O {1.2577 * np.sin(h):.6f} {-1.2577 * np.cos(h):.6f} 0")
-    rec = _run_json(tmp_path, monkeypatch, ["--atoms", atoms, "--charge", "-1"])
+    # in PCM water, as the P3 nitrite fixture is: in the gas phase at STO-3G
+    # its HOMO is +7 eV, an unbound anion whose record now says so (review 5 R3)
+    rec = _run_json(tmp_path, monkeypatch, ["--atoms", atoms, "--charge", "-1",
+                                            "--solvent", "water"])
     assert rec["validity"]["sites"] is True and rec["sites"]["schema"] == em.SITES_SCHEMA
     total = rec["results"]["surface_stats"]["area_A2"]
     g = rec["results"]["gipf"]                      # an anion: no positive part
@@ -437,3 +440,23 @@ def test_deliberate_triplet_runs_with_the_spin_finding_recorded(tmp_path, monkey
     rec = json.loads(js.read_text())
     assert ["WARN", "SPIN_OVERRIDE"] in rec["input"]["gate"]["findings"]
     assert rec["validity"]["input"] is True
+
+
+@pytest.mark.parametrize("solvent, valid", [(None, False), ("water", True)])
+def test_gas_phase_unbound_anion_record_says_so(tmp_path, monkeypatch, solvent, valid):
+    """Review 5 R3 validation: acetate at def2-SVP in the gas phase (HOMO
+    +0.17 eV) was recorded fully valid with a site table."""
+    import json
+    import sys
+    js = tmp_path / "ac.json"
+    extra = ["--solvent", solvent] if solvent else []
+    monkeypatch.setattr(sys, "argv", ["esp_map.py", "--smiles", "CC(=O)[O-]", "--basis",
+                                      "def2-svp", *extra, "--size", "80",
+                                      "--out", str(tmp_path / "ac.png"), "--json", str(js)])
+    em.main()
+    rec = json.loads(js.read_text())
+    el = rec["results"]["electronic"]
+    assert rec["validity"]["electronic"] is valid and (el["homo_eV"] > 0) is (not valid)
+    assert (rec["sites"] is not None) is valid
+    if not valid:
+        assert el["problems"][0].startswith("UNBOUND_ANION_GAS")

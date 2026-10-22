@@ -183,12 +183,13 @@ def test_surface_report_states_the_surface_it_is_on():
     ({"verdict": "INFO", "forced": False}, False, [], False),      # H2 mismatch
 ])
 def test_validity_input(gate, verified, problems, expect):
-    v = em.validity(gate, verified, {"problems": problems})
+    v = em.validity(gate, verified, {"problems": problems}, electronic={"problems": []})
     assert v["input"] is expect and v["surface"] is True and v["sites"] is False
 
 
 def test_validity_surface_is_false_when_the_surface_has_problems():
-    v = em.validity(None, None, em.surface_report(_diag(problems=["CLIPPED"]), 0.002))
+    v = em.validity(None, None, em.surface_report(_diag(problems=["CLIPPED"]), 0.002),
+                    electronic={"problems": []})
     assert v["surface"] is False
 
 
@@ -2280,3 +2281,38 @@ def test_atoms_charge_is_not_an_override(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["esp_map.py", "--atoms", _NITRITE, "--charge", "-1"])
     with pytest.raises(_ReachedCompute):
         em.main()
+
+
+# ------------------------------------- unbound anion in the record (review 5 R3)
+class _MO:
+    def __init__(self, e, occ):
+        self.mo_energy, self.mo_occ = np.asarray(e, float), np.asarray(occ, float)
+
+
+@pytest.mark.parametrize("e, occ, charge, solvent, bad", [
+    ([-0.5, 0.0063, 0.3], [2, 2, 0], -1, None, True),     # acetate, def2-SVP gas: +0.17 eV
+    ([-0.5, -0.20, 0.3], [2, 2, 0], -1, "water", False),   # the same in PCM water
+    ([-0.5, 0.0063, 0.3], [2, 2, 0], 0, None, False),      # not an anion
+    ([[-0.5, 0.01], [-0.5, 0.3]], [[1, 1], [1, 0]], -1, None, True),   # UKS
+])
+def test_unbound_anion_is_an_electronic_problem(e, occ, charge, solvent, bad):
+    rep = em.electronic_report(_MO(e, occ), charge, solvent)
+    assert bool(rep["problems"]) is bad
+    if bad:
+        assert rep["problems"][0].startswith("UNBOUND_ANION_GAS: ")
+    v = em.validity({"forced": False}, True, {"problems": []}, electronic=rep)
+    assert v["electronic"] is (not bad)
+
+
+def test_frontier_orbitals_in_eV_and_lumo_absent_without_virtuals():
+    homo, lumo = em.frontier_orbitals_eV(_MO([-0.5, -0.2, 0.1], [2, 2, 0]))
+    assert homo == pytest.approx(-0.2 * em.HA2EV) and lumo == pytest.approx(0.1 * em.HA2EV)
+    assert em.frontier_orbitals_eV(_MO([-0.5, -0.2], [2, 2]))[1] is None
+
+
+def test_sites_are_withheld_when_the_electronic_structure_is_not_valid():
+    valid = {"input": True, "surface": True, "electronic": False, "sites": False}
+    P = np.array([[0.0, 0, 2], [1.0, 0, 2], [0, 1.0, 2]])
+    sites, why = em.sites_block(valid, P, np.array([[0, 1, 2]]), np.zeros(3),
+                                np.array([[0, 0, 0], [0, 0, 1.2]]), ["C", "O"])
+    assert sites is None and "electronic" in why

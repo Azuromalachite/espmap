@@ -28,7 +28,7 @@
   },
   "record": {
     "schema": "str",
-    "validity": {"input": "bool", "surface": "bool", "sites": "bool"},
+    "validity": {"input": "bool", "surface": "bool", "electronic": "bool", "sites": "bool"},
     "analysis_key": "str",
     "render_key": "str",
     "key_fields": {
@@ -74,6 +74,7 @@
         "V_max_kcal_mol": "num?", "n_cap_vertices": "int", "i_sub": "int", "i_bond": "int"
       },
       "sigma_hole_reason": "str?",
+      "electronic": {"homo_eV": "num", "lumo_eV": "num?", "problems": ["str"]},
       "n_verts": "int",
       "surface": {
         "definition": "#surface_definition",
