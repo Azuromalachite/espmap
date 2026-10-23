@@ -23,10 +23,11 @@ _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases
 _BY_ID = {c["id"]: c for c in _CASES}
 
 # implementation PRs remove entries. Step 3 (selection and the supplied
-# identity checks) implements the refusals before compute and E14's rule. E23
-# (review 6) already refuses: record 1, the radical, fails the gate.
-NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "E23",
-                                       "E16", "E17"}
+# identity checks) implements the refusals before compute and E14's rule, and
+# with review 6's fixes E18, E20-E22, E24 and E25 (E23 refused already).
+NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "E16",
+                                       "E17", "E18", "E20", "E21", "E22", "E23",
+                                       "E24", "E25"}
 
 
 def _records(name):

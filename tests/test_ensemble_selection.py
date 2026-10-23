@@ -197,12 +197,11 @@ def test_shape_descriptors_of_a_rod_and_a_ball():
     assert em.shape_descriptors(ball)["asphericity"] < 0.02
 
 
-# --- review 6: committed as strict xfails before the fixes --------------------
+# --- review 6: committed as strict xfails before the fixes (c92a448) ----------
 C18 = "CC(=O)OCC/C=C\CCCCCCCC/C=C\CCCC"
 BENCH_C18_IDS = [4, 28, 34, 40, 53, 54, 57, 67, 72, 82]      # bench/conformers.jsonl conf_id
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S4: Rg is not the bench's")
 def test_selection_reproduces_the_measured_c18_members():
     """The conformer rows (5.1 / 2.69 / 5.2) were measured on these ten; the
     docstring cites bench/conformers.py select(), so the selection must be it."""
@@ -210,7 +209,8 @@ def test_selection_reproduces_the_measured_c18_members():
     assert sorted(m["embed_conf_id"] for m in p["members"]) == BENCH_C18_IDS
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S4: a collision tops up with the next compact")
+@pytest.mark.xfail(strict=True, reason="review 6 S4, deferred to section 8: re-spreading "
+                   "changes the measured C18 members (test above)")
 def test_a_collision_with_the_lowest_energy_member_re_spreads():
     """1-octanol, K = 3: the lowest-energy conformer is the most extended, so
     the Rg-spread pick at the top collides with it. The third member must
@@ -221,7 +221,6 @@ def test_a_collision_with_the_lowest_energy_member_re_spreads():
     assert lo + 0.25 * (hi - lo) <= rg[1] <= lo + 0.75 * (hi - lo)
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S5: the symmetry-match cap truncates silently")
 def test_a_capped_symmetry_search_never_keeps_a_symmetry_copy():
     """(tBuOCH2)3CH has 1296 heavy-atom automorphisms, past the cap of 1000."""
     mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)(C)OCC(COC(C)(C)C)COC(C)(C)C"))
@@ -234,7 +233,6 @@ def test_a_capped_symmetry_search_never_keeps_a_symmetry_copy():
     assert capped["n_unique"] == exact
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S6: unreadable records are dropped and renumbered")
 def test_records_keep_their_file_numbers():
     path = _DIR / "E25_record_2_unreadable.sdf"
     m, probs, n = em.read_structure(path, record=2)
@@ -243,7 +241,6 @@ def test_records_keep_their_file_numbers():
     assert m is not None and m.GetProp("_Name") == "conf 3"
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S1: re-embedding drops the file's allene axis")
 def test_a_generated_ensemble_keeps_the_configuration_its_3d_file_fixes():
     from rdkit.Chem import rdMolTransforms
     path = _DIR / "E19_allene_one_axis_3d.sdf"
@@ -260,3 +257,54 @@ def test_a_generated_ensemble_keeps_the_configuration_its_3d_file_fixes():
             c.SetAtomPosition(i, [float(x) for x in r[1:]])
         signs.add(rdMolTransforms.GetDihedralDeg(c, 1, 3, 5, 6) > 0)
     assert signs == {True}
+
+
+def test_the_gate_leaves_a_small_ring_trans_bond_open_and_nothing_else():
+    """S1, gate half: no SMILES fixes trans-cyclooctene's helicity."""
+    def left_open(smiles):
+        return [k for k, _ in em.stereo_left_open(Chem.MolFromSmiles(smiles))]
+    assert any("trans double bond" in k for k in left_open("C1CC/C=C/CCC1"))
+    assert any("trans double bond" in k for k in left_open("O[C@H]1CC/C=C/CCC1"))
+    assert left_open("C1CC/C=C\\CCC1") == []                 # cis-cyclooctene
+    assert left_open("C1CCC/C=C/CCCC1") == []                 # a ten-ring: no helicity
+    assert left_open("c1ccccc1") == [] and left_open("C1=CCCCC1") == []
+
+
+def test_configuration_signs_tell_the_two_helicities_and_axes_apart():
+    for name in ("E20_tco_two_helicities.sdf", "E21_allene_two_axes.sdf"):
+        ms = list(Chem.SDMolSupplier(str(_DIR / name), removeHs=False))
+        signs = [em.configuration_signs(Chem.RemoveHs(m)) for m in ms]
+        assert len(signs[0]) == 1 and signs[0] != signs[-1], name
+    assert em.configuration_signs(Chem.RemoveHs(_poses(1)[0])) == {}   # ibuprofen: none
+
+
+def test_every_supplied_record_is_gated_whatever_its_place():
+    """S2: the radical is refused by the gate in second place as in first."""
+    for name in ("E22_one_skeleton_three_charges.sdf", "E23_radical_first.sdf"):
+        codes = {c for c, _ in _refusal(path=_DIR / name, ensemble="supplied")}
+        assert "OPEN_SHELL" in codes, name
+    codes = {c for c, _ in _refusal(path=_DIR / "E22_one_skeleton_three_charges.sdf",
+                                    ensemble="supplied")}
+    assert "MEMBER_CHARGE" in codes
+
+
+def test_the_plan_carries_the_charge_and_spin_every_member_shares():
+    p = em.plan_ensemble(path=_DIR / "E7_poses_one_ligand.sdf", ensemble="supplied")
+    assert (p["identity"]["charge"], p["identity"]["n_radical"]) == (0, 0)
+
+
+def test_a_generated_ensemble_from_3d_drops_the_other_configuration():
+    p = em.plan_ensemble(path=_DIR / "E19_allene_one_axis_3d.sdf", ensemble=10)
+    assert p["protocol"]["n_other_configuration"] > 0
+
+
+def test_an_unreadable_record_is_named_in_a_supplied_ensemble():
+    got = _supplied("E25_record_2_unreadable.sdf")
+    assert [c for c, _ in got] == ["RECORD_UNREADABLE"] and got[0][1].startswith("record 2 ")
+
+
+def test_two_records_with_one_unreadable_are_still_two_records():
+    """Invariant 9: the unreadable second record no longer hides the first's
+    company (it was read as a single-record file)."""
+    m, probs, n = em.read_structure(_DIR / "E25_record_2_unreadable.sdf")
+    assert m is None and n == 3 and probs[0][1] == "MULTIPLE_RECORDS"
