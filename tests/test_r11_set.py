@@ -43,6 +43,10 @@ UNSAFE_NOW = {
     # probe round 4: the same on a tilted drawing, and a one-element-pair one
     "draw_methylpropanoate_atom3_up_0.8_tilted60_0_1.5.mol",
     "draw_chlorobenzene_atom0_up_1.0_tilted45_30_1.5.mol", "draw_decalin_noH_atom2_up_0.6_1.5.mol",
+    # probe round 5: two or three atoms lifted on a small tilted drawing
+    "draw_methylpropanoate_lift_3+0.8_5+0.8_tilted60_0_1.5.mol",
+    "draw_methylpropanoate_lift_3+0.8_1-0.8_tilted60_0_1.5.mol",
+    "draw_chloroaniline_lift_0+0.7_3-0.6_6+0.5_tilted45_30_1.5.mol",
 }
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
     # S17: delocalised N-C 1.31 A is 11 % short of its reference: refused

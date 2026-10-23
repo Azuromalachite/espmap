@@ -484,6 +484,35 @@ for smi, nm in (("FC(F)(F)C(F)(F)F", "hexafluoroethane"), ("C1CC2CCC1C2", "norbo
     _write(f"real_{nm}_noH_3d_rot90x", _tilted(h, 90.0, 0.0), True, REAL, "geometry", "geometry",
            "the same, rotated 90 deg about x", "a real non-flat skeleton seen face-on along z")
 
+# Probe round 5: two or three atoms lifted on a small tilted drawing; leaving
+# one atom out of the plane fit is not enough. And real heavy-atom chain
+# esters whose C-C bonds (1.53 A, within 1 % of Marvin's 1.54) mostly lie in
+# one plane: a rule that settled for "most bonds even" would discard them.
+for smi, nm, lifts, ax, ay in (("CCOC(C)=O", "methylpropanoate", ((3, 0.8), (5, 0.8)), 60.0, 0.0),
+                               ("CCOC(C)=O", "methylpropanoate", ((3, 0.8), (1, -0.8)), 60.0, 0.0),
+                               ("Nc1ccccc1Cl", "chloroaniline", ((0, 0.7), (3, -0.6), (6, 0.5)), 45.0, 30.0)):
+    m = _depiction(smi, 1.5)
+    X = _xyz(m)
+    for idx, dz in lifts:
+        X[idx, 2] = dz
+    tag = "_".join(f"{i}{'+' if d > 0 else '-'}{abs(d)}" for i, d in lifts)
+    _write(f"draw_{nm}_lift_{tag}_tilted{int(ax)}_{int(ay)}_1.5", _tilted(_set_xyz(m, X), ax, ay),
+           True, DRAW, "drawing", "drawing",
+           f"RDKit depiction at 1.5 A, atoms {[i for i, _ in lifts]} lifted, then rotated "
+           f"{ax:.0f} deg about x and {ay:.0f} about y",
+           "an edited drawing with several atoms lifted, seen at an angle")
+for smi, nm, seed in (("CCCCCCCCCC/C=C\\CCOC(C)=O", "z3_14_oac_chain", 3),
+                      ("CCCCCCCCCCCCOC(C)=O", "dodecyl_acetate", 5)):
+    m = Chem.AddHs(Chem.MolFromSmiles(smi))
+    AllChem.EmbedMolecule(m, randomSeed=seed)
+    AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=5000)
+    h = Chem.RemoveHs(m)
+    _write(f"real_{nm}_noH_3d", h, True, REAL, "geometry", "geometry",
+           f"RDKit ETKDG (seed {seed}) + MMFF94s, H removed",
+           "a real chain ester: most C-C bonds near 1.53 A, many in one plane, but not all bonds even")
+    _write(f"real_{nm}_noH_3d_rot90x", _tilted(h, 90.0, 0.0), True, REAL, "geometry", "geometry",
+           "the same, rotated 90 deg about x", "a real chain ester seen face-on along z")
+
 # S8: a 2D header is the file's own statement, also when z is not 0.
 m = _depiction("C[C@@H](O)[C@H](N)C(=O)O", 1.5)
 X = _xyz(m)

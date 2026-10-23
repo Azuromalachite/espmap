@@ -2442,6 +2442,125 @@
    "why": "a real non-flat skeleton seen face-on along z"
   },
   {
+   "file": "draw_methylpropanoate_lift_3+0.8_5+0.8_tilted60_0_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atoms [3, 5] lifted, then rotated 60 deg about x and 0 about y",
+   "why": "an edited drawing with several atoms lifted, seen at an angle"
+  },
+  {
+   "file": "draw_methylpropanoate_lift_3+0.8_1-0.8_tilted60_0_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atoms [3, 1] lifted, then rotated 60 deg about x and 0 about y",
+   "why": "an edited drawing with several atoms lifted, seen at an angle"
+  },
+  {
+   "file": "draw_chloroaniline_lift_0+0.7_3-0.6_6+0.5_tilted45_30_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atoms [0, 3, 6] lifted, then rotated 45 deg about x and 30 about y",
+   "why": "an edited drawing with several atoms lifted, seen at an angle"
+  },
+  {
+   "file": "real_z3_14_oac_chain_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG (seed 3) + MMFF94s, H removed",
+   "why": "a real chain ester: most C-C bonds near 1.53 A, many in one plane, but not all bonds even"
+  },
+  {
+   "file": "real_z3_14_oac_chain_noH_3d_rot90x.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "the same, rotated 90 deg about x",
+   "why": "a real chain ester seen face-on along z"
+  },
+  {
+   "file": "real_dodecyl_acetate_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG (seed 5) + MMFF94s, H removed",
+   "why": "a real chain ester: most C-C bonds near 1.53 A, many in one plane, but not all bonds even"
+  },
+  {
+   "file": "real_dodecyl_acetate_noH_3d_rot90x.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "the same, rotated 90 deg about x",
+   "why": "a real chain ester seen face-on along z"
+  },
+  {
    "file": "draw2d_threonine_wedge_z_1.5.mol",
    "kind": "drawing",
    "allowed": [
