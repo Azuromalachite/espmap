@@ -24,9 +24,10 @@ class Stub:
     """A member run. V_min is -10 - (member number), so statistics are known;
     fail/invalid/key name the conformers to break."""
 
-    def __init__(self, fail=(), invalid=(), key_for=None, kill_after_json=()):
+    def __init__(self, fail=(), invalid=(), key_for=None, kill_after_json=(), site=None):
         self.calls, self.fail, self.invalid = [], set(fail), set(invalid)
         self.key_for, self.kill = key_for or {}, set(kill_after_json)
+        self.site = site or (lambda n: 1.0 + n)       # member number -> nearest-nucleus mean
 
     def __call__(self, argv, cwd, env, timeout):
         sdf = Path(_arg(argv, "--file"))
@@ -47,8 +48,8 @@ class Stub:
                    results=dict(e_tot_Ha=-100.0 - 0.001 * n, V_min_kcal_mol=-10.0 - n,
                                 V_max_kcal_mol=20.0 + n, surface=dict(genus=0)),
                    sites=dict(atoms=[dict(index=0, atom_map=0, element="C",
-                                          nearest_nucleus=dict(V_area_mean_kcal_mol=1.0 + n),
-                                          radius_scaled=dict(V_area_mean_kcal_mol=2.0 + n))],
+                                          nearest_nucleus=dict(V_area_mean_kcal_mol=self.site(n)),
+                                          radius_scaled=dict(V_area_mean_kcal_mol=self.site(n) + 1.0))],
                               reaction_sites=[]))
         Path(_arg(argv, "--json")).write_text(json.dumps(rec), encoding="utf-8")
         if label in self.kill:
@@ -275,3 +276,39 @@ def test_the_record_carries_relabelling_and_the_isotope_rule(tmp_path):
     rec = em.run_ensemble(plan, tmp_path, runner=Stub(), log=lambda s: None)
     assert [bool(m["relabelled"]) for m in rec["members"]] == [False, True, False, True]
     assert rec["identity"]["isotopes"] == "must_match" and rec["identity"]["isotope_labels"] == []
+
+
+# --- convergence: not judgeable is not failed (the v0.3.0 acceptance run) -------------
+def _conv_rec(plan, n, tmp_path, site=None):
+    p = dict(plan, members=plan["members"][:n])
+    return em.run_ensemble(p, tmp_path, runner=Stub(site=site), log=lambda s: None)
+
+
+@pytest.mark.xfail(strict=True, reason="validity.convergence collapses 'not judgeable' to false")
+@pytest.mark.parametrize("n", [1, 2])
+def test_too_few_members_is_not_judgeable_not_failed(plan, tmp_path, n):
+    rec = _conv_rec(plan, n, tmp_path)
+    assert rec["convergence"]["converged"] is None
+    assert rec["validity"]["convergence"] is None
+    assert rec["validity"]["members"] is True
+
+
+def test_three_or_more_members_that_converge_are_true(plan, tmp_path):
+    rec = _conv_rec(plan, 4, tmp_path, site=lambda n: 1.0 + 0.1 * n)
+    assert rec["convergence"]["converged"] is True and rec["validity"]["convergence"] is True
+
+
+def test_three_or_more_members_that_do_not_converge_are_false(plan, tmp_path):
+    rec = _conv_rec(plan, 4, tmp_path, site=lambda n: 9.0 if n == 3 else 0.0)
+    assert rec["convergence"]["converged"] is False and rec["validity"]["convergence"] is False
+
+
+@pytest.mark.xfail(strict=True, reason="the schema forbids null and the record writes false")
+def test_not_judgeable_convergence_is_null_in_validity_and_allowed_by_the_schema(plan, tmp_path):
+    """The invariant: convergence.converged is null => validity.convergence is null."""
+    types = _SCHEMA["properties"]["validity"]["properties"]["convergence"]["type"]
+    assert "null" in (types if isinstance(types, list) else [types])
+    for n in (1, 2, 4):
+        rec = _conv_rec(plan, n, tmp_path / str(n))
+        if rec["convergence"]["converged"] is None:
+            assert rec["validity"]["convergence"] is None
