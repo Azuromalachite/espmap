@@ -2566,8 +2566,7 @@ def test_alie_is_nan_where_no_orbital_reaches():
 
 
 # review 6 S9: |e| turned an unbound occupied orbital into a plausible ALIE
-@pytest.mark.xfail(strict=True, reason="review 6 S9: |e| hides an unbound occupied orbital")
-@pytest.mark.parametrize("e_occ", [[0.05], [-0.5, 0.02]])
+@pytest.mark.parametrize("e_occ", [[0.05], [-0.5, 0.02], [0.0]])
 def test_alie_refuses_an_unbound_occupied_orbital(e_occ):
     mol, pts = _h2_and_points()
     C = np.eye(mol.nao)
@@ -2579,7 +2578,6 @@ def test_alie_refuses_an_unbound_occupied_orbital(e_occ):
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason="review 6 S9: |e| hides an unbound occupied orbital")
 def test_alie_refuses_the_gas_phase_enolate():
     """Review 6's reproduction: the gas-phase enolate's HOMO is above zero at
     B3LYP/def2-SVP (+1.38 eV), and |e| gave a plausible 2.19 eV minimum."""

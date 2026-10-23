@@ -44,7 +44,12 @@ not graded (§6).
 The **average local ionisation energy** at a point **r** (Sjoberg et al.
 1990, `sjoberg1990`; on molecular surfaces, Bulat et al. 2010, `bulat2010`):
 
-    Ī(r) = Σ_i n_i |ψ_i(r)|² |ε_i|  /  Σ_i n_i |ψ_i(r)|²
+    Ī(r) = Σ_i n_i |ψ_i(r)|² (−ε_i)  /  Σ_i n_i |ψ_i(r)|²
+
+(Review 6 S9: −ε_i, not the |ε_i| of the original definition. The two agree
+for a bound system; |ε| gave the gas-phase enolate, whose HOMO is above zero,
+a plausible 2.19 eV. An occupied orbital at or above zero is refused,
+`ALIE_UNBOUND`.)
 
 over **occupied** orbitals i, with occupation n_i and orbital energy ε_i.
 
@@ -183,7 +188,8 @@ built from the same kind of literature but not shared until ALIE is pushed.
 ## 7. Rendering
 
 - `--property {esp,alie}` chooses the field drawn, default `esp`.
-- **ALIE is sequential, never diverging.** It is always positive, so
+- **ALIE is sequential, never diverging.** It is positive wherever it is
+  reported (an unbound system is refused, §1), so
   invariant 7 applies by construction.
 - **Orientation, asserted in `--selftest`:** low Ī, the reactive end, is
   drawn **warm/dark**, matching ESP's "warm = where an electrophile goes".
@@ -227,11 +233,12 @@ built from the same kind of literature but not shared until ALIE is pushed.
 ## 10. Acceptance tests
 
 1. **One-orbital identity:** for any system with a single occupied orbital
-   (H₂ or He in HF), Ī(r) = |ε₁| at every vertex, to 1e-10, in any basis.
+   (H₂ or He in HF), Ī(r) = −ε₁ at every vertex, to 1e-10, in any basis.
    This is exact, and catches a wrong occupation weight or a missing |·|.
 2. **RKS vs UKS:** a closed-shell molecule computed as UKS with spin 0 gives
    the same Ī as RKS, to 1e-8.
-3. **Positivity:** Ī > 0 at every vertex of a bound system.
+3. **Positivity:** Ī > 0 at every vertex of a bound system, and an unbound
+   one (an occupied ε ≥ 0) is refused rather than given a value.
 4. **Area-weighted statistics** reuse `area_stats` (the same weighting as V),
    with conservation tests as for V.
 5. **Validity:** an unbound gas-phase anion writes `results.alie` and no

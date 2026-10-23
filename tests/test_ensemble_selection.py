@@ -343,7 +343,6 @@ def test_the_ring_reading_agrees_with_an_embedded_geometry():
 
 
 # --- review 6 S12-S14 ------------------------------------------------------------
-@pytest.mark.xfail(strict=True, reason="review 6 S12: no heavy atoms crashes shape_descriptors")
 def test_a_molecule_without_heavy_atoms_does_not_crash():
     try:
         p = em.plan_ensemble(smiles="[H][H]", ensemble=1)
@@ -352,7 +351,6 @@ def test_a_molecule_without_heavy_atoms_does_not_crash():
     assert p["members"][0]["rg"] is None and p["members"][0]["folded"] is False
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S13: the file is re-parsed once per record")
 def test_a_supplied_file_is_parsed_once(monkeypatch):
     real = Chem.SDMolSupplier
     calls = []
