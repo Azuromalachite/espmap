@@ -141,11 +141,9 @@ them, and `tests/test_fixtures.py` checks each against:
 Two details of the inputs:
 - **C18 atom maps follow the chain** (map *n* = C*n*; acetyl 21/22, ester O
   31, carbonyl O 32), not SMILES order.
-- **The nitrite input is its DFT geometry rotated rigidly out of z = 0.**
-  When the fixtures were made, an exactly planar nitrite with two equal N–O
-  bonds was refused as `DIMENSION_AMBIGUOUS`. It is now read as a geometry,
-  since 1.26 Å is a real N–O length, not a drawing's. The rotated input is
-  kept so the records stay reproducible as made.
+- **The nitrite input is its DFT geometry rotated rigidly out of z = 0.** An
+  exactly planar nitrite with two equal N–O bonds is refused as
+  `DIMENSION_AMBIGUOUS`, because a 2D drawing looks the same.
 
 ## Input
 
@@ -157,25 +155,15 @@ python esp_map.py --file structure.mol --check              # gate only, no comp
 
 `--file` reads `.mol .sdf .cdxml .xyz .pdb`. A structure **drawn** in an editor
 and exported as MOL/SDF/CDXML is a picture, so its coordinates are discarded,
-a conformer is generated, and the run says so loudly.
-
-A file is treated as a drawing when its header says 2D. It is also treated as
-one when the header says 3D, every *z* is zero, and every bond has the same
-length at a drawing program's standard (1.5 Å in RDKit and most editors, 1.54
-in Marvin), across two or more element pairs. Other flat files:
-- **Kept as a geometry:** benzene optimised in the *xy* plane, water from an
-  `.xyz`, C₆F₆, CO₂ at 1.16 Å. Flat files whose bonds are equal but real are
-  kept only when every bond is within 10 % of a reference length for its
-  element pair and order. `.xyz` and `.pdb` are never drawings.
-- **Refused as `DIMENSION_AMBIGUOUS`:**
-  - equal bonds at a drawing length with only one element pair, since a
-    symmetric molecule could look the same;
-  - equal bonds at a length no drawing program uses that are not chemically
-    plausible, e.g. a chlorobenzene drawing rescaled to 1.4 Å, whose C–Cl
-    would be 21 % short. That case was once computed as a real geometry.
-
-A file carrying real 3D coordinates is used as-is, with any missing hydrogens
-added and relaxed against frozen heavy atoms.
+a conformer is generated, and the run says so loudly. A file is treated as a
+drawing when its header says 2D, or when it says 3D but every *z* is zero and
+every bond has the same length across two or more element pairs. A planar
+*geometry* — benzene optimised in the *xy* plane, water from an `.xyz` — is
+kept; `.xyz` and `.pdb` are never drawings. A flat file with a 3D header and
+one element pair (nitrite, nitrate, CO₂) cannot be told apart from a drawing
+and is refused with `DIMENSION_AMBIGUOUS`. A file carrying real 3D
+coordinates is used as-is, with any missing hydrogens added and relaxed
+against frozen heavy atoms.
 
 A file with more than one record (an SDF of docking poses) is refused; pass
 `--record N` to compute record *N*. The JSON records which one under

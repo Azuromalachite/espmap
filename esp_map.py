@@ -297,23 +297,13 @@ def coordinate_kind(mol, fmt, tol=0.03):
     water from an .xyz -- and so depended on how many decimals a file printed.
       - .xyz and .pdb are never drawings;
       - MOL/SDF/CDXML whose header says 2D are drawings;
-      - a 3D header with every z = 0 and bonds of non-uniform length is a
-        geometry: drawing programs draw every bond at one length.
-      - uniform bonds AT a drawing program's length (DRAWING_BOND_LENGTHS:
-        1.5 A in RDKit and most editors, 1.54 in Marvin, 0.825 in ChemDraw's
-        units) are a drawing if there are two or more element pairs, and
-        ambiguous with one (a symmetric molecule could sit there too). Pairs
-        ignore bond ORDER: Kekule nitrite has N=O and N-O(-).
-      - uniform bonds at any other length are a geometry only if every bond
-        is chemically plausible: within PLAUSIBLE_TOL of the reference
-        length for its element pair and order (bond_reference_length).
-        Otherwise ambiguous, a BLOCK. Review 5 R11: uniform length alone
-        discarded C6F6 (C-C 1.394, C-F 1.335 A) and C2F4 as drawings and
-        refused CO2 and BF3; the first fix, "not at a drawing length means
-        geometry", then let a chlorobenzene drawing at 1.35-1.4 A through to
-        be computed with C-Cl 1.4 A, silently. Its C-Cl is 21 % short of the
-        reference, so it is refused, and a silent wrong geometry is not
-        possible on this path.
+      - a 3D header with every z = 0 is a drawing only if every bond has the
+        same length (within tol) across at least two element pairs. Drawing
+        programs draw every bond at one length; a geometry has C-H ~1.09,
+        C-Cl ~1.74 A. Pairs ignore bond ORDER: Kekule nitrite has N=O and
+        N-O(-), both 1.258 A in a DFT geometry, and counting orders called it
+        a drawing. With one element pair (nitrite, nitrate, CO2, a diatomic)
+        lengths cannot tell a drawing from a symmetric molecule -> ambiguous.
     """
     if mol.GetNumConformers() == 0:
         return "none"
@@ -335,36 +325,7 @@ def coordinate_kind(mol, fmt, tol=0.03):
     mean = sum(lengths) / len(lengths)
     if max(abs(x - mean) for x in lengths) > tol * mean:
         return "geometry"
-    if any(abs(mean - d) <= tol * d for d in DRAWING_BOND_LENGTHS):
-        return "drawing" if len(pairs) > 1 else "ambiguous"
-    plausible = all(abs(L / bond_reference_length(b) - 1) <= PLAUSIBLE_TOL
-                    for b, L in zip(mol.GetBonds(), lengths))
-    return "geometry" if plausible else "ambiguous"
-
-
-# Standard bond lengths drawing programs write (A): RDKit and most editors
-# 1.5, Marvin 1.54, ChemDraw 0.825 (its 14.4 pt default in MOL units).
-DRAWING_BOND_LENGTHS = (1.5, 1.54, 0.825)
-# How far a bond in a flat, uniform-length file may sit from its reference
-# length and still be read as a geometry. Measured on the R11 set: C6F6 +0.4,
-# C2F4 -0.8, CO2 -6.1, azide -4.5, BF3 -7.1, nitrate -8.8 %; a chlorobenzene
-# drawing at 1.4 A has C-Cl -21 %. Ozone (+10.8 % on its resonance O=O)
-# stays ambiguous, as before R11.
-PLAUSIBLE_TOL = 0.10
-# single, aromatic, double, triple: fraction of the single-bond length
-_ORDER_FACTOR = {1.0: 1.0, 1.5: 0.92, 2.0: 0.87, 3.0: 0.79}
-
-
-def bond_reference_length(bond):
-    """A rough expected length (A) for an RDKit bond: the sum of the two
-    atoms' covalent radii (RDKit's table) scaled for bond order. Used only to
-    ask whether a flat file's bonds could be real (coordinate_kind), never
-    as a geometry. C-C 1.52 / 1.40 / 1.32 / 1.20; C-Cl 1.78; C=O 1.24."""
-    from rdkit import Chem
-    pt = Chem.GetPeriodicTable()
-    r = (pt.GetRcovalent(bond.GetBeginAtom().GetAtomicNum())
-         + pt.GetRcovalent(bond.GetEndAtom().GetAtomicNum()))
-    return r * _ORDER_FACTOR.get(bond.GetBondTypeAsDouble(), 1.0)
+    return "drawing" if len(pairs) > 1 else "ambiguous"
 
 
 def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0, record=None):
@@ -849,8 +810,8 @@ def read_structure(path, charge=0, record=None):
     if kind == "ambiguous":
         return None, [(BLOCK, "DIMENSION_AMBIGUOUS",
                        f"{path} is flagged 3D with every z = 0 and every bond "
-                       f"at a drawing program's standard length: a drawing and "
-                       f"a symmetric planar molecule look identical",
+                       f"the same length: a drawing and a symmetric planar "
+                       f"molecule look identical",
                        "write a 2D header if this is a drawing, or give any "
                        "atom a non-zero z (or save as .xyz) if it is a geometry")], n
     m.SetProp("_coords", kind)
