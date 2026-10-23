@@ -2310,6 +2310,10 @@ ENSEMBLE_SCHEMA = "espmap.ensemble/1"
 # (DEDUP_RMSD, CONTACT_MIN_BONDS: section 8.2).
 CONV_TOL_KCAL = 1.0
 BOOTSTRAP_N = 1000
+# what --weight dft weights are, in the record (review 7 R7-3)
+WEIGHTS_ARE = ("Boltzmann factors of the SCF electronic energies of the retained, "
+               "deduplicated optimised minima at temperature_K: not a thermodynamic "
+               "population (no zero-point, thermal or entropic terms, no unsampled minima)")
 BOLTZMANN_T = 298.15
 KB_KCAL = 0.0019872043
 
@@ -2513,6 +2517,44 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     return rec
 
 
+def _optimised_mol(m, rec):
+    """Plan member m's molecule (bonds, maps, hydrogens) carrying the final
+    coordinates of its optimised record, or None when the record's atoms are
+    not m's atoms in m's order."""
+    from rdkit import Chem
+    from rdkit.Geometry import Point3D
+    g = rec.get("geometry", {})
+    mc = Chem.Mol(m["_mol"], confId=m["_cid"]) if m["_cid"] != -1 else Chem.Mol(m["_mol"])
+    if g.get("symbols") != [a.GetSymbol() for a in mc.GetAtoms()] or not g.get("xyz_angstrom"):
+        return None
+    conf = mc.GetConformer()
+    for i, (x, y, z) in enumerate(g["xyz_angstrom"]):
+        conf.SetAtomPosition(i, Point3D(x, y, z))
+    return mc
+
+
+def _same_minimum(a, b, dedup_rmsd=DEDUP_RMSD, max_matches=SYMMETRY_MATCH_CAP):
+    """Symmetry-aware heavy-atom RMSD of two final geometries of one molecule
+    (mirror image included for an achiral one, as select_ensemble does), and
+    whether it is below dedup_rmsd."""
+    from rdkit import Chem
+    from rdkit.Chem import rdMolAlign
+    ha, hb = Chem.RemoveHs(a), Chem.RemoveHs(b)
+    matches = ha.GetSubstructMatches(ha, uniquify=False, useChirality=False,
+                                     maxMatches=max_matches)
+    maps = [list(zip(mt, range(ha.GetNumAtoms()))) for mt in matches]
+    probes = [ha]
+    if _is_achiral(a):
+        mirror = Chem.Mol(ha)
+        c = mirror.GetConformer()
+        for i in range(mirror.GetNumAtoms()):
+            p = c.GetAtomPosition(i)
+            c.SetAtomPosition(i, (p.x, p.y, -p.z))
+        probes.append(mirror)
+    r = min(rdMolAlign.GetBestRMS(Chem.Mol(p), hb, map=maps) for p in probes)
+    return float(r), bool(r < dedup_rmsd)
+
+
 def _stats(values):
     """mean, sd (ddof 1), min, max, range, n over the finite values."""
     v = np.array([x for x in values if x is not None and np.isfinite(x)], float)
@@ -2608,7 +2650,62 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                                  folded=m["folded"], rg_angstrom=m["rg"], **attempts(label)))
             continue
         kept.append((i, label, rec, js))
-    rg_by = {i: plan["members"][i]["rg"] for i, *_ in kept}
+    # Review 7 R7-3: with --optimize, the ESP and the energy are the final
+    # geometry's but Rg, extent, asphericity, contacts, folded and the
+    # configuration were the start's, and starts that reached one minimum
+    # were each weighted. Shape and configuration are now read from the
+    # record's final coordinates; a member whose optimisation changed the
+    # configuration is excluded; and of the starts that reach one minimum
+    # (symmetric heavy-atom RMSD below DEDUP_RMSD) the first in selection
+    # order is kept, the rest excluded with duplicate_minimum_of.
+    from rdkit import Chem
+    shape, final_mol, retained = {}, {}, []
+    ref_conf = plan["identity"].get("configuration", {})
+    for i, label, rec, js in kept:
+        m = plan["members"][i]
+        if not rec["settings"].get("optimize"):
+            shape[i] = dict(rg=m["rg"], extent=m["extent"], asphericity=m["asphericity"],
+                            contacts=m["contacts"], folded=m["folded"],
+                            configuration=m.get("configuration", {}), shape_from="input")
+            retained.append((i, label, rec, js))
+            continue
+        mc = _optimised_mol(m, rec)
+        if mc is None:
+            excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
+                                 source_record=m.get("record"), code="MEMBER_GEOMETRY_UNREADABLE",
+                                 reason="optimised record's atoms are not the member's atoms in "
+                                        "its order, so its final shape cannot be read",
+                                 folded=None, rg_angstrom=None, **attempts(label)))
+            continue
+        d = shape_descriptors(mc)
+        shape[i] = dict(d, configuration=configuration_signs(Chem.RemoveHs(mc)),
+                        shape_from="optimised")
+        if shape[i]["configuration"] != ref_conf:
+            excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
+                                 source_record=m.get("record"), code="MEMBER_CONFIGURATION_CHANGED",
+                                 reason=f"optimisation changed the configuration to "
+                                        f"{shape[i]['configuration']}, not {ref_conf}",
+                                 folded=d["folded"], rg_angstrom=d["rg"], **attempts(label)))
+            continue
+        twin = None
+        for j, other, *_ in retained:
+            if j in final_mol:
+                rms, same = _same_minimum(mc, final_mol[j])
+                if same:
+                    twin = (other, rms)
+                    break
+        if twin:
+            excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
+                                 source_record=m.get("record"), code="MEMBER_DUPLICATE_MINIMUM",
+                                 reason=f"optimised to the same minimum as {twin[0]} (heavy-atom "
+                                        f"RMSD {twin[1]:.3f} A < {DEDUP_RMSD} A); counted once",
+                                 duplicate_minimum_of=twin[0],
+                                 folded=d["folded"], rg_angstrom=d["rg"], **attempts(label)))
+            continue
+        final_mol[i] = mc
+        retained.append((i, label, rec, js))
+    kept = retained
+    rg_by = {i: shape[i]["rg"] for i, *_ in kept}
     ext_i = max(rg_by, key=lambda i: rg_by[i] if rg_by[i] is not None else -1) if rg_by else None
     genus_ref = next((r["results"]["surface"].get("genus") for i, _, r, _ in kept if i == ext_i), None)
     weights = None
@@ -2621,6 +2718,7 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
         genus = rec["results"]["surface"].get("genus")
         g_ex = genus - genus_ref if genus is not None and genus_ref is not None else None
         npz = out / f"{label}.npz"
+        sh = shape[i]
         members.append(dict(
             conformer=label, member_id=rec["geometry"]["sha1"],
             embed_conf_id=m.get("embed_conf_id"), source_record=m.get("record"),
@@ -2631,10 +2729,11 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
             geometry_sha1=rec["geometry"]["sha1"],
             mmff_dE_kcal=(m["mmff_energy"] - min(x["mmff_energy"] for x in plan["members"])
                           if m.get("mmff_energy") is not None else None),
-            rg_angstrom=m["rg"], extent_angstrom=m["extent"], asphericity=m["asphericity"],
-            contacts=m["contacts"], folded=m["folded"], genus=genus, genus_excess=g_ex,
-            folded_genus_disagree=bool(g_ex is not None and m["folded"] != (g_ex > 0)),
-            configuration=m.get("configuration", {}),
+            rg_angstrom=sh["rg"], extent_angstrom=sh["extent"], asphericity=sh["asphericity"],
+            contacts=sh["contacts"], folded=sh["folded"], shape_from=sh["shape_from"],
+            genus=genus, genus_excess=g_ex,
+            folded_genus_disagree=bool(g_ex is not None and sh["folded"] != (g_ex > 0)),
+            configuration=sh["configuration"],
             relabelled=m.get("relabelled", []),
             optimized=bool(rec["settings"].get("optimize")),
             scf_energy_Ha=rec["results"].get("e_tot_Ha"),
@@ -2698,11 +2797,14 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
             n_symmetry_matches=sel.get("n_symmetry_matches"),
             symmetry_match_cap=SYMMETRY_MATCH_CAP if "SYMMETRY_MATCH_CAP" in globals() else None),
         weighting=plan.get("weight", "none"),
+        weights_are=(WEIGHTS_ARE if plan.get("weight") == "dft" else None),
         temperature_K=BOLTZMANN_T if plan.get("weight") == "dft" else None)
     akey = first["analysis_key"] if first else None
     timing_free = {k: v for k, v in protocol.items() if k != "input_file"}
     prov = (first or {}).get("provenance", {})
     identity = ensemble_identity(plan)
+    # a start that reached a kept minimum is represented by it: not a failure
+    failures = [e for e in excluded if e.get("code") != "MEMBER_DUPLICATE_MINIMUM"]
     # Review 7 R7-2: (analysis_key, protocol) alone collided across molecules
     # and across supplied conformer sets of one molecule. The key now names
     # what exists: the molecule, the protocol, and the ordered members.
@@ -2730,11 +2832,11 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                          not_judgeable=not_judgeable, per_site=conv),
         kish_n=(float(1 / np.sum(weights ** 2)) if weights is not None else None),
         results=results, sites=sites,
-        validity=dict(members=bool(members) and not excluded,
+        validity=dict(members=bool(members) and not failures,
                       # null when not judgeable (fewer than 3 usable values, or no
                       # site table): not measured is not failed
                       convergence=converged,
-                      unbiased=not any(e["folded"] for e in excluded)))
+                      unbiased=not any(e["folded"] for e in failures)))
 
 
 # flags the ensemble command sets per member, never passed through

@@ -273,6 +273,13 @@
       "number",
       "null"
      ]
+    },
+    "weights_are": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "description": "dft weighting only: electronic-energy Boltzmann factors over the retained, deduplicated optimised minima, not a thermodynamic population"
     }
    }
   },
@@ -340,7 +347,8 @@
      "optimized",
      "scf_energy_Ha",
      "validity",
-     "relabelled"
+     "relabelled",
+     "shape_from"
     ],
     "properties": {
      "conformer": {
@@ -515,6 +523,13 @@
        "items": false
       },
       "description": "review 6 S10: [i, j] pairs: index i now holds what the member's input had at j, so its diastereotopic groups carry member 1's labels; [] when unchanged"
+     },
+     "shape_from": {
+      "enum": [
+       "input",
+       "optimised"
+      ],
+      "description": "review 7 R7-3: where rg, extent, asphericity, contacts, folded and configuration were read: the member's input, or its optimised record's final coordinates"
      }
     }
    }
@@ -576,6 +591,13 @@
        "type": "string"
       },
       "description": "every failed attempt, '<kind>, rc <n>: <last stderr line>'. Only an infrastructure failure (killed, no record) is retried; a deterministic one stays excluded across reruns, since rerunning until it passes would be selection on outcome"
+     },
+     "duplicate_minimum_of": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "review 7 R7-3: code MEMBER_DUPLICATE_MINIMUM: the kept member whose minimum this start reached. Not a failure: it leaves validity.members and validity.unbiased unchanged"
      }
     }
    },
@@ -614,7 +636,7 @@
    "properties": {
     "members": {
      "type": "boolean",
-     "description": "every member's own validity holds"
+     "description": "every planned member was computed with a valid record; a start excluded as a duplicate minimum does not count against it"
     },
     "convergence": {
      "type": [
@@ -625,7 +647,7 @@
     },
     "unbiased": {
      "type": "boolean",
-     "description": "false whenever any excluded member is folded (F9: the chi = 2 check once excluded exactly the folded C18 members). Was 'bias' in the spec draft; renamed so that true reads as fine, like every other validity flag"
+     "description": "false whenever any excluded member is folded (F9: the chi = 2 check once excluded exactly the folded C18 members). Was 'bias' in the spec draft; renamed so that true reads as fine, like every other validity flag. A folded start excluded as a duplicate minimum does not count: its minimum is kept"
     }
    }
   }

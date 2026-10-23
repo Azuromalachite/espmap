@@ -42,7 +42,10 @@ class Stub:
         sha1 = em.spec_sha1(em._mol_to_spec(m))
         # --optimize: the record's geometry is the optimised one, and it names
         # the input it was optimised from
-        geom = (dict(sha1=em._sha1(sha1 + "optimised"), optimised_from_sha1=sha1) if self.optimize
+        rows = [r.split() for r in em._mol_to_spec(m).split(";")]
+        geom = (dict(sha1=em._sha1(sha1 + "optimised"), optimised_from_sha1=sha1,
+                     symbols=[r[0] for r in rows],
+                     xyz_angstrom=[[float(x) for x in r[1:]] for r in rows]) if self.optimize
                 else dict(sha1=sha1))
         rec = dict(schema="espmap.record/1", analysis_key=self.key_for.get(label, "a" * 40),
                    key_fields=dict(analysis=dict(xc="b3lyp", basis="def2svp")),
@@ -468,7 +471,6 @@ class OptimiseTo(Stub):
         return rc
 
 
-@pytest.mark.xfail(strict=True, reason="R7-3: shape comes from the pre-optimisation plan")
 def test_r7_e6_the_record_describes_the_optimised_geometry(tmp_path):
     p = em.plan_ensemble(smiles="CC(=O)OCC/C=C\CCCCCCCC/C=C\CCCC", ensemble=10, weight="dft", optimize=True)
     folded = [i for i, m in enumerate(p["members"]) if m["folded"]]
@@ -483,7 +485,6 @@ def test_r7_e6_the_record_describes_the_optimised_geometry(tmp_path):
     assert m["rg_angstrom"] == pytest.approx(p["members"][dst]["rg"])
 
 
-@pytest.mark.xfail(strict=True, reason="R7-3: two starts at one minimum are both weighted")
 def test_r7_e7_two_starts_at_one_minimum_are_not_double_counted(tmp_path):
     p = em.plan_ensemble(smiles="CCCCCCO", ensemble=4, weight="dft", optimize=True)
     rec = em.run_ensemble(p, tmp_path, runner=OptimiseTo(p, {"conf_01": 0}), log=lambda s: None)
@@ -509,3 +510,13 @@ def test_r7_1_the_same_protocol_resumes(plan, tmp_path):
     again = Stub()
     em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=again, log=lambda s: None)
     assert again.calls == []
+
+
+def test_r7_3_a_duplicate_minimum_is_named_and_is_not_a_failure(tmp_path):
+    p = em.plan_ensemble(smiles="CCCCCCO", ensemble=4, weight="dft", optimize=True)
+    rec = em.run_ensemble(p, tmp_path, runner=OptimiseTo(p, {"conf_01": 0}), log=lambda s: None)
+    (dup,) = rec["excluded"]
+    assert dup["code"] == "MEMBER_DUPLICATE_MINIMUM" and dup["duplicate_minimum_of"] == "conf_00"
+    assert rec["validity"]["members"] is True and rec["validity"]["unbiased"] is True
+    assert all(m["shape_from"] == "optimised" for m in rec["members"])
+    assert "not a thermodynamic population" in rec["protocol"]["weights_are"]
