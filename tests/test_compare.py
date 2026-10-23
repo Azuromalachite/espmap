@@ -249,3 +249,28 @@ def test_the_command_line(tmp_path):
     assert r.returncode == 0, r.stderr
     c = json.loads((tmp_path / "c.json").read_text())
     assert c["schema"] == "espmap.compare/1" and c["sites"][0]["name"] == "OH"
+
+
+# --- the user's decision (2026-10-24): a single-geometry side is never resolved -------
+@pytest.mark.xfail(strict=True, reason="sd 0 on a single side lets resolved be true")
+@pytest.mark.parametrize("sides", ["single_single", "single_ensemble", "ensemble_single"])
+def test_a_single_geometry_side_is_never_resolved(tmp_path, sides):
+    """Conformational uncertainty is not measured on a single geometry, so the
+    comparison may report delta and partition but never cross into
+    'resolved', however large delta is."""
+    a_rec = [_record("CCCCCCO", {NN: v, RS: v}) for v in (1.0, 1.1, 1.2)]
+    b_rec = [_record("CCCCCCCO", {NN: v, RS: v}) for v in (30.0, 30.1, 30.2)]
+    a = (_single(tmp_path, "a", a_rec[0]) if sides.startswith("single")
+         else _ensemble(tmp_path, "a", a_rec))
+    b = (_single(tmp_path, "b", b_rec[0]) if sides.endswith("single")
+         else _ensemble(tmp_path, "b", b_rec))
+    c = em.compare_records(a, b, CORR)
+    for rule in em.PARTITION_RULES:
+        s = c["sites"][0]["by_rule"][rule]
+        assert abs(s["delta_mean"]) > 25 and s["resolved"] is False
+    for q in ("V_min_kcal_mol", "V_max_kcal_mol"):
+        assert c["global_extrema"][q]["resolved"] is False
+    assert "CONFORMERS_NOT_SAMPLED" in c["flags"]
+    single = [s for s in "AB" if c["inputs"][s]["kind"] == "single"]
+    for s in single:
+        assert c["sites"][0]["by_rule"][NN]["conformational"][s]["measured"] == "not_measured"
