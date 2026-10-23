@@ -19,7 +19,7 @@ _DIR = Path(__file__).resolve().parent / "data" / "r11"
 _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases"]
 
 # what the current rule gets wrong; a new rule removes entries. Against v0.2.0
-# the 100 cases had 15 unsafe and 40 not preferred; the rule now has none
+# the 105 cases had 15 unsafe and 41 not preferred; the rule now has none
 # unsafe and these not preferred, every one a BLOCK:
 UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
@@ -33,6 +33,9 @@ NOT_PREFERRED_NOW = UNSAFE_NOW | {
     # a flat sp3-sp3 ring 0.05 A off its plane is refused, not called a
     # drawing, so a nearly flat real ring (1,3-cyclohexadiene) is not discarded
     "draw_thf_znoise_0.05_1.45.mol",
+    # the real ring that rule protects: 0.092 A off its plane, with a CH2-CH2
+    # ring bond, so refused rather than discarded as a drawing
+    "real_13chd_noH.mol",
     # C-C up to +6.6 %, past the 5 % for sp3 carbon, so not a geometry; with
     # one element pair an implausible file is refused, not called a drawing
     "draw_hexane_squash_1.25_1.5.mol",
