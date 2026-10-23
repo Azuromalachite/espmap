@@ -434,15 +434,21 @@
    "name": "supplied: the same conformer with diastereotopic methyls' indices swapped",
    "recipe": {
     "file": "E26_diastereotopic_swap.sdf",
-    "ensemble": "supplied"
+    "ensemble": "supplied",
+    "plan_only": true
    },
    "expect": {
-    "outcome": "refuse",
-    "before_compute": true
+    "outcome": "accept",
+    "checks": {
+     "relabelled_records": [
+      2
+     ],
+     "pro_labels_agree": true
+    }
    },
    "worst": "a site row of 'methyl 4' that is the pro-R methyl in one member and pro-S in the other",
    "cost": "fast",
-   "why": "review 6 S10: element and neighbours are preserved by the swap, so verify_mapping passes it"
+   "why": "review 6 S10, the user's decision (2026-10-24): canonicalize, never refuse. The record is relabelled to record 1's diastereotopic labels and says so; a first expectation of 'refuse' was replaced when it proved to refuse real ensembles (ETKDG places diastereotopic groups either way round)"
   },
   {
    "id": "E27",

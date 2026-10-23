@@ -152,6 +152,7 @@ WHAT THIS IS AND IS NOT
     than the convergence tests reported in the review.
 """
 import argparse
+import json
 import os
 import sys
 
@@ -1788,6 +1789,91 @@ def shape_descriptors(mol, conf_id=-1):
                 folded=bool(contacts))
 
 
+def prochiral_labels(mol, conf_id=-1):
+    """{(centre, a, b): CIP label} for every atom with exactly two
+    graph-equivalent heavy-atom neighbours a < b (equal canonical rank,
+    breakTies=False): the label the centre takes, from conformer conf_id,
+    when a is tagged with an isotope. In a chiral molecule a and b are
+    diastereotopic, and the label says which of the two sits where. Three or
+    more equivalent groups (tert-butyl methyls) rotate into each other and
+    carry no fixed label, so they are not used; hydrogens (CH2) are not
+    either."""
+    from rdkit import Chem
+    from rdkit.Chem import rdCIPLabeler
+    ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=False))
+    one = Chem.Mol(mol, confId=conf_id) if conf_id != -1 else Chem.Mol(mol)
+    out = {}
+    for c in mol.GetAtoms():
+        groups = {}
+        for n in c.GetNeighbors():
+            if n.GetAtomicNum() > 1:
+                groups.setdefault(ranks[n.GetIdx()], []).append(n.GetIdx())
+        for same in groups.values():
+            if len(same) != 2:
+                continue
+            a, b = sorted(same)
+            x = Chem.Mol(one)
+            tag = x.GetAtomWithIdx(a)
+            tag.SetIsotope(int(round(tag.GetMass())) + 1)
+            Chem.AssignStereochemistryFrom3D(x, replaceExistingTags=True)
+            rdCIPLabeler.AssignCIPLabels(x)
+            ca = x.GetAtomWithIdx(c.GetIdx())
+            out[(c.GetIdx(), a, b)] = ca.GetProp("_CIPCode") if ca.HasProp("_CIPCode") else None
+    return out
+
+
+def relabel_prochiral(mol, conf_id, target, max_matches=None):
+    """Review 6 S10, the user's decision: give conformer conf_id of mol the
+    same diastereotopic labels as `target` (prochiral_labels of member 1) by
+    exchanging the coordinates of graph-equivalent groups, never by
+    refusing. ETKDG embeds each conformer independently and places
+    diastereotopic groups either way round, so without this "methyl 4" is the
+    pro-R methyl in some members and pro-S in others, and per-atom rows and
+    maps on it mix the two.
+
+    For each centre whose label differs, the heavy-atom graph automorphism
+    that exchanges its two groups and moves the fewest atoms is applied to
+    the coordinates, each heavy atom's hydrogens following it in index order
+    (a methyl's three are interchangeable). The set of points is unchanged;
+    only which index sits where. Modifies the conformer in place and returns
+    the moved index pairs [[i, j], ...] (i now holds what j held), or raises
+    ValueError when no automorphism reaches the target."""
+    from rdkit import Chem
+    max_matches = max_matches or SYMMETRY_MATCH_CAP
+    have = prochiral_labels(mol, conf_id)
+    if have == target:
+        return []
+    heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
+    pos_of = {i: k for k, i in enumerate(heavy)}
+    hm = Chem.RemoveHs(Chem.Mol(mol), sanitize=False)
+    hm.UpdatePropertyCache(strict=False)
+    autos = hm.GetSubstructMatches(hm, uniquify=False, useChirality=False, maxMatches=max_matches)
+    if len(autos) >= max_matches:
+        raise ValueError(f"{max_matches} or more automorphisms; cannot relabel")
+    conf = mol.GetConformer(conf_id)
+    moved = []
+    for (c, a, b), want in sorted(target.items()):
+        if prochiral_labels(mol, conf_id).get((c, a, b)) == want:
+            continue
+        ka, kb = pos_of[a], pos_of[b]
+        cands = [s for s in autos if s[ka] == kb and s[kb] == ka]
+        if not cands:
+            raise ValueError(f"no automorphism exchanges atoms {a} and {b}")
+        s = min(cands, key=lambda s: sum(1 for k, v in enumerate(s) if k != v))
+        P = conf.GetPositions()
+        perm = {heavy[k]: heavy[v] for k, v in enumerate(s) if k != v}
+        for i, j in list(perm.items()):
+            hi = sorted(n.GetIdx() for n in mol.GetAtomWithIdx(i).GetNeighbors() if n.GetAtomicNum() == 1)
+            hj = sorted(n.GetIdx() for n in mol.GetAtomWithIdx(j).GetNeighbors() if n.GetAtomicNum() == 1)
+            perm.update(zip(hi, hj))
+        for i, j in perm.items():
+            conf.SetAtomPosition(i, P[j].tolist())
+        moved += [[int(i), int(j)] for i, j in sorted(perm.items())]
+    if prochiral_labels(mol, conf_id) != target:
+        raise ValueError("relabelling did not reach member 1's labels")
+    return moved
+
+
 def _is_achiral(mol):
     """True when the molecule is its own mirror image as specified: inverting
     every tetrahedral centre gives the same canonical SMILES. Then a
@@ -2070,6 +2156,17 @@ def supplied_members(path, charge=None, basis="def2-tzvp", spin=0):
                 f"remove record {r}, or compute each stereoisomer as its own ensemble"))
     if out:
         raise EnsembleRefused(out)
+    # review 6 S10: one labelling of diastereotopic groups across the members
+    if not _is_achiral(first):
+        target = prochiral_labels(first)
+        for r, m in enumerate(members[1:], start=2):
+            try:
+                moved = relabel_prochiral(m, -1, target)
+            except ValueError as e:
+                raise EnsembleRefused([_ensemble_block(
+                    "MEMBER_ATOM_ORDER", f"record {r}: {e}",
+                    f"write record {r} with record 1's atom order")]) from None
+            m.SetProp("_relabelled", json.dumps(moved))
     return first, members
 
 
@@ -2117,7 +2214,9 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
         raise EnsembleRefused([f for f in findings if f[0] == BLOCK])
     if supplied:
         first, mols = supplied_members(path, charge=charge, basis=basis, spin=spin)
-        members = [dict(record=r, spec=_mol_to_spec(m), **shape_descriptors(m))
+        members = [dict(record=r, spec=_mol_to_spec(m),
+                        relabelled=json.loads(m.GetProp("_relabelled")) if m.HasProp("_relabelled") else [],
+                        **shape_descriptors(m))
                    for r, m in enumerate(mols, start=1)]
         protocol = dict(source="supplied", path=str(path), k_requested=len(mols),
                         k_obtained=len(mols))
@@ -2157,7 +2256,16 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
                 "fix every stereo element in the input")])
         approval = Chem.RemoveHs(probe)
         members, bad = [], []
+        # review 6 S10: ETKDG places diastereotopic groups either way round
+        target = None if _is_achiral(mol) else prochiral_labels(mol, sel["members"][0][0])
         for cid, e in sel["members"]:
+            moved = []
+            if target is not None:
+                try:
+                    moved = relabel_prochiral(mol, cid, target)
+                except ValueError as err:
+                    bad.append(_ensemble_block("MEMBER_ATOM_ORDER", f"embedded conformer {cid}: {err}",
+                                               "report this"))
             spec = _mol_to_spec(mol, cid)
             ok, computed, why = verify_computed(spec, approval)
             mapped, why_m = verify_mapping(spec, approval)
@@ -2165,7 +2273,7 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
                 bad.append(_ensemble_block(
                     "MEMBER_IDENTITY", f"embedded conformer {cid}: {why or why_m}",
                     "report this: the embedder changed the approved structure"))
-            members.append(dict(embed_conf_id=cid, mmff_energy=e, spec=spec,
+            members.append(dict(embed_conf_id=cid, mmff_energy=e, spec=spec, relabelled=moved,
                                 **shape_descriptors(mol, cid)))
         if bad:
             raise EnsembleRefused(bad)

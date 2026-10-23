@@ -27,7 +27,7 @@ _BY_ID = {c["id"]: c for c in _CASES}
 # with review 6's fixes E18, E20-E22, E24 and E25 (E23 refused already).
 NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "E16",
                                        "E17", "E18", "E20", "E21", "E22", "E23",
-                                       "E24", "E25", "E27", "E28"}
+                                       "E24", "E25", "E26", "E27", "E28"}
 
 
 def _records(name):
@@ -162,6 +162,15 @@ def _params(cost):
             for c in _CASES if c["cost"] == cost]
 
 
+def _mol_block_from_spec(spec, recipe):
+    """The file's first record carrying spec's coordinates (same atom order)."""
+    m = Chem.Mol(_records(recipe["file"])[0])
+    conf = m.GetConformer()
+    for i, row in enumerate(spec.split(";")):
+        conf.SetAtomPosition(i, [float(x) for x in row.split()[1:]])
+    return Chem.MolToMolBlock(m)
+
+
 def _refused_before_compute(expect):
     return any(e.get("outcome") == "refuse" and e.get("before_compute")
                for e in (expect, expect.get("or", {})))
@@ -185,6 +194,17 @@ def _run(case):
     if r.get("classify_only"):
         got = em.shape_descriptors(_records(r["file"])[0])
         assert {k: got[k] for k in e["checks"]} == e["checks"]
+        return
+    if r.get("plan_only"):
+        # an expectation decided before compute (E26: relabelling)
+        plan = em.plan_ensemble(**_plan_kwargs(r))
+        for name, want in e["checks"].items():
+            if name == "relabelled_records":
+                assert [m["record"] for m in plan["members"] if m["relabelled"]] == want
+            elif name == "pro_labels_agree":
+                mols = [Chem.MolFromMolBlock(_mol_block_from_spec(m["spec"], r)) for m in plan["members"]]
+                labels = {json.dumps(sorted(em.prochiral_labels(x).items(), key=str)) for x in mols}
+                assert (len(labels) == 1) == want
         return
     if "ensemble" in r and _refused_before_compute(e):
         # step 3: plan_ensemble is everything before the first SCF. A case

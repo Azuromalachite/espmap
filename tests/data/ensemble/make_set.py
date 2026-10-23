@@ -301,10 +301,13 @@ case("E25", "supplied: record 2 of 3 cannot be read", {"file": f_bad, "ensemble"
      "a two-member ensemble with the lost record never named", "fast",
      "review 6 S6: unreadable records were dropped and the rest renumbered")
 case("E26", "supplied: the same conformer with diastereotopic methyls' indices swapped",
-     {"file": f_dia, "ensemble": "supplied"}, {"outcome": "refuse", "before_compute": True},
+     {"file": f_dia, "ensemble": "supplied", "plan_only": True},
+     {"outcome": "accept", "checks": {"relabelled_records": [2], "pro_labels_agree": True}},
      "a site row of 'methyl 4' that is the pro-R methyl in one member and pro-S in the other",
-     "fast", "review 6 S10: element and neighbours are preserved by the swap, so "
-             "verify_mapping passes it")
+     "fast", "review 6 S10, the user's decision (2026-10-24): canonicalize, never refuse. "
+             "The record is relabelled to record 1's diastereotopic labels and says so; "
+             "a first expectation of 'refuse' was replaced when it proved to refuse real "
+             "ensembles (ETKDG places diastereotopic groups either way round)")
 case("E27", "supplied: CD3OH then CH3OH", {"file": f_isotope, "ensemble": "supplied"},
      {"outcome": "refuse", "before_compute": True},
      "two isotopologues averaged as one molecule, the identity whichever came first", "fast",

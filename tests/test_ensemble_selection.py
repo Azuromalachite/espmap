@@ -3,6 +3,7 @@
 fields only, no SCF. The hostile set's own cases are in test_ensemble_set.py;
 these pin WHY each refusal happens, so a refusal for the wrong reason fails.
 """
+import json
 from pathlib import Path
 
 import numpy as np
@@ -443,3 +444,45 @@ def test_tert_butyl_rotation_is_not_a_label_swap(tmp_path):
     *_, conv = em._embed_and_minimise(mol, 6, 2)
     path = _write(tmp_path / "tbu.sdf", [Chem.Mol(mol, confId=c) for c, _ in conv[:3]])
     assert em.plan_ensemble(path=path, ensemble="supplied")["protocol"]["k_obtained"] == 3
+
+
+
+# --- review 6 S10: canonical diastereotopic labels -------------------------------
+def test_twenty_poses_get_one_labelling_and_keep_their_points():
+    """E7's poses come from ETKDG, which puts the isobutyl methyls either way
+    round; after planning every member carries record 1's labels, and each
+    member's set of points is unchanged."""
+    path = _DIR / "E7_poses_one_ligand.sdf"
+    raw = list(Chem.SDMolSupplier(str(path), removeHs=False))
+    p = em.plan_ensemble(path=path, ensemble="supplied")
+    target = em.prochiral_labels(raw[0])
+    assert sum(bool(m["relabelled"]) for m in p["members"]) >= 1
+    for m, r in zip(p["members"], raw):
+        x = Chem.Mol(r)
+        conf = x.GetConformer()
+        pts = np.array([[float(v) for v in row.split()[1:]] for row in m["spec"].split(";")])
+        for i, q in enumerate(pts):
+            conf.SetAtomPosition(i, q.tolist())
+        assert em.prochiral_labels(x) == target
+        before = sorted(map(tuple, np.round(r.GetConformer().GetPositions(), 4)))
+        assert sorted(map(tuple, np.round(pts, 4))) == before
+
+
+def test_generated_members_share_one_labelling():
+    p = em.plan_ensemble(smiles="CC(C)C[C@H](C)C(=O)O", ensemble=6)
+    mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)C[C@H](C)C(=O)O"))
+    labels = set()
+    for m in p["members"]:
+        x = Chem.Mol(mol)
+        c = Chem.Conformer(x.GetNumAtoms())
+        for i, row in enumerate(m["spec"].split(";")):
+            c.SetAtomPosition(i, [float(v) for v in row.split()[1:]])
+        c.Set3D(True)
+        x.AddConformer(c, assignId=True)
+        labels.add(json.dumps(sorted(em.prochiral_labels(x).items(), key=str)))
+    assert len(labels) == 1
+
+
+def test_an_achiral_molecule_is_never_relabelled():
+    p = em.plan_ensemble(smiles="CC(C)CCO", ensemble=4)
+    assert all(m["relabelled"] == [] for m in p["members"])
