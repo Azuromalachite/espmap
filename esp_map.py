@@ -3748,6 +3748,22 @@ _FORCE_FIELDS = {"mmff94s": "mmff94s", "mmff94": "mmff94", "uff": "uff"}
 # every label geometry_method() emits besides dft:..., each with an optional
 # hydrogen suffix for a file whose hydrogens were added here
 _BASE_LABELS = (*_FORCE_FIELDS, "etkdg_mmff94s", "etkdg_uff", "idealised", "undeclared")
+# origins that are a force-field or embedder guess, not a pose or a reference
+# geometry: --optimize may move them (optimize_would_move_supplied)
+_GENERATED_ORIGINS = ("etkdg_mmff94s", "etkdg_uff", *_FORCE_FIELDS)
+
+
+def optimize_would_move_supplied(gi):
+    """True when --optimize would replace coordinates a file supplied as a pose
+    or a reference geometry, which main refuses without --force. A file that
+    declares a generated origin (an ETKDG or force-field geometry, as every
+    member file of a generated ensemble does) is neither, and --weight dft
+    needs those members optimised (E11, found by the v0.3.0 acceptance run:
+    every generated member was refused)."""
+    if not (gi or {}).get("source", "").startswith("file 3D coordinates used as-is"):
+        return False
+    label = declared_geometry_method(gi.get("declared_geometry") or "") or ""
+    return label.split("+")[0] not in _GENERATED_ORIGINS
 _H_SUFFIXES = ("+mmff94s_h", "+added_h")
 
 
@@ -4640,7 +4656,7 @@ def main():
         # did not do this: it is the input string, or the reader's own output
         # (review 3, H2).
         kept = gi["source"].startswith("file 3D coordinates used as-is")
-        if kept and a.optimize and not a.force:
+        if a.optimize and optimize_would_move_supplied(gi) and not a.force:
             # checked before any compute: optimising a supplied pose discards
             # exactly what the pose was for (its placement in an environment)
             raise SystemExit("--optimize would move the coordinates this file "

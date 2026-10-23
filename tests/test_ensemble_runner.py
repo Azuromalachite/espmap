@@ -312,7 +312,6 @@ def test_not_judgeable_convergence_is_null_in_validity_and_allowed_by_the_schema
             assert rec["validity"]["convergence"] is None
 
 
-@pytest.mark.xfail(strict=True, reason="--optimize refuses every generated member (E11)")
 @pytest.mark.parametrize("origin, moves", [("etkdg_mmff94s", False), ("etkdg_uff", False),
                                            ("mmff94s", False), (None, True),
                                            ("dft:b3lyp/def2tzvp", True), ("undeclared", True)])
