@@ -24,7 +24,9 @@ class Stub:
     """A member run. V_min is -10 - (member number), so statistics are known;
     fail/invalid/key name the conformers to break."""
 
-    def __init__(self, fail=(), invalid=(), key_for=None, kill_after_json=(), site=None):
+    def __init__(self, fail=(), invalid=(), key_for=None, kill_after_json=(), site=None,
+                 optimize=False):
+        self.optimize = optimize                       # write an optimised geometry, as --optimize does
         self.calls, self.fail, self.invalid = [], set(fail), set(invalid)
         self.key_for, self.kill = key_for or {}, set(kill_after_json)
         self.site = site or (lambda n: 1.0 + n)       # member number -> nearest-nucleus mean
@@ -38,11 +40,15 @@ class Stub:
         n = int(label.split("_")[1])
         m = Chem.MolFromMolFile(str(sdf), removeHs=False)
         sha1 = em.spec_sha1(em._mol_to_spec(m))
+        # --optimize: the record's geometry is the optimised one, and it names
+        # the input it was optimised from
+        geom = (dict(sha1=em._sha1(sha1 + "optimised"), optimised_from_sha1=sha1) if self.optimize
+                else dict(sha1=sha1))
         rec = dict(schema="espmap.record/1", analysis_key=self.key_for.get(label, "a" * 40),
                    key_fields=dict(analysis=dict(xc="b3lyp", basis="def2svp")),
                    validity=dict(input=True, surface=label not in self.invalid,
                                  electronic=True, sites=label not in self.invalid),
-                   geometry=dict(sha1=sha1), settings=dict(optimize=False),
+                   geometry=geom, settings=dict(optimize=self.optimize),
                    provenance=dict(espmap_version=em.__version__, code="0123abc",
                                    rdkit="x", pyscf="y"),
                    results=dict(e_tot_Ha=-100.0 - 0.001 * n, V_min_kcal_mol=-10.0 - n,
@@ -54,7 +60,7 @@ class Stub:
         Path(_arg(argv, "--json")).write_text(json.dumps(rec), encoding="utf-8")
         if label in self.kill:
             return -9, 1.0, "killed"
-        np.savez_compressed(_arg(argv, "--npz"), geometry_sha1=sha1)
+        np.savez_compressed(_arg(argv, "--npz"), geometry_sha1=geom["sha1"])
         return 0, 3.0, ""
 
 
@@ -321,3 +327,18 @@ def test_optimize_may_move_only_a_generated_geometry(origin, moves):
     neither, and --weight dft needs those members optimised."""
     gi = {"source": "file 3D coordinates used as-is", "declared_geometry": origin}
     assert em.optimize_would_move_supplied(gi) is moves
+
+
+
+@pytest.mark.xfail(strict=True, reason="an optimised member's record carries a new sha1 (E11)")
+def test_optimised_members_are_complete_and_resumed(tmp_path):
+    """Found by the v0.3.0 acceptance run: with --optimize every member ran
+    (rc 0) and was then counted failed, because its record's geometry is the
+    optimised one. The input is named by optimised_from_sha1."""
+    plan = em.plan_ensemble(smiles="CCCCCCO", ensemble=3, weight="dft", optimize=True)
+    rec = em.run_ensemble(plan, tmp_path, runner=Stub(optimize=True), log=lambda s: None)
+    assert rec["excluded"] == [] and rec["k_obtained"] == 3
+    assert all(m["optimized"] for m in rec["members"])
+    again = Stub(optimize=True)
+    em.run_ensemble(plan, tmp_path, runner=again, log=lambda s: None)
+    assert again.calls == []                           # resumed, not recomputed
