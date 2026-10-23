@@ -21,36 +21,13 @@ _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases
 # what the current rule gets wrong; a new rule removes entries. Against v0.2.0
 # the 105 cases had 15 unsafe and 27 more safe but not preferred; the rule now has none
 # unsafe and these not preferred, every one a BLOCK:
-UNSAFE_NOW = {
-    # review 6, added before any rule change; each comment says what fails.
-    # S15: text after the last $$$$ shifts the header lines, so the record is
-    # read under a header that is not its own and a real geometry is discarded
-    "real_C2F4_trailing_comment.sdf", "real_C2F4_trailing_header_like.sdf",
-    # S16: max |z| under FLAT_TOL, but the best-fit plane tilts to the noise and
-    # its max deviation exceeds FLAT_TOL: the drawing is kept as a geometry
-    "draw_alanine_znoise_0.09_review6_s12.mol", "draw_alanine_znoise_0.09_review6_s35.mol",
-    "draw_threonine_znoise_0.09_review6_s11.mol",
-    # S17: O (or N) between two heavy atoms at a real wide angle is outside the
-    # sp3 window, so a real heavy-atom skeleton is discarded as a drawing
-    "real_disiloxane_noH_144.mol", "real_disiloxane_noH_150.mol", "real_trisilylamine_noH.mol",
-    # S8: a 2D header is overruled as soon as any z != 0
-    "draw2d_threonine_wedge_z_1.5.mol", "draw2d_chlorobenzene_one_z_1.5.mol",
-    "real_2butanol_2Dheader.mol",
-    # held-out probe of the fix: a drawing with one atom lifted out of its
-    # plane is not flat, so no drawing test runs and it is kept as a geometry
-    "draw_methylpropanoate_atom3_up_0.35_1.5.mol", "draw_methylpropanoate_atom3_up_0.8_1.5.mol",
-    "draw_chlorobenzene_atom0_up_0.5_1.5.mol", "draw_aminopropanol_atom1_up_1.0_1.5.mol",
-    # probe round 4: the same on a tilted drawing, and a one-element-pair one
-    "draw_methylpropanoate_atom3_up_0.8_tilted60_0_1.5.mol",
-    "draw_chlorobenzene_atom0_up_1.0_tilted45_30_1.5.mol", "draw_decalin_noH_atom2_up_0.6_1.5.mol",
-    # probe round 5: two or three atoms lifted on a small tilted drawing
-    "draw_methylpropanoate_lift_3+0.8_5+0.8_tilted60_0_1.5.mol",
-    "draw_methylpropanoate_lift_3+0.8_1-0.8_tilted60_0_1.5.mol",
-    "draw_chloroaniline_lift_0+0.7_3-0.6_6+0.5_tilted45_30_1.5.mol",
-}
+UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
     # S17: delocalised N-C 1.31 A is 11 % short of its reference: refused
     "real_dicyanamide.mol",
+    # one element pair projecting evenly is refused, not called a drawing: a
+    # symmetric real skeleton could do the same (_projected_kind)
+    "draw_decalin_noH_atom2_up_0.6_1.5.mol",
     # Kekule O=O at 1.278 A is 11 % from its reference: outside PLAUSIBLE_TOL
     "real_ozone.mol",
     # aromatic N-O is 10.0 % long against the covalent-radius reference; only
