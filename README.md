@@ -271,7 +271,7 @@ nearest-nucleus rule and 0.26 bohr unless stated:
 | partition rule, C18 acetate | ≤ 3.95 | 10 conformers; median site 0.89, largest at the ester carbonyl C | `site_partition.jsonl` |
 | partition rule, **single atoms** (`atoms`, H not folded) | up to 11.9 | the small anions above plus chlorobenzene (gas), def2-TZVP, on the same surfaces as the grid rows. The rules trade area between a heavy atom and its own hydrogens (up to 5.2×); atoms with no hydrogens move ≤ 0.85. On the 10 C18 acetate conformers (def2-SVP + RI, gas) the nearest-nucleus rule leaves 14–15 of the 22 heavy atoms with no surface at all, and an atom that has area under both rules moves by up to 8.7. **Atom values are diagnostic; quote `reaction_sites`** | `site_partition.jsonl` |
 | partition rule, 5th percentile | up to 8.9 | the tail is the fragile statistic; lead with the mean | `site_partition.jsonl` |
-| conformer, C18 acetate | 5.1 | median site's spread over 10 conformers, folded ones included (max 8.3): above the partition effect at almost every site. Over the 8 extended conformers alone: 2.69 (max 5.16) | `site_partition.jsonl` |
+| conformer, C18 acetate | 5.1 | median site's spread over 10 conformers, folded ones included (max 8.3): above the partition effect at almost every site. Over the 8 extended conformers alone: 2.69 (max 5.16). Extended means a genus-0 surface; the 2 folded conformers have genus 2 and 3 | `site_partition.jsonl` |
 | grid spacing (0.26 → 0.16 bohr) | 0.15 | mean; 5th percentile 0.72, site V<sub>min</sub> 0.54, areas ≤ 1.7 % | `site_partition.jsonl` |
 
 Site areas sum to the surface area to 2×10⁻¹⁶ under both rules. A site's
@@ -321,8 +321,10 @@ Two consequences for anyone quoting a number from this:
   electronic properties at 0.40 kcal/mol on chlorobenzene, **not** for small
   anions (up to 6.5 kcal/mol), and **not** for conformational energies or
   barriers. `--optimize` runs a DFT optimisation (needs
-  `pip install 'espmap[opt]'`, which adds pyberny) and is exercised on one
-  molecule only.
+  `pip install 'espmap[opt]'`, which adds pyberny). It is tested on methanol
+  and the glycine zwitterion, and was run on nitrite, SCN⁻ and the enolate at
+  def2-TZVP in PCM water before v0.2.0. It is not yet tried on a flexible
+  molecule.
 - The gate checks that a structure is *unambiguous*. It cannot tell you it is
   the molecule you meant to draw: a cleanly drawn wrong tautomer passes with a
   note.

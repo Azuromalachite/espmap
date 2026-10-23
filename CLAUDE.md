@@ -10,7 +10,7 @@ A single-module tool: SMILES or a structure file → DFT → electrostatic
 potential on the ρ = 0.002 e·bohr⁻³ isosurface → a rendered image with a
 colour scale chosen from the data.
 
-`esp_map.py` (~1700 lines) is the whole program. There is no package layout
+`esp_map.py` (~3000 lines) is the whole program. There is no package layout
 and that is intentional — it stays readable end to end, and `pyproject.toml`
 exposes it as a `py-modules` entry plus an `espmap` console script.
 
@@ -193,7 +193,11 @@ rule as if the partition were a fact.
   untested. Do not claim functional convergence beyond the four tested.
 - **Excited states, periodic systems, transition metals.** `TESTED_ELEMENTS`
   is the validated set; anything outside warns rather than refuses.
-- **`--optimize`** exists but is exercised on one molecule.
+- **`--optimize`** is lightly exercised. The tests cover methanol (atom maps
+  kept) and the glycine zwitterion (re-verified). Before v0.2.0 it was run on
+  nitrite, SCN⁻ and the enolate at def2-TZVP in PCM water, where it
+  reproduced the bench DFT geometries' V_min/V_max. That covers small,
+  well-behaved molecules, not a validated protocol for flexible ones.
 - **Fluorine reports no σ-hole**, because it does not form one. This is a
   deliberate exclusion in `main`, not an oversight.
 - **Intent checking.** The gate verifies a structure is *unambiguous*, never
@@ -214,8 +218,8 @@ Any change to basis, functional, grid, surface definition or solvent handling
 invalidates the table above. Re-measure the affected axis and update both this
 file and `README.md` — the numbers appear in both and in the module docstring.
 
-`docs/adversarial-review-1.md`, `-2.md` and `-3.md` record every
-defect found so far, with the reproduction for each. If a test fails in a way
+`docs/adversarial-review-1.md` through `-5.md` record every defect found so
+far, with the reproduction for each (review 5's in `docs/review-5/`). If a test fails in a way
 that looks familiar, it is probably in there.
 
 ## Around the module
@@ -240,9 +244,10 @@ ones:
 
 - Close ωB97X-D by swapping in a PySCF build that has it, or by using a
   different range-separated functional and saying which.
-- Exercise `--optimize` on three more molecules and report the spread.
+- Exercise `--optimize` on a flexible molecule and report the spread.
 - Raise PySCF's `max_memory` for `--density-fit` runs and re-time the C18
   acetate: at 898 nao density fitting was slower than exact (1,175 s vs
   875 s) with peak memory under the default 4 GB cap.
-- Reduce the slow suite's runtime; 4 minutes is near the limit of what anyone
-  runs locally before pushing.
+- Reduce the slow suite's runtime. The whole suite took 165 s at v0.2.0
+  (528 tests, 34 with real DFT, 4 threads); chlorobenzene's literature-range
+  σ-hole test is 65 s of that.
