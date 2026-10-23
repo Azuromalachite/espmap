@@ -21,6 +21,11 @@ stereo descriptors and conformer ID are still missing. The rest of the
 revised order stands; the reactivity descriptors (item 6) are the spec's
 P4. The findings below are as of revision 2.
 
+**Review 6** is scheduled for the start of the `espmap.record/2` or P4 work,
+whichever comes first: a whole-repo adversarial review, with its brief written
+then. Until then, R11 (drawing vs geometry) is handled on its own: a hostile
+input set first (`tests/data/r11`), then a rule written to pass it.
+
 ## Retractions — read these first
 
 1. **F1's cost table was 10–20× too pessimistic.** I extrapolated one-core aromatic timings to the C18 targets, with a scaling exponent fitted on two points, and projected 4–5 h for the acetate. On the author's 16-thread laptop it took **875 s** `[M]`, and decanoic acid took 211 s, not ~30 min. The recommendation "measure first" stands. The conclusion I drew from the estimate does not: a fast mode is **not** a prerequisite for C18 work.
