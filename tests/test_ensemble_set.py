@@ -46,8 +46,8 @@ def _key(m, stereo=True):
 
 def test_the_manifest_is_complete_and_consistent():
     ids = [c["id"] for c in _CASES]
-    assert len(ids) == len(set(ids)) == 37
-    assert {i for i in ids if i[0] == "E"} == {f"E{i}" for i in range(1, 26)}
+    assert len(ids) == len(set(ids)) == 40
+    assert {i for i in ids if i[0] == "E"} == {f"E{i}" for i in range(1, 29)}
     assert {i for i in ids if i[0] == "C"} == {f"C{i}" for i in range(1, 13)}
     files = {c["recipe"]["file"] for c in _CASES if "file" in c["recipe"]}
     assert files == {p.name for p in _DIR.glob("*.sdf")}
@@ -138,6 +138,21 @@ def test_E24_maps_differ_on_the_same_atoms():
 
 def test_E25_record_2_is_unreadable_and_the_others_are_not():
     assert [m is None for m in _records(_BY_ID["E25"]["recipe"]["file"])] == [False, True, False]
+
+
+def test_E26_swaps_labels_only():
+    a, b = _records(_BY_ID["E26"]["recipe"]["file"])
+    assert _key(a) == _key(b)                          # one molecule, one configuration
+    pa, pb = a.GetConformer().GetPositions(), b.GetConformer().GetPositions()
+    assert not np.allclose(pa, pb)                     # the labels moved
+    assert sorted(map(tuple, np.round(pa, 4))) == sorted(map(tuple, np.round(pb, 4)))  # the points did not
+
+
+def test_E27_E28_are_two_isotopologues_in_both_orders():
+    for cid in ("E27", "E28"):
+        ms = _records(_BY_ID[cid]["recipe"]["file"])
+        assert sorted(sum(a.GetIsotope() == 2 for a in m.GetAtoms()) for m in ms) == [0, 3]
+        assert len({_key(m, stereo=False) for m in ms}) == 2         # SMILES shows the labels
 
 
 def _params(cost):

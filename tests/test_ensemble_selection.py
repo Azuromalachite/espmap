@@ -405,3 +405,41 @@ def test_the_contact_rule_is_the_spec_s_numbers():
         conf.SetAtomPosition(0, (pos[o] + v / np.linalg.norm(v) * d).tolist())
         got = {(i, j) for i, j, *_ in em.intramolecular_contacts(m)}
         assert ((0, o) in got) is contact, d
+
+
+
+# --- review 6 S10, S11: guards (what must still be accepted) -------------------------
+def test_an_achiral_molecules_mirror_conformers_are_not_refused(tmp_path):
+    """S10 checks prochiral labels only in a chiral molecule: a conformer and
+    its mirror image are both valid members of an achiral one, and the mirror
+    swaps enantiotopic labels."""
+    mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)CO"))
+    em._embed_and_minimise(mol, 2, 3)
+    mirror = Chem.Mol(mol, confId=0)
+    c = mirror.GetConformer(0)
+    for i, p in enumerate(c.GetPositions()):
+        c.SetAtomPosition(i, (p[0], p[1], -p[2]))
+    path = _write(tmp_path / "mirror.sdf", [Chem.Mol(mol, confId=0), mirror])
+    assert em.plan_ensemble(path=path, ensemble="supplied")["protocol"]["k_obtained"] == 2
+
+
+def test_two_unswapped_conformers_of_a_chiral_molecule_are_accepted(tmp_path):
+    mol = Chem.AddHs(Chem.MolFromSmiles("C[C@H](O)C(C)C"))
+    *_, conv = em._embed_and_minimise(mol, 4, 11)
+    path = _write(tmp_path / "ok.sdf", [Chem.Mol(mol, confId=c) for c, _ in conv[:2]])
+    assert em.plan_ensemble(path=path, ensemble="supplied")["protocol"]["k_obtained"] == 2
+
+
+def test_two_conformers_of_one_isotopologue_are_accepted(tmp_path):
+    mol = Chem.AddHs(Chem.MolFromSmiles("[2H]C([2H])([2H])O"))
+    *_, conv = em._embed_and_minimise(mol, 4, 5)
+    path = _write(tmp_path / "d3.sdf", [Chem.Mol(mol, confId=c) for c, _ in conv[:2]])
+    assert em.plan_ensemble(path=path, ensemble="supplied")["protocol"]["k_obtained"] == 2
+
+
+def test_tert_butyl_rotation_is_not_a_label_swap(tmp_path):
+    """Three equivalent groups rotate into each other: no fixed pro-label."""
+    mol = Chem.AddHs(Chem.MolFromSmiles("C[C@H](O)C(C)(C)C"))
+    *_, conv = em._embed_and_minimise(mol, 6, 2)
+    path = _write(tmp_path / "tbu.sdf", [Chem.Mol(mol, confId=c) for c, _ in conv[:3]])
+    assert em.plan_ensemble(path=path, ensemble="supplied")["protocol"]["k_obtained"] == 3

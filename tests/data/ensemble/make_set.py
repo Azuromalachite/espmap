@@ -164,6 +164,32 @@ lines[3] = "999" + lines[3][3:]               # counts line: an atom count the b
 blocks[1] = "\n".join(lines)
 (OUT / f_bad).write_text(SEP.join(blocks))
 
+# --- review 6 S10 and S11 ---------------------------------------------------------
+def swapped_methyls(m, cid, a, b):
+    """The same conformer with atoms a and b (and their hydrogens) exchanging
+    indices: every coordinate is the same, the labels are not."""
+    out = Chem.Mol(m, confId=cid)
+    conf = out.GetConformer(cid)
+    P = conf.GetPositions()
+    ha = [n.GetIdx() for n in out.GetAtomWithIdx(a).GetNeighbors() if n.GetAtomicNum() == 1]
+    hb = [n.GetIdx() for n in out.GetAtomWithIdx(b).GetNeighbors() if n.GetAtomicNum() == 1]
+    for i, j in {a: b, b: a, **dict(zip(ha, hb)), **dict(zip(hb, ha))}.items():
+        conf.SetAtomPosition(i, P[j].tolist())
+    return out
+
+
+MBO = "C[C@H](O)C(C)C"                         # (S)-3-methylbutan-2-ol; atoms 4, 5 the methyls
+mb, mbc = confs(MBO, 2)
+f_dia = write_sdf("E26_diastereotopic_swap.sdf",
+                  [(mb, mbc[0], "conf 1"), (swapped_methyls(mb, mbc[0], 4, 5), mbc[0],
+                                                "conf 1, the two isopropyl methyls' indices swapped")])
+d3, d3c = confs("[2H]C([2H])([2H])O", 2)
+h3 = Chem.Mol(d3, confId=d3c[1])                # the same nuclei and order, labels cleared
+for a in h3.GetAtoms():
+    a.SetIsotope(0)
+f_isotope = write_sdf("E27_cd3oh_then_ch3oh.sdf", [(d3, d3c[0], "CD3OH"), (h3, d3c[1], "CH3OH")])
+f_isotope2 = write_sdf("E28_ch3oh_then_cd3oh.sdf", [(h3, d3c[1], "CH3OH"), (d3, d3c[0], "CD3OH")])
+
 # --- ensemble cases --------------------------------------------------------------
 case("E1", "benzene, K = 10", {"smiles": "c1ccccc1", "ensemble": 10},
      {"outcome": "accept", "checks": {"k_requested": 10, "k_obtained": 1}},
@@ -274,6 +300,18 @@ case("E25", "supplied: record 2 of 3 cannot be read", {"file": f_bad, "ensemble"
      {"outcome": "refuse", "before_compute": True},
      "a two-member ensemble with the lost record never named", "fast",
      "review 6 S6: unreadable records were dropped and the rest renumbered")
+case("E26", "supplied: the same conformer with diastereotopic methyls' indices swapped",
+     {"file": f_dia, "ensemble": "supplied"}, {"outcome": "refuse", "before_compute": True},
+     "a site row of 'methyl 4' that is the pro-R methyl in one member and pro-S in the other",
+     "fast", "review 6 S10: element and neighbours are preserved by the swap, so "
+             "verify_mapping passes it")
+case("E27", "supplied: CD3OH then CH3OH", {"file": f_isotope, "ensemble": "supplied"},
+     {"outcome": "refuse", "before_compute": True},
+     "two isotopologues averaged as one molecule, the identity whichever came first", "fast",
+     "review 6 S11, decided: isotope labels must match across members")
+case("E28", "supplied: CH3OH then CD3OH", {"file": f_isotope2, "ensemble": "supplied"},
+     {"outcome": "refuse", "before_compute": True}, "an outcome that depends on record order",
+     "fast", "review 6 S11")
 case("C1", "A compared with itself",
      {"A": {"smiles": "CCCCCCO", "ensemble": 6}, "B": "same_as_A",
       "sites": {"by": "smarts", "pairs": [{"name": "O", "A": "[OX2H]", "B": "[OX2H]"}]}},

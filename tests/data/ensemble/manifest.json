@@ -430,6 +430,51 @@
    "why": "review 6 S6: unreadable records were dropped and the rest renumbered"
   },
   {
+   "id": "E26",
+   "name": "supplied: the same conformer with diastereotopic methyls' indices swapped",
+   "recipe": {
+    "file": "E26_diastereotopic_swap.sdf",
+    "ensemble": "supplied"
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "a site row of 'methyl 4' that is the pro-R methyl in one member and pro-S in the other",
+   "cost": "fast",
+   "why": "review 6 S10: element and neighbours are preserved by the swap, so verify_mapping passes it"
+  },
+  {
+   "id": "E27",
+   "name": "supplied: CD3OH then CH3OH",
+   "recipe": {
+    "file": "E27_cd3oh_then_ch3oh.sdf",
+    "ensemble": "supplied"
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "two isotopologues averaged as one molecule, the identity whichever came first",
+   "cost": "fast",
+   "why": "review 6 S11, decided: isotope labels must match across members"
+  },
+  {
+   "id": "E28",
+   "name": "supplied: CH3OH then CD3OH",
+   "recipe": {
+    "file": "E28_ch3oh_then_cd3oh.sdf",
+    "ensemble": "supplied"
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "an outcome that depends on record order",
+   "cost": "fast",
+   "why": "review 6 S11"
+  },
+  {
    "id": "C1",
    "name": "A compared with itself",
    "recipe": {
