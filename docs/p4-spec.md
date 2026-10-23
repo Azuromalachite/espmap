@@ -1,6 +1,11 @@
 # P4: reactivity descriptors on the surface — specification
 
-Status: **revision 1, draft for review.** Nothing here is implemented. This is
+Status: **revision 1. Deferred (2026-10-23).** The user made v0.3 about
+ensembles and comparison records (`docs/ensemble-spec.md`). `alie_at_points`
+itself is a standalone PR (#70); the record/2 integration below waits, and
+returns framed as a measured surface property, not a reactivity predictor.
+The calibration set (§6) stays committed. Originally: nothing here is
+implemented. This is
 stage P4 of `docs/per-site-spec.md` §8 ("ALIE, then frontier-orbital
 amplitudes, then Fukui functions"), and the theme of v0.3. It fixes **what**
 is computed and **what must be measured before any number is quoted**, before
