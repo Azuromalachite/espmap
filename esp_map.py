@@ -219,8 +219,8 @@ def from_smiles(smiles, n_confs=20, seed=0xC0FFEE, max_iters=2000):
         raise ValueError(f"RDKit could not parse SMILES: {smiles!r}")
     mol = Chem.AddHs(mol)
     # one embedding implementation, shared with from_file: v3 had two copies
-    best, ff, spread, n_emb, n_conv = _embed_and_minimise(mol, n_confs, seed,
-                                                          max_iters=max_iters)
+    best, ff, spread, n_emb, n_conv, _ = _embed_and_minimise(mol, n_confs, seed,
+                                                             max_iters=max_iters)
     info = dict(forcefield=ff, n_embedded=n_emb, n_converged=n_conv,
                 e_spread=spread,
                 charge=Chem.GetFormalCharge(mol),
@@ -268,7 +268,12 @@ def _mol_to_spec(mol, conf_id=-1):
 
 
 def _embed_and_minimise(mol, n_confs, seed, max_iters=2000):
-    """ETKDGv3 + MMFF94s over n_confs; returns (best_conf_id, forcefield, spread)."""
+    """ETKDGv3 + MMFF94s over n_confs, embedded into mol. Returns (best_conf_id,
+    forcefield, spread, n_embedded, n_converged, converged), where converged
+    is [(conf_id, energy)] for every conformer the force field converged, in
+    embedding order: a single map uses the best one, an ensemble
+    (select_ensemble) chooses among all of them. The only embedder
+    (invariant 1)."""
     from rdkit.Chem import AllChem
     p = AllChem.ETKDGv3()
     p.randomSeed = seed
@@ -288,8 +293,9 @@ def _embed_and_minimise(mol, n_confs, seed, max_iters=2000):
     if not np.isfinite(en).any():
         raise RuntimeError("no conformer converged under the force field")
     fin = en[np.isfinite(en)]
+    converged = [(int(c), float(e)) for c, e in zip(cids, en) if np.isfinite(e)]
     return (int(cids[int(np.argmin(en))]), ff, float(fin.max() - fin.min()),
-            len(cids), int((ok == 0).sum()))
+            len(cids), int((ok == 0).sum()), converged)
 
 
 def coordinate_kind(mol, fmt, tol=0.03):
@@ -573,7 +579,7 @@ def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0, record=None):
         h_source = _h_source(mol, n_supplied, relaxed)
     else:
         mol = Chem.AddHs(mol)
-        best, ff, spread, n_emb, n_conv = _embed_and_minimise(mol, n_confs, seed)
+        best, ff, spread, n_emb, n_conv, _ = _embed_and_minimise(mol, n_confs, seed)
         h_source = _h_source(mol, 0, True)
         source = ("2D depiction: drawn coordinates DISCARDED, 3D generated "
                   "by ETKDGv3" if drawing
@@ -1432,6 +1438,362 @@ def verify_mapping(spec, probe, reference=False, tol=1e-3):
             return False, (f"atom {i} ({rows[i][0]}) is {moved[i]:.3f} A from where the "
                            f"file put it; the file's atom order is not the computed one")
     return True, ""
+
+
+# ---------------------------------------------------------------- ensembles
+# docs/ensemble-spec.md sections 1-3, written against tests/data/ensemble.
+# Everything here runs BEFORE any SCF: an ensemble that mixes molecules,
+# tautomers or stereoisomers is refused here, not averaged later.
+CONTACT_MIN_BONDS = 5          # a 1,5 pair of a gauche kink is 4 bonds apart
+CONTACT_SLACK = 0.5            # A over the Bondi sum
+DEDUP_RMSD = 0.5               # A, heavy atoms; provisional until section 8
+N_EMBED = 100
+SELECTION_RULES = ("rg_spread",)
+
+
+class EnsembleRefused(ValueError):
+    """An ensemble that may not be computed. .findings holds the gate-style
+    (severity, code, message, remedy) tuples, every one a BLOCK."""
+
+    def __init__(self, findings):
+        self.findings = findings
+        super().__init__("; ".join(f"{c}: {m}" for _, c, m, _ in findings))
+
+
+def _heavy_xyz(mol, conf_id=-1):
+    conf = mol.GetConformer(conf_id)
+    idx = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
+    return idx, np.array([list(conf.GetAtomPosition(i)) for i in idx])
+
+
+def intramolecular_contacts(mol, conf_id=-1):
+    """Heavy-atom pairs at least CONTACT_MIN_BONDS bonds apart and closer than
+    their Bondi radii plus CONTACT_SLACK (spec section 3). Returns
+    [(i, j, distance, limit)]. A pair with an atom BONDI lacks is not judged."""
+    from rdkit import Chem
+    topo = Chem.GetDistanceMatrix(mol)
+    idx, X = _heavy_xyz(mol, conf_id)
+    out = []
+    for a in range(len(idx)):
+        for b in range(a + 1, len(idx)):
+            i, j = idx[a], idx[b]
+            if topo[i, j] < CONTACT_MIN_BONDS:
+                continue
+            ri = BONDI.get(mol.GetAtomWithIdx(i).GetSymbol())
+            rj = BONDI.get(mol.GetAtomWithIdx(j).GetSymbol())
+            if ri is None or rj is None:
+                continue
+            d = float(np.linalg.norm(X[a] - X[b]))
+            if d < ri + rj + CONTACT_SLACK:
+                out.append((i, j, d, ri + rj + CONTACT_SLACK))
+    return out
+
+
+def shape_descriptors(mol, conf_id=-1):
+    """Per-member shape (spec section 3), heavy atoms, unweighted, in A:
+    radius of gyration, maximum extent, asphericity normalised to [0, 1]
+    (0 a sphere, 1 a rod: (l1 - (l2 + l3)/2) / (l1 + l2 + l3) of the gyration
+    tensor's eigenvalues, l1 largest), the contacts, and folded, which is
+    'has a contact'. Surface genus is added per member once its surface
+    exists; it is a diagnostic, never part of the folded rule."""
+    _, X = _heavy_xyz(mol, conf_id)
+    Y = X - X.mean(axis=0)
+    lam = np.sort(np.linalg.eigvalsh(Y.T @ Y / len(Y)))[::-1]
+    D = np.linalg.norm(X[:, None] - X[None], axis=-1)
+    contacts = intramolecular_contacts(mol, conf_id)
+    return dict(rg=float(np.sqrt(lam.sum())), extent=float(D.max()),
+                asphericity=float((lam[0] - 0.5 * (lam[1] + lam[2])) / lam.sum())
+                if lam.sum() > 0 else 0.0,
+                contacts=[[int(i), int(j), round(d, 3)] for i, j, d, _ in contacts],
+                folded=bool(contacts))
+
+
+def _is_achiral(mol):
+    """True when the molecule is its own mirror image as specified: inverting
+    every tetrahedral centre gives the same canonical SMILES. Then a
+    conformer and its mirror image are the same conformer (gauche+ and
+    gauche- butane); for a chiral molecule the mirror image is the other
+    enantiomer and is never compared."""
+    from rdkit import Chem
+    m = Chem.RemoveHs(Chem.Mol(mol))
+    for a in m.GetAtoms():
+        a.SetAtomMapNum(0)
+    mirror = Chem.Mol(m)
+    flip = {Chem.ChiralType.CHI_TETRAHEDRAL_CW: Chem.ChiralType.CHI_TETRAHEDRAL_CCW,
+            Chem.ChiralType.CHI_TETRAHEDRAL_CCW: Chem.ChiralType.CHI_TETRAHEDRAL_CW}
+    for a in mirror.GetAtoms():
+        a.SetChiralTag(flip.get(a.GetChiralTag(), a.GetChiralTag()))
+    return Chem.MolToSmiles(m) == Chem.MolToSmiles(mirror)
+
+
+def _rg_spread(rg, energy, k):
+    """The lowest-energy conformer, plus k-1 spread evenly across the Rg
+    range (bench/conformers.py select(), the rule the measured conformer
+    rows used): the question is how much SHAPE moves the ESP, and the k
+    lowest minima of a long chain are often near-duplicates."""
+    best = int(np.argmin(energy))
+    order = np.argsort(rg, kind="stable")
+    picks = [best]
+    for q in np.linspace(0, len(order) - 1, max(k - 1, 0)):
+        i = int(order[int(round(q))])
+        if i not in picks:
+            picks.append(i)
+    for i in order:                         # top up if Rg ties collapsed picks
+        if len(picks) >= k:
+            break
+        if int(i) not in picks:
+            picks.append(int(i))
+    return picks[:k]
+
+
+def select_ensemble(mol, converged, k, dedup_rmsd=DEDUP_RMSD, rule="rg_spread",
+                    max_matches=1000):
+    """Choose up to k members from the conformers embedded in mol (spec
+    section 2). converged is _embed_and_minimise's [(conf_id, energy)].
+
+    1. Deduplicate by symmetry-aware heavy-atom RMSD below dedup_rmsd, in
+       order of increasing energy, so the lower-energy copy is kept. The
+       symmetry matches are found once and passed to GetBestRMS. For an
+       achiral molecule the mirror image of a conformer is compared too.
+    2. Choose by `rule`; only "rg_spread" exists.
+    Never pads: k_obtained may be smaller than k (benzene gives 1). The force
+    field's energies order and choose; they are returned, never used as
+    weights. Returns a dict: members [(conf_id, energy)] in selection order,
+    k_requested, k_obtained, n_converged, n_unique, and the parameters."""
+    from rdkit import Chem
+    from rdkit.Chem import rdMolAlign
+    if rule not in SELECTION_RULES:
+        raise ValueError(f"unknown selection rule {rule!r}; one of {SELECTION_RULES}")
+    if not converged:
+        raise ValueError("no converged conformer to select from")
+    heavy = Chem.RemoveHs(mol)              # its own copy: GetBestRMS moves the probe
+    matches = heavy.GetSubstructMatches(heavy, uniquify=False, useChirality=False,
+                                        maxMatches=max_matches)
+    maps = [list(zip(m, range(heavy.GetNumAtoms()))) for m in matches]
+    achiral = _is_achiral(mol)
+    mirror = None
+    if achiral:
+        mirror = Chem.Mol(heavy)
+        for c in mirror.GetConformers():
+            for i in range(mirror.GetNumAtoms()):
+                p = c.GetAtomPosition(i)
+                c.SetAtomPosition(i, (p.x, p.y, -p.z))
+    ordered = sorted(converged, key=lambda ce: (ce[1], ce[0]))
+    kept = []
+    for cid, e in ordered:
+        dup = False
+        for kid, _ in kept:
+            for probe in (heavy, mirror) if achiral else (heavy,):
+                if rdMolAlign.GetBestRMS(probe, heavy, cid, kid, map=maps) < dedup_rmsd:
+                    dup = True
+                    break
+            if dup:
+                break
+        if not dup:
+            kept.append((cid, e))
+    rg = np.array([shape_descriptors(mol, cid)["rg"] for cid, _ in kept])
+    energy = np.array([e for _, e in kept])
+    picks = _rg_spread(rg, energy, k)
+    return dict(members=[kept[i] for i in picks], k_requested=int(k),
+                k_obtained=len(picks), n_converged=len(converged), n_unique=len(kept),
+                rule=rule, dedup_rmsd=dedup_rmsd, mirror_images_merged=achiral,
+                n_symmetry_matches=len(maps))
+
+
+def _ensemble_block(code, message, remedy):
+    return (BLOCK, code, message, remedy)
+
+
+def _weight_problems(weight, optimize):
+    """MMFF energies never weight (section 2); DFT energies weight only
+    DFT-optimised members, because single points on force-field geometries
+    carry the force field's strain."""
+    if weight in (None, "none"):
+        return []
+    if weight == "mmff":
+        return [_ensemble_block(
+            "WEIGHT_MMFF", "force-field energies may order members, never weight them",
+            "drop the weights (statistics are unweighted), or use --weight dft "
+            "with --optimize")]
+    if weight == "dft":
+        return [] if optimize else [_ensemble_block(
+            "WEIGHT_NEEDS_OPTIMIZE",
+            "DFT single points on force-field geometries are not conformer energies",
+            "add --optimize so every member is a DFT minimum, or drop --weight")]
+    return [_ensemble_block("WEIGHT_UNKNOWN", f"no weighting called {weight!r}",
+                            "use --weight dft (with --optimize), or none")]
+
+
+def _gate(probe, smiles, basis, spin, charge, require_stereo):
+    from rdkit import Chem
+    verdict, findings = check_structure(Chem.RemoveHs(probe), basis, spin=spin,
+                                        maps_from=probe, smiles=smiles, charge=charge,
+                                        require_stereo=require_stereo)
+    return verdict, findings
+
+
+def _identity(mol):
+    """Canonical isomeric SMILES (the check) and InChIKey (a label only:
+    standard InChI merges mobile-H tautomers, test_E8)."""
+    from rdkit import Chem
+    m = Chem.RemoveHs(Chem.Mol(mol))
+    for a in m.GetAtoms():
+        a.SetAtomMapNum(0)
+    return dict(smiles=Chem.MolToSmiles(m), inchikey=Chem.MolToInchiKey(m))
+
+
+def supplied_members(path, charge=0):
+    """Read every record of a multi-record file through read_structure (the
+    one reader) and check that they are conformers of ONE molecule in ONE
+    configuration with ONE atom order (spec section 1). Record 1 is the
+    approval. Returns (probe, [mol]); raises EnsembleRefused with every
+    problem found, not only the first.
+
+    Per member: a real 3D geometry with every hydrogen supplied (adding
+    hydrogens would be generating geometry), verify_computed against the
+    approval (another molecule, isomer or tautomer fails here), the same
+    stereo completion as record 1 assigned from each member's own 3D
+    coordinates (verify_computed alone accepts SOME completion), and
+    verify_mapping index by index: a reordered record is refused, never
+    trusted by file order."""
+    from rdkit import Chem
+    first, probs, n_found = read_structure(path, charge=charge, record=1)
+    if first is None:
+        raise EnsembleRefused(probs or [_ensemble_block(
+            "MEMBER_UNREADABLE", "record 1 could not be read", "fix record 1")])
+    if n_found < 2:
+        raise EnsembleRefused([_ensemble_block(
+            "ENSEMBLE_ONE_RECORD", f"{path} holds one record",
+            "supply a multi-record SDF, or use --ensemble K to generate conformers")])
+    members, out = [first], []
+    for r in range(2, n_found + 1):
+        m, p, _ = read_structure(path, charge=charge, record=r)
+        if m is None:
+            out += [(s, c, f"record {r}: {msg}", fix) for s, c, msg, fix in p] or [
+                _ensemble_block("MEMBER_UNREADABLE", f"record {r} could not be read",
+                                f"fix or remove record {r}")]
+        members.append(m)
+    approval = Chem.RemoveHs(first)
+    ref_smiles = None
+    for r, m in enumerate(members, start=1):
+        if m is None:
+            continue
+        if not coordinates_fix_stereo(m):
+            out.append(_ensemble_block(
+                "MEMBER_NOT_3D", f"record {r} is not a 3D geometry",
+                f"supply real 3D coordinates for record {r}, or remove it"))
+            continue
+        if Chem.AddHs(m).GetNumAtoms() != m.GetNumAtoms():
+            out.append(_ensemble_block(
+                "MEMBER_MISSING_H", f"record {r} lacks hydrogens",
+                f"supply every hydrogen in record {r}: adding them would generate geometry"))
+            continue
+        spec = _mol_to_spec(m)
+        ok, computed, why = verify_computed(spec, approval)
+        if r == 1:
+            ref_smiles = computed
+        if not ok:
+            code = "MEMBER_STEREO" if "stereo" in why else "MEMBER_IDENTITY"
+            out.append(_ensemble_block(
+                code, f"record {r} is not record 1's molecule: {why} "
+                      f"(record 1 {ref_smiles}, record {r} {computed or 'no match'})",
+                f"remove record {r}: one ensemble is one molecule, one tautomer, "
+                f"one protonation state and one stereoisomer"))
+            continue
+        if computed != ref_smiles:
+            out.append(_ensemble_block(
+                "MEMBER_STEREO", f"record {r} is another stereoisomer ({computed}, "
+                                 f"record 1 {ref_smiles})",
+                f"remove record {r}, or compute each stereoisomer as its own ensemble"))
+            continue
+        mapped, why_m = verify_mapping(spec, first)
+        if not mapped:
+            out.append(_ensemble_block(
+                "MEMBER_ATOM_ORDER", f"record {r}: {why_m}",
+                f"write record {r} with record 1's atom order"))
+    if out:
+        raise EnsembleRefused(out)
+    return first, members
+
+
+def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
+                  basis="def2-tzvp", weight=None, optimize=False, n_embed=N_EMBED,
+                  seed=0xC0FFEE, dedup_rmsd=DEDUP_RMSD, rule="rg_spread", max_iters=2000):
+    """Everything an ensemble needs before its first SCF: parse, gate, then
+    either generate and select (ensemble = K) or read and check the supplied
+    members (ensemble = "supplied"). Raises EnsembleRefused before any
+    compute; with no --force, because an ensemble record has no
+    validity.input to carry a forced member.
+
+    Returns a dict: source, identity (the approved canonical isomeric SMILES
+    and its InChIKey), gate findings, protocol, and members, each with its
+    spec (the coordinates PySCF will receive), its shape descriptors, and
+    for a generated ensemble its embedding conformer id and force-field
+    energy (ordering only, never a weight)."""
+    from rdkit import Chem
+    problems = _weight_problems(weight, optimize)
+    supplied = ensemble == "supplied"
+    if not supplied and not (isinstance(ensemble, int) and not isinstance(ensemble, bool)
+                             and ensemble >= 1):
+        problems.append(_ensemble_block(
+            "ENSEMBLE_K", f"--ensemble must be a positive K or 'supplied', not {ensemble!r}",
+            "give the number of conformers to compute"))
+    if supplied and not path:
+        problems.append(_ensemble_block(
+            "ENSEMBLE_SOURCE", "a supplied ensemble is read from a multi-record file",
+            "pass the conformers as one SDF, or use --ensemble K with --smiles"))
+    if not supplied and isinstance(ensemble, int) and ensemble > n_embed:
+        problems.append(_ensemble_block(
+            "ENSEMBLE_K", f"K = {ensemble} is more than the {n_embed} conformers embedded",
+            "lower K, or embed more conformers"))
+    if problems:
+        raise EnsembleRefused(problems)
+    q = charge or 0
+    probe, probs = parse_for_check(smiles=smiles, path=path, charge=q,
+                                   record=1 if supplied else None)
+    if probe is None:
+        raise EnsembleRefused(probs)
+    # one stereoisomer per ensemble: a generated one must have nothing open,
+    # or ETKDG picks a configuration per embedding (E13)
+    verdict, findings = _gate(probe, smiles, basis, spin, charge, not supplied)
+    if verdict == BLOCK:
+        raise EnsembleRefused([f for f in findings if f[0] == BLOCK])
+    if supplied:
+        first, mols = supplied_members(path, charge=q)
+        members = [dict(record=r, spec=_mol_to_spec(m), **shape_descriptors(m))
+                   for r, m in enumerate(mols, start=1)]
+        protocol = dict(source="supplied", path=str(path), k_requested=len(mols),
+                        k_obtained=len(mols))
+        identity = _identity(first)
+    else:
+        mol = Chem.AddHs(Chem.RemoveHs(probe))
+        mol.RemoveAllConformers()
+        _, ff, spread, n_emb, n_conv, converged = _embed_and_minimise(
+            mol, n_embed, seed, max_iters=max_iters)
+        sel = select_ensemble(mol, converged, ensemble, dedup_rmsd=dedup_rmsd, rule=rule)
+        approval = Chem.RemoveHs(probe)
+        members, bad = [], []
+        for cid, e in sel["members"]:
+            spec = _mol_to_spec(mol, cid)
+            ok, computed, why = verify_computed(spec, approval)
+            mapped, why_m = verify_mapping(spec, approval)
+            if not (ok and mapped):
+                bad.append(_ensemble_block(
+                    "MEMBER_IDENTITY", f"embedded conformer {cid}: {why or why_m}",
+                    "report this: the embedder changed the approved structure"))
+            members.append(dict(embed_conf_id=cid, mmff_energy=e, spec=spec,
+                                **shape_descriptors(mol, cid)))
+        if bad:
+            raise EnsembleRefused(bad)
+        protocol = dict(source="generated", n_embed=n_embed, n_embedded=n_emb,
+                        seed=seed, forcefield=ff,
+                        forcefield_spread=spread,
+                        **{k: v for k, v in sel.items() if k != "members"})
+        identity = _identity(probe)
+    return dict(identity=identity, source=protocol["source"], protocol=protocol,
+                gate=findings, members=members,
+                folded_count=sum(m["folded"] for m in members),
+                weight=weight or "none")
 
 
 def estimate_cost(spec, basis, charge=0, spin=0):

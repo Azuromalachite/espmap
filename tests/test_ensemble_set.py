@@ -22,8 +22,10 @@ _DIR = Path(__file__).resolve().parent / "data" / "ensemble"
 _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases"]
 _BY_ID = {c["id"]: c for c in _CASES}
 
-# every case is unimplemented; implementation PRs remove entries
-NOT_YET = {c["id"] for c in _CASES}
+# implementation PRs remove entries. Step 3 (selection and the supplied
+# identity checks) implements the refusals before compute and E14's rule.
+NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15",
+                                       "E16", "E17"}
 
 
 def _records(name):
@@ -111,12 +113,39 @@ def _params(cost):
             for c in _CASES if c["cost"] == cost]
 
 
+def _refused_before_compute(expect):
+    return any(e.get("outcome") == "refuse" and e.get("before_compute")
+               for e in (expect, expect.get("or", {})))
+
+
+def _plan_kwargs(recipe):
+    kw = dict(ensemble=recipe["ensemble"], weight=recipe.get("weight"),
+              optimize=recipe.get("optimize", False))
+    if "file" in recipe:
+        kw["path"] = _DIR / recipe["file"]
+    else:
+        kw["smiles"] = recipe["smiles"]
+    return kw
+
+
 def _run(case):
     """Execute a case against the implementation (docs/ensemble-spec.md section 9
     steps 3-5). Written against the spec's names; adapt the call, never the
     expectation."""
+    r, e = case["recipe"], case["expect"]
+    if r.get("classify_only"):
+        got = em.shape_descriptors(_records(r["file"])[0])
+        assert {k: got[k] for k in e["checks"]} == e["checks"]
+        return
+    if "ensemble" in r and _refused_before_compute(e):
+        # step 3: plan_ensemble is everything before the first SCF. A case
+        # whose expectation allows "accept" (E9's "or") passes here only by
+        # refusing; accepting would need the runner (step 4).
+        with pytest.raises(em.EnsembleRefused):
+            em.plan_ensemble(**_plan_kwargs(r))
+        return
     if not hasattr(em, "run_ensemble") or not hasattr(em, "compare_records"):
-        pytest.fail("ensembles and comparison records are not implemented yet")
+        pytest.fail("ensemble runner and comparison records are not implemented yet")
     raise NotImplementedError("wire the case recipe to run_ensemble / compare_records")
 
 
