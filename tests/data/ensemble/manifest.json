@@ -88,7 +88,7 @@
     "outcome": "accept",
     "checks": {
      "excluded_min": 1,
-     "validity.bias": false
+     "validity.unbiased": false
     }
    },
    "worst": "a converged-looking ensemble of only extended members",

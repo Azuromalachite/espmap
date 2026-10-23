@@ -1947,7 +1947,12 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
         raise EnsembleRefused([f for f in findings if f[0] == BLOCK])
     if supplied:
         first, mols = supplied_members(path, charge=charge, basis=basis, spin=spin)
-        members = [dict(record=r, spec=_mol_to_spec(m), **shape_descriptors(m))
+        members = [dict(record=r, spec=_mol_to_spec(m), _mol=m, _cid=-1,
+                        geometry_origin=next((m.GetProp(k) for k in ("espmap_geometry_origin",
+                                                                      "geometry")
+                                              if m.HasProp(k)), None),
+                        configuration=configuration_signs(Chem.RemoveHs(m)),
+                        **shape_descriptors(m))
                    for r, m in enumerate(mols, start=1)]
         protocol = dict(source="supplied", path=str(path), k_requested=len(mols),
                         k_obtained=len(mols))
@@ -1995,7 +2000,11 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
                 bad.append(_ensemble_block(
                     "MEMBER_IDENTITY", f"embedded conformer {cid}: {why or why_m}",
                     "report this: the embedder changed the approved structure"))
-            members.append(dict(embed_conf_id=cid, mmff_energy=e, spec=spec,
+            members.append(dict(embed_conf_id=cid, mmff_energy=e, spec=spec, _mol=mol,
+                                _cid=cid,
+                                geometry_origin=("etkdg_mmff94s" if ff == "MMFF94s"
+                                                 else "etkdg_uff"),
+                                configuration=signs[len(members)],
                                 **shape_descriptors(mol, cid)))
         if bad:
             raise EnsembleRefused(bad)
@@ -2005,11 +2014,342 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
                         **{k: v for k, v in sel.items() if k != "members"})
         identity = _identity(probe)
     identity.update(charge=Chem.GetFormalCharge(probe),
-                    n_radical=int(sum(a.GetNumRadicalElectrons() for a in probe.GetAtoms())))
+                    n_radical=int(sum(a.GetNumRadicalElectrons() for a in probe.GetAtoms())),
+                    atom_maps=[a.GetAtomMapNum() for a in probe.GetAtoms() if a.GetAtomicNum() > 1],
+                    configuration=members[0].get("configuration", {}) if members else {})
     return dict(identity=identity, source=protocol["source"], protocol=protocol,
                 gate=findings, members=members,
                 folded_count=sum(m["folded"] for m in members),
                 weight=weight or "none")
+
+
+ENSEMBLE_SCHEMA = "espmap.ensemble/1"
+# Provisional until the spec's section 8 measures them; the record says so.
+CONV_TOL_KCAL = 1.0
+BOOTSTRAP_N = 1000
+BOLTZMANN_T = 298.15
+KB_KCAL = 0.0019872043
+
+
+def member_label(i):
+    """conf_00, conf_01, ... in selection order: zero-based, so files the
+    Atlas already holds under spa.espmap_ensemble/0 (conf_00 = the lowest
+    MMFF member) stay valid under espmap.ensemble/1."""
+    return f"conf_{i:02d}"
+
+
+def spec_sha1(spec):
+    """geometry.sha1 of the record the member run will write, from its spec:
+    the same canonical text as geometry_record."""
+    rows = [r.split() for r in spec.split(";")]
+    return _sha1("\n".join(f"{r[0]} {float(r[1]):.8f} {float(r[2]):.8f} {float(r[3]):.8f}"
+                           for r in rows))
+
+
+def write_member_sdf(path, mol, conf_id, origin):
+    """One member as a one-record SDF, hydrogens and atom maps kept, its
+    geometry origin declared so it reaches analysis_key (geometry_method)."""
+    from rdkit import Chem
+    m = Chem.Mol(mol, confId=conf_id) if conf_id != -1 else Chem.Mol(mol)
+    if origin:
+        m.SetProp("espmap_geometry_origin", origin)
+    w = Chem.SDWriter(str(path))
+    w.write(m, confId=conf_id)
+    w.close()
+
+
+def _member_complete(json_path, npz_path, sha1):
+    """Resume only a member whose record parses, carries the expected
+    geometry, and whose NPZ exists with the same geometry. The runner renames
+    finished outputs into place NPZ first, so a killed run leaves no file
+    that looks complete; this check is the second line."""
+    import json
+    try:
+        rec = json.loads(json_path.read_text(encoding="utf-8"))
+        with np.load(npz_path) as z:
+            npz_sha1 = str(z["geometry_sha1"])
+    except Exception:
+        return False
+    return rec.get("geometry", {}).get("sha1") == sha1 == npz_sha1
+
+
+def _run_member_process(argv, cwd, env, timeout):
+    import subprocess
+    import time
+    from pathlib import Path
+    t0 = time.time()
+    try:
+        r = subprocess.run([sys.executable, str(Path(__file__).resolve())] + argv, cwd=cwd,
+                           env=env, capture_output=True, text=True, timeout=timeout)
+        rc, err = r.returncode, r.stderr
+    except subprocess.TimeoutExpired as e:
+        rc, err = -9, f"timeout after {timeout} s\n{e.stderr or ''}"
+    return rc, time.time() - t0, err
+
+
+def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=print,
+                 subject=None):
+    """Compute every planned member as an ordinary espmap.record/1, one
+    process per member, and write the ensemble record (docs/ensemble-spec.md
+    section 4) beside them. Resumable: a member whose record and NPZ already
+    hold its geometry is not recomputed.
+
+    Layout under outdir: conformers/conf_NN.sdf (the input), conformers/
+    conf_NN.json (the member record), conf_NN.npz (its surface), run_log.jsonl
+    (rc, wall time and stderr tail of every run), ensemble.json.
+
+    member_args are passed to every member run (--xc, --basis, --solvent,
+    --density-fit, --sites ...). Each run writes to *.part names, renamed
+    into place NPZ first and only on success. A failed member is excluded
+    with its reason, Rg and folded call: never dropped, never retried under
+    the same name. Each run gets its own PYSCF_TMPDIR.
+
+    runner(argv, cwd, env, timeout) -> (rc, wall_s, stderr) is injectable
+    for tests; the default starts this file as a new process."""
+    import json
+    import os
+    from pathlib import Path
+    if subject is not None:
+        plan = dict(plan, subject=subject)
+    runner = runner or _run_member_process
+    out = Path(outdir)
+    conf_dir = out / "conformers"
+    conf_dir.mkdir(parents=True, exist_ok=True)
+    log_path = out / "run_log.jsonl"
+    done, failed = [], []
+    for i, m in enumerate(plan["members"]):
+        label = member_label(i)
+        sdf, js, nz = conf_dir / f"{label}.sdf", conf_dir / f"{label}.json", out / f"{label}.npz"
+        # the SDF is the member's input, and it keeps 4 decimals: the record
+        # will carry the geometry as written, so the expected sha1 is read back
+        write_member_sdf(sdf, m["_mol"], m["_cid"], m.get("geometry_origin"))
+        from rdkit import Chem
+        sha1 = spec_sha1(_mol_to_spec(Chem.MolFromMolFile(str(sdf), removeHs=False)))
+        if _member_complete(js, nz, sha1):
+            log(f"{label}: done earlier, kept")
+            done.append((i, label))
+            continue
+        part_js, part_nz = conf_dir / f"{label}.part.json", out / f"{label}.part.npz"
+        tmp = out / "pyscf_tmp" / label
+        tmp.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ, PYSCF_TMPDIR=str(tmp))
+        argv = ["--file", str(sdf), "--json", str(part_js), "--npz", str(part_nz),
+                "--out", str(out / f"{label}.png")] + list(member_args)
+        rc, wall, err = runner(argv, str(out), env, timeout)
+        ok = rc == 0 and part_js.exists() and part_nz.exists()
+        if ok:
+            os.replace(part_nz, nz)
+            os.replace(part_js, js)
+            ok = _member_complete(js, nz, sha1)
+        tail = "\n".join((err or "").strip().splitlines()[-5:])
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(dict(conformer=label, rc=rc, wall_s=round(wall, 1),
+                                    ok=ok, stderr_tail=tail)) + "\n")
+        log(f"{label}: {'ok' if ok else f'FAILED rc={rc}'} ({wall:.0f} s)")
+        (done if ok else failed).append((i, label) if ok else (i, label, rc, tail))
+    rec = assemble_ensemble(plan, out, done, failed)
+    (out / "ensemble.json").write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
+    return rec
+
+
+def _stats(values):
+    """mean, sd (ddof 1), min, max, range, n over the finite values."""
+    v = np.array([x for x in values if x is not None and np.isfinite(x)], float)
+    if len(v) == 0:
+        return dict(mean=None, sd=None, min=None, max=None, range=None, n=0)
+    return dict(mean=float(v.mean()), sd=float(v.std(ddof=1)) if len(v) > 1 else None,
+                min=float(v.min()), max=float(v.max()), range=float(v.max() - v.min()),
+                n=int(len(v)))
+
+
+def _bootstrap_mean(values, n=BOOTSTRAP_N, seed=0):
+    v = np.array([x for x in values if x is not None and np.isfinite(x)], float)
+    if len(v) < 2:
+        return None
+    rng = np.random.default_rng(seed)
+    means = rng.choice(v, size=(n, len(v)), replace=True).mean(axis=1)
+    return [float(np.percentile(means, 2.5)), float(np.percentile(means, 97.5))]
+
+
+def _site_values(rec):
+    """{site key: {rule: V_area_mean}} for one member record: reaction sites
+    by label and atom list, single atoms by index and map. Keyed by the
+    definition, never by a label alone (review 5 R5)."""
+    out = {}
+    s = rec.get("sites") or {}
+    for e in s.get("reaction_sites") or []:
+        key = f"site {e.get('label')} {e.get('atoms')}"
+        out[key] = {r: (e.get(r) or {}).get("V_area_mean_kcal_mol") for r in PARTITION_RULES}
+    for e in s.get("atoms") or []:
+        key = f"atom {e['index']} map {e.get('atom_map') or 0} {e['element']}"
+        out[key] = {r: (e.get(r) or {}).get("V_area_mean_kcal_mol") for r in PARTITION_RULES}
+    return out
+
+
+def _convergence(series):
+    """Section 5 for one statistic over members in selection order: the
+    running mean and range, and converged = adding the last third moved the
+    mean by no more than CONV_TOL_KCAL."""
+    v = [x for x in series if x is not None and np.isfinite(x)]
+    if len(v) < 3:
+        return dict(running_mean=[float(np.mean(v[:k + 1])) for k in range(len(v))],
+                    running_range=[float(np.ptp(v[:k + 1])) for k in range(len(v))],
+                    shift_last_third=None, converged=None)
+    cut = len(v) - max(1, len(v) // 3)
+    shift = abs(float(np.mean(v)) - float(np.mean(v[:cut])))
+    return dict(running_mean=[float(np.mean(v[:k + 1])) for k in range(len(v))],
+                running_range=[float(np.ptp(v[:k + 1])) for k in range(len(v))],
+                shift_last_third=shift, converged=bool(shift <= CONV_TOL_KCAL))
+
+
+def assemble_ensemble(plan, outdir, done, failed):
+    """The espmap.ensemble/1 record from the member records on disk. Every
+    member must share one analysis_key (E10): a mixed-level ensemble raises
+    EnsembleRefused here, after compute, rather than being averaged."""
+    import hashlib
+    import json
+    import re
+    from pathlib import Path
+    out = Path(outdir)
+    members, excluded, recs = [], [], []
+    by_index = {i: lab for i, lab in done}
+    for i, label in done:
+        js = out / "conformers" / f"{label}.json"
+        rec = json.loads(js.read_text(encoding="utf-8"))
+        recs.append((i, label, rec, js))
+    keys = {r["analysis_key"] for _, _, r, _ in recs}
+    if len(keys) > 1:
+        raise EnsembleRefused([_ensemble_block(
+            "ENSEMBLE_MIXED_ANALYSIS", f"members carry {len(keys)} analysis_keys",
+            "compute every member with one protocol")])
+    for i, label, rc, tail in failed:
+        m = plan["members"][i]
+        excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
+                             source_record=m.get("record"), code="MEMBER_RUN_FAILED",
+                             reason=f"member run failed, rc {rc}: {tail.splitlines()[-1] if tail else ''}",
+                             folded=m["folded"], rg_angstrom=m["rg"]))
+    kept = []
+    for i, label, rec, js in recs:
+        m = plan["members"][i]
+        v = rec["validity"]
+        if not (v.get("input") and v.get("surface") and v.get("electronic")):
+            why = [k for k in ("input", "surface", "electronic") if not v.get(k)]
+            excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
+                                 source_record=m.get("record"), code="MEMBER_INVALID",
+                                 reason=f"member validity false: {', '.join(why)}",
+                                 folded=m["folded"], rg_angstrom=m["rg"]))
+            continue
+        kept.append((i, label, rec, js))
+    rg_by = {i: plan["members"][i]["rg"] for i, *_ in kept}
+    ext_i = max(rg_by, key=lambda i: rg_by[i] if rg_by[i] is not None else -1) if rg_by else None
+    genus_ref = next((r["results"]["surface"].get("genus") for i, _, r, _ in kept if i == ext_i), None)
+    weights = None
+    if plan.get("weight") == "dft" and kept:
+        e = np.array([r["results"]["e_tot_Ha"] for *_, r, _ in kept]) * HA2KCAL
+        w = np.exp(-(e - e.min()) / (KB_KCAL * BOLTZMANN_T))
+        weights = w / w.sum()
+    for k, (i, label, rec, js) in enumerate(kept):
+        m = plan["members"][i]
+        genus = rec["results"]["surface"].get("genus")
+        g_ex = genus - genus_ref if genus is not None and genus_ref is not None else None
+        npz = out / f"{label}.npz"
+        members.append(dict(
+            conformer=label, member_id=rec["geometry"]["sha1"],
+            embed_conf_id=m.get("embed_conf_id"), source_record=m.get("record"),
+            record=f"conformers/{label}.json",
+            record_sha256=hashlib.sha256(js.read_bytes()).hexdigest(),
+            npz=f"{label}.npz" if npz.exists() else None,
+            npz_sha256=hashlib.sha256(npz.read_bytes()).hexdigest() if npz.exists() else None,
+            geometry_sha1=rec["geometry"]["sha1"],
+            mmff_dE_kcal=(m["mmff_energy"] - min(x["mmff_energy"] for x in plan["members"])
+                          if m.get("mmff_energy") is not None else None),
+            rg_angstrom=m["rg"], extent_angstrom=m["extent"], asphericity=m["asphericity"],
+            contacts=m["contacts"], folded=m["folded"], genus=genus, genus_excess=g_ex,
+            folded_genus_disagree=bool(g_ex is not None and m["folded"] != (g_ex > 0)),
+            configuration=m.get("configuration", {}),
+            optimized=bool(rec["settings"].get("optimize")),
+            scf_energy_Ha=rec["results"].get("e_tot_Ha"),
+            weight=float(weights[k]) if weights is not None else None,
+            validity=rec["validity"]))
+    ext = [mm["conformer"] for mm in members if not mm["folded"]]
+    pops = {"all": [mm["conformer"] for mm in members], "extended": ext}
+    by_label = {label: rec for _, label, rec, _ in kept}
+    results = {"per_member": {lab: dict(V_min_kcal_mol=r["results"]["V_min_kcal_mol"],
+                                        V_max_kcal_mol=r["results"]["V_max_kcal_mol"])
+                              for lab, r in by_label.items()}}
+    for q in ("V_min_kcal_mol", "V_max_kcal_mol"):
+        results[q] = {p: _stats([by_label[l]["results"][q] for l in labs])
+                      for p, labs in pops.items()}
+    site_vals = {lab: _site_values(r) for lab, r in by_label.items()}
+    sites, conv, not_conv = None, {}, []
+    if site_vals and all(site_vals.values()):
+        sites = {}
+        for key in site_vals[members[0]["conformer"]]:
+            sites[key] = {}
+            for rule in PARTITION_RULES:
+                per = {lab: site_vals[lab].get(key, {}).get(rule) for lab in pops["all"]}
+                entry = {"per_member": per}
+                for p, labs in pops.items():
+                    entry[p] = dict(_stats([per[l] for l in labs]),
+                                    bootstrap95_mean=_bootstrap_mean([per[l] for l in labs]))
+                sites[key][rule] = entry
+                c = _convergence([per[l] for l in pops["all"]])
+                conv[f"{key} | {rule}"] = c
+                if c["converged"] is False:
+                    not_conv.append(f"{key} | {rule}")
+    converged = (not not_conv) if conv and all(c["converged"] is not None
+                                               for c in conv.values()) else None
+    first = recs[0][2] if recs else None
+    sel = plan["protocol"]
+    generated = plan["source"] == "generated"
+    protocol = dict(
+        source=plan["source"], input_file=sel.get("path"),
+        n_embed=sel.get("n_embed"), n_embedded=sel.get("n_embedded"),
+        n_converged=sel.get("n_converged"), seed=sel.get("seed"),
+        forcefield=sel.get("forcefield"),
+        n_other_configuration=sel.get("n_other_configuration"),
+        selection=dict(
+            method=(f"lowest MMFF + {sel['k_requested'] - 1} across Rg of {sel.get('n_embed')} "
+                    f"ETKDG, heavy-atom RMSD {sel.get('dedup_rmsd')} A" if generated
+                    else "every record of the supplied file"),
+            rule="rg_spread" if generated else "supplied_all",
+            rg_definition="rdkit_Descriptors3D_mass_weighted_all_atoms",
+            dedup_rmsd_A=sel.get("dedup_rmsd") if generated else None,
+            dedup_atoms="heavy" if generated else None,
+            mirror_images_merged=bool(sel.get("mirror_images_merged")),
+            n_unique=sel.get("n_unique", sel.get("k_obtained")),
+            n_symmetry_matches=sel.get("n_symmetry_matches"),
+            symmetry_match_cap=SYMMETRY_MATCH_CAP if "SYMMETRY_MATCH_CAP" in globals() else None),
+        weighting=plan.get("weight", "none"),
+        temperature_K=BOLTZMANN_T if plan.get("weight") == "dft" else None)
+    akey = first["analysis_key"] if first else None
+    timing_free = {k: v for k, v in protocol.items() if k != "input_file"}
+    prov = (first or {}).get("provenance", {})
+    return dict(
+        schema=ENSEMBLE_SCHEMA, subject=plan.get("subject"),
+        ensemble_key=_sha1(json.dumps(dict(analysis_key=akey, protocol=timing_free),
+                                      sort_keys=True)),
+        analysis_key=akey, analysis=first["key_fields"]["analysis"] if first else None,
+        espmap=dict(version=prov.get("espmap_version", __version__),
+                    commit=(prov.get("code") if re.fullmatch(r"[0-9a-f]{7,40}", str(prov.get("code")))
+                            else None),
+                    code=prov.get("code"), rdkit=prov.get("rdkit"), pyscf=prov.get("pyscf")),
+        identity=dict(smiles=plan["identity"]["smiles"], inchikey=plan["identity"]["inchikey"],
+                      charge=plan["identity"]["charge"], n_radical=plan["identity"]["n_radical"],
+                      atom_maps=plan["identity"].get("atom_maps", []),
+                      configuration=plan["identity"].get("configuration", {}),
+                      isotopes="ignored"),
+        protocol=protocol, k_requested=sel["k_requested"], k_obtained=len(members),
+        folded_rule=dict(min_bonds=CONTACT_MIN_BONDS, slack_A=CONTACT_SLACK,
+                         radii="Bondi; Mantina 2009 for B", status="provisional"),
+        members=members, excluded=excluded,
+        convergence=dict(conv_tol_kcal=CONV_TOL_KCAL, status="provisional",
+                         converged=converged, not_converged=not_conv, per_site=conv),
+        kish_n=(float(1 / np.sum(weights ** 2)) if weights is not None else None),
+        results=results, sites=sites,
+        validity=dict(members=bool(members) and not excluded,
+                      convergence=bool(converged),
+                      unbiased=not any(e["folded"] for e in excluded)))
 
 
 def estimate_cost(spec, basis, charge=0, spin=0):

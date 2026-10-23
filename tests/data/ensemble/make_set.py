@@ -182,7 +182,7 @@ case("E4", "C18 acetate, K = 10", {"smiles": C18, "ensemble": 10},
      "the measured site spread is 5.1 with folded members, 2.69 without")
 case("E5", "E4 with the folded members' surfaces failing integrity",
      {"smiles": C18, "ensemble": 10, "inject": "surface_failure_on_folded"},
-     {"outcome": "accept", "checks": {"excluded_min": 1, "validity.bias": False}},
+     {"outcome": "accept", "checks": {"excluded_min": 1, "validity.unbiased": False}},
      "a converged-looking ensemble of only extended members", "slow",
      "the chi = 2 check once excluded exactly the folded C18 members (F9)")
 case("E6", "n-butane: gauche+ and gauche- (mirror-related, achiral molecule)",

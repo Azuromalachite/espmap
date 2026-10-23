@@ -134,6 +134,13 @@ Per member, recorded:
 
 ## 4. The ensemble record (`espmap.ensemble/1`)
 
+The schema is `docs/ensemble-schema.json`, reviewed by a consumer (Arrowfield,
+against the Atlas's `spa.espmap_ensemble/0`) before the runner was written.
+Members are labelled `conf_00`, `conf_01`, ... in selection order, zero-based,
+so files already written under the Atlas's index stay valid. The Atlas's
+`protocol` string is its own directory label and is not this record's
+`protocol` object.
+
 ```
 schema: espmap.ensemble/1
 subject: opaque caller label from --subject, copied verbatim, never read
@@ -152,7 +159,7 @@ convergence: {...}                          # §5
 results: global V_min / V_max / surface stats per member, and over members
 sites: per site and per rule: per-member means, then over members:
        mean, sd, min, max, range, n; and the same over extended members
-validity: {members, convergence, bias}
+validity: {members, convergence, unbiased}
 ```
 
 - **Members are verifiable.** `member_id` is the sha1 of the member's
@@ -175,7 +182,9 @@ validity: {members, convergence, bias}
 
 **Exclusions are reported with their shape.** A member whose surface fails
 integrity, or whose input or electronic validity is false, is excluded and
-listed. `validity.bias` is false **whenever any excluded member is folded**.
+listed. `validity.unbiased` is false **whenever any excluded member is folded**
+(named so that true reads as fine, like every other validity flag; `bias` in
+the first draft).
 That rule is conservative and testable: "disproportionately" wouldn't be. That is exactly the failure espmap
 shipped once: the χ = 2 check refused precisely the two folded C18
 conformers, and the ensemble looked converged at 1.1 kcal/mol until they
@@ -281,7 +290,7 @@ Expectations marked *measure* get their numbers from §8 first.
 | E2 | cyclohexane | chair; a twist-boat only if within protocol and distinct | duplicate chairs counted twice |
 | E3 | 18-crown-6 or a cyclic peptide | genus 1 from the ring is not "folded" | every member called folded |
 | E4 | C18 acetate, K = 10 | folded members identified (contact or excess genus); stats both ways | folded members averaged in without a flag |
-| E5 | E4 with the folded members' surfaces failing integrity | excluded, listed, `validity.bias` false | a converged-looking ensemble of only extended members |
+| E5 | E4 with the folded members' surfaces failing integrity | excluded, listed, `validity.unbiased` false | a converged-looking ensemble of only extended members |
 | E6 | a symmetric molecule whose conformers differ by a symmetry operation | deduplicated by symmetry-aware RMSD | symmetry copies inflating n |
 | E7 | supplied SDF: 20 docking poses of one ligand | accepted as an ensemble, protocol "supplied" | refused, or computed as pose 1 only |
 | E8 | supplied SDF mixing a ligand and its tautomer | refused before compute | a mixed "ensemble" |
