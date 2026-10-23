@@ -348,12 +348,20 @@ def coordinate_kind(mol, fmt, tol=0.03):
     if fmt in ("xyz", "pdb"):
         return "geometry"
     c = mol.GetConformer()
-    header_3d = mol.HasProp("_header_dim") and mol.GetProp("_header_dim") == "3D"
-    if not (c.Is3D() or header_3d):
+    header = mol.GetProp("_header_dim") if mol.HasProp("_header_dim") else None
+    # Review 6 S8: a 2D header is the file's own statement, also when some z
+    # is not 0 (an editor writing wedge depth, a nudged atom).
+    if header == "2D" or not (c.Is3D() or header == "3D"):
         return "drawing"
     X = np.array([list(c.GetAtomPosition(i)) for i in range(mol.GetNumAtoms())])
     X -= X.mean(axis=0)
-    dev = np.abs(X @ np.linalg.svd(X)[2][-1]).max() if len(X) > 3 else 0.0
+    # Flat when one plane holds every atom within FLAT_TOL. The least-squares
+    # plane can tilt to fit z noise and leave a larger maximum deviation than
+    # the z = const plane does (review 6 S16: a drawing with |z| <= 0.08 A
+    # was 0.101 A off its fitted plane); both are planes, so take the smaller.
+    # The best z = const plane sits at the midrange: half the z span.
+    dev = (min(np.abs(X @ np.linalg.svd(X)[2][-1]).max(), np.ptp(X[:, 2]) / 2)
+           if len(X) > 3 else 0.0)
     if dev > FLAT_TOL:
         return "geometry"
     if mol.GetNumBonds() == 0:
@@ -497,6 +505,11 @@ def flat_sp3_problems(mol):
                 out.append(f"flat {len(ring)}-ring with an sp3-sp3 bond")
     for a in mol.GetAtoms():
         if a.GetHybridization() != sp3:
+            continue
+        # Review 6 S17: O and N bonded to silicon are wide or planar in
+        # reality (Si-O-Si 142-150 deg, N(SiH3)3 planar), so their angle and
+        # flatness say nothing about a drawing; the bond lengths still decide.
+        if a.GetSymbol() in ("O", "N") and any(n.GetSymbol() == "Si" for n in a.GetNeighbors()):
             continue
         nb = [n.GetIdx() for n in a.GetNeighbors()]
         tag = f"sp3 {a.GetSymbol()}{a.GetIdx()}"
@@ -1256,26 +1269,62 @@ def _perceive_bonds(m, charge, fmt):
     return mol
 
 
-def _molfile_header_dims(path):
-    """The dimension code on line 2 of each MOL/SDF record ("2D", "3D" or
-    ""), in file order. coordinate_kind needs what the file says: RDKit's
-    conformer flag turns a 3D header into 2D when every z is 0 and a bond
-    carries a stereo mark."""
+def _molfile_records(path):
+    """The MOL blocks of a MOL/SDF file, in file order: the text before each
+    $$$$ that holds a counts line (V2000 or V3000). Text that is not a record
+    -- a comment or a converter's trailer after the last $$$$ -- is not one,
+    so it cannot shift which header belongs to which record (review 6 S15: a
+    C2F4 SDF with one trailing line was read under no header and discarded)."""
     import re
     from pathlib import Path
     try:
-        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        text = Path(path).read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
     except OSError:
         return []
     out = []
     for k, rec in enumerate(re.split(r"^\$\$\$\$[^\n]*$", text, flags=re.M)):
         if k:
-            if not rec.strip():
-                continue
             rec = rec[1:] if rec.startswith("\n") else rec
+        if re.search(r"^.{33,39}V[23]000\s*$", rec, flags=re.M):
+            out.append(rec)
+    return out
+
+
+def _molfile_header_dims(path):
+    """The dimension code on line 2 of each MOL/SDF record ("2D", "3D" or
+    ""), in file order. coordinate_kind needs what the file says: RDKit's
+    conformer flag turns a 3D header into 2D when every z is 0 and a bond
+    carries a stereo mark."""
+    out = []
+    for rec in _molfile_records(path):
         lines = rec.split("\n")
         out.append(lines[1][20:22].strip().upper() if len(lines) > 1 else "")
     return out
+
+
+def _as_drawing(m, block):
+    """A record judged a drawing, re-read as the 2D drawing it is: z set to
+    0 and the header to 2D, so its stereo comes from its wedges and drawn
+    double bonds only. Read under a 3D header, RDKit takes chirality from z,
+    and z noise in an unwedged drawing then fixes a configuration nobody drew
+    (review 6 S7: two seeds of one threonine drawing gave two diastereomers,
+    both passing --require-stereo). The record's properties are kept."""
+    from rdkit import Chem
+    lines = block.split("\n")
+    if len(lines) < 4 or "V2000" not in lines[3]:
+        return m                                    # V3000: left as RDKit read it
+    n_at = int(lines[3][:3])
+    lines[1] = lines[1][:20] + "2D" + lines[1][22:] if len(lines[1]) >= 22 else lines[1]
+    for k in range(4, 4 + n_at):
+        lines[k] = lines[k][:20] + f"{0.0:10.4f}" + lines[k][30:]
+    d = Chem.MolFromMolBlock("\n".join(lines), removeHs=False)
+    if d is None or d.GetNumAtoms() != m.GetNumAtoms():
+        return m
+    d.GetConformer().Set3D(False)
+    for p in m.GetPropNames(includePrivate=True, includeComputed=False):
+        if not d.HasProp(p):
+            d.SetProp(p, m.GetProp(p))
+    return d
 
 
 def read_structure(path, charge=0, record=None):
@@ -1294,6 +1343,7 @@ def read_structure(path, charge=0, record=None):
     from rdkit import Chem
     _quiet_rdkit()
     ext = str(path).lower().rsplit(".", 1)[-1]
+    blocks = []                                     # MOL blocks, aligned with mols
     try:
         if ext == "cdxml":
             mols = [m for m in Chem.MolsFromCDXMLFile(str(path)) if m is not None]
@@ -1301,11 +1351,14 @@ def read_structure(path, charge=0, record=None):
             mols = (list(Chem.SDMolSupplier(str(path), removeHs=False))
                     if ext == "sdf" else
                     [Chem.MolFromMolFile(str(path), removeHs=False)])
-            dims = _molfile_header_dims(path)
-            if len(dims) == len(mols):
-                for m, d in zip(mols, dims):
+            recs = _molfile_records(path)
+            if len(recs) == len(mols):
+                blocks = recs
+                for m, rec in zip(mols, recs):
                     if m is not None:
-                        m.SetProp("_header_dim", d)
+                        lines = rec.split("\n")
+                        m.SetProp("_header_dim", lines[1][20:22].strip().upper()
+                                  if len(lines) > 1 else "")
         elif ext in ("xyz", "pdb"):
             # Neither format carries trustworthy bond ORDERS. XYZ has no bonds
             # at all (v3 rejected every xyz as "MULTIPLE_FRAGMENTS"). PDB has
@@ -1362,6 +1415,9 @@ def read_structure(path, charge=0, record=None):
                            f"cannot tell a drawing from a real planar molecule",
                            "write a 2D header if this is a drawing; if it is a "
                            "geometry, save it as .xyz")]
+        if kind == "drawing" and blocks and m.GetConformer().Is3D():
+            m = _as_drawing(m, blocks[r - 1])
+            m.SetProp("_format", ext)
         m.SetProp("_coords", kind)
         return m, []
 
