@@ -22,7 +22,15 @@ _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases
 # what the current rule gets wrong; a rule removes entries. Master (v0.2.1)
 # had no --require-stereo and passed all 39 unspecified cases silently; the
 # rule written against this set (stereo_left_open) leaves none.
-UNSAFE_NOW = set()
+UNSAFE_NOW = {
+    # review 6 S7, added before any rule change: an unwedged drawing under a 3D
+    # header with z noise keeps the chirality read from the noise, which
+    # --require-stereo then treats as specified
+    "draw3d_ala_znoise_0.05_s1", "draw3d_ala_znoise_0.05_s2", "draw3d_ala_znoise_0.05_s3",
+    "draw3d_threonine_znoise_0.02_s1", "draw3d_threonine_znoise_0.02_s2",
+    "draw3d_threonine_znoise_0.02_s3", "draw3d_threonine_znoise_0.05_s1",
+    "draw3d_threonine_znoise_0.05_s3",
+}
 NOT_PREFERRED_NOW = UNSAFE_NOW | set()
 
 

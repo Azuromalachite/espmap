@@ -344,6 +344,199 @@ _write("real_13chd_noH", m, True, REAL, "geometry", "geometry",
        f"RDKit ETKDG + MMFF94s, H removed, rotated, z kept (max |z| {dev:.3f} A)",
        "a real ring that is nearly, not exactly, planar: within 0.1 A of its plane")
 
+# --- M. review 6: classes the R11 rule at v0.2.1 gets wrong -------------------
+# Added as cases before any rule change (review 6 S8, S15-S17), several
+# variants per class so a fix cannot special-case one file.
+
+def _write_text(name, text, flag3d, allowed, prefer, kind, source, why, ext="sdf"):
+    (OUT / f"{name}.{ext}").write_text(text, encoding="utf-8")
+    assert prefer is None or prefer in allowed, name
+    CASES.append(dict(file=f"{name}.{ext}", kind=kind, allowed=allowed, prefer=prefer,
+                      outcomes=_outcomes(kind, flag3d),
+                      header="3D" if flag3d else "2D", source=source, why=why))
+
+
+def _block(mol, flag3d=True):
+    mol = Chem.Mol(mol)
+    mol.GetConformer().Set3D(flag3d)
+    return Chem.MolToMolBlock(mol)
+
+
+# S15: text after the last $$$$ (a converter's trailer, a hand-added comment)
+# must not shift which header line belongs to which record.
+for nm, mol, flag3d, kind, allowed, prefer, tail in (
+        ("real_C2F4_trailing_comment", _mmff("FC(F)=C(F)F"), True, "geometry", REAL, "geometry",
+         "converted by hand from a Gaussian log\n"),
+        ("real_C6F6_trailing_lines", _mmff("Fc1c(F)c(F)c(F)c(F)c1F"), True, "geometry", REAL, "geometry",
+         "\n\nend of file\n"),
+        ("real_C2F4_trailing_header_like", _mmff("FC(F)=C(F)F"), True, "geometry", REAL, "geometry",
+         "note\n  -OEChem-10232614502D\n"),
+        ("draw_chlorobenzene_2Dheader_trailing", _depiction("Clc1ccccc1", 1.5), False, "drawing", DRAW,
+         "drawing", "exported by an editor\n")):
+    _write_text(nm, _block(mol, flag3d) + "$$$$\n" + tail, flag3d, allowed, prefer, kind,
+                "one SDF record, then text after the last $$$$",
+                "trailing text after the only record: the header that counts is that record's own")
+
+# S16: drawings with z noise up to 0.09 A. The largest |z| stays under the
+# flatness tolerance, but a least-squares plane can tilt to fit the noise and
+# report a larger deviation. Every seed is kept, not only those that fail.
+_noise16 = np.random.default_rng(20261024)
+for smi, nm, L in (("OC1CCCCC1", "cyclohexanol", 1.5), ("CC(O)CN", "aminopropanol", 1.45),
+                   ("CCCCCC", "hexane", 1.5)):
+    for zn in (0.08, 0.09):
+        for seed in (1, 2):
+            m = _depiction(smi, L)
+            X = _xyz(m)
+            X[:, 2] = _noise16.uniform(-zn, zn, len(X))
+            _write(f"draw_{nm}_znoise_{zn}_s{seed}_{L}", _set_xyz(m, X), True, DRAW, "drawing",
+                   "drawing", f"RDKit depiction at {L} A, z uniform in +-{zn} A",
+                   "a flat sp3 drawing whose noise stays inside the flatness tolerance; "
+                   "real puckering is ~0.2 A or more")
+# review 6's own reproductions (docs/review-6/a_stereo3.py): small molecules,
+# where a few atoms let the fitted plane tilt furthest
+for smi, nm, seed in (("CC(N)C(=O)O", "alanine", 12), ("CC(N)C(=O)O", "alanine", 35),
+                      ("CC(O)C(N)C(=O)O", "threonine", 11)):
+    m = Chem.MolFromSmiles(smi)
+    AllChem.Compute2DCoords(m)
+    X = _xyz(m)
+    X[:, 2] = np.random.default_rng(seed).uniform(-0.09, 0.09, len(X))
+    _write(f"draw_{nm}_znoise_0.09_review6_s{seed}", _set_xyz(m, X), True, DRAW, "drawing",
+           "drawing", f"RDKit depiction (1.5 A), z uniform in +-0.09 A, numpy seed {seed}",
+           "review 6 S16: max |z| under the flatness tolerance, best-plane deviation over it")
+
+# S17: real species at bond lengths and angles near the rule's thresholds.
+# Literature-typical values, rounded; heavy atoms only where H are absent anyway
+# or where a heavy-atom-only file is what a user would have.
+_write("real_dicyanamide", _built("[N-](C#N)C#N", [(0, 0), _polar(1.31, 30), (
+       _polar(1.31, 30)[0] + 1.16 * math.cos(math.radians(30 - 6)),
+       _polar(1.31, 30)[1] + 1.16 * math.sin(math.radians(30 - 6))), _polar(1.31, 150), (
+       _polar(1.31, 150)[0] + 1.16 * math.cos(math.radians(150 + 6)),
+       _polar(1.31, 150)[1] + 1.16 * math.sin(math.radians(150 + 6)))]), True, REAL, "geometry",
+       "geometry", "built: N-C 1.31 A, C#N 1.16 A, C-N-C 120 deg, N-C-N 174 deg",
+       "real dicyanamide: its central N-C is 11 % short of a single-bond reference because it is "
+       "delocalised, not because it is drawn")
+_write("real_cyanamide_noH", _built("NC#N", [(0, 0), (1.35, 0), (1.35 + 1.16, 0)]), True, REAL,
+       "geometry", "geometry", "built: N-C 1.35 A, C#N 1.16 A, linear",
+       "real cyanamide's heavy atoms: a short, delocalised N-C single bond")
+for ang in (144.0, 150.0):
+    _write(f"real_disiloxane_noH_{int(ang)}", _built("[SiH3]O[SiH3]", [
+           _polar(1.63, 90 + ang / 2), (0, 0), _polar(1.63, 90 - ang / 2)]), True, REAL,
+           "geometry", "geometry", f"built: Si-O 1.63 A, Si-O-Si {ang:.0f} deg (heavy atoms only)",
+           "Si-O-Si is wide in reality (about 142-150 deg); an sp3 O angle window for C-O-C "
+           "does not apply to O between silicons")
+_write("real_trisilylamine_noH", _built("[SiH3]N([SiH3])[SiH3]", [
+       _polar(1.73, 90), (0, 0), _polar(1.73, 210), _polar(1.73, 330)]), True, REAL, "geometry",
+       "geometry", "built: Si-N 1.73 A, planar N (heavy atoms only)",
+       "N(SiH3)3 is planar at N in reality: a flat N between heavy atoms is not a drawing")
+
+# Held-out probe of the S7/S8/S15-S17 fix (s16_3d_one_atom_up_0.35): a drawing
+# with one atom lifted out of its plane is no longer flat, so it skipped every
+# drawing test and was computed as given. Its x,y are still a drawing's: every
+# bond at one drawing length when projected. Real non-flat skeletons with
+# bonds near 1.5 A (heavy atoms only) guard the other side.
+for smi, nm, idx, dz in (("CCOC(C)=O", "methylpropanoate", 3, 0.35),
+                         ("CCOC(C)=O", "methylpropanoate", 3, 0.8),
+                         ("Clc1ccccc1", "chlorobenzene", 0, 0.5),
+                         ("CC(O)CN", "aminopropanol", 1, 1.0)):
+    m = _depiction(smi, 1.5)
+    X = _xyz(m)
+    X[idx, 2] = dz
+    _write(f"draw_{nm}_atom{idx}_up_{dz}_1.5", _set_xyz(m, X), True, DRAW, "drawing", "drawing",
+           f"RDKit depiction at 1.5 A, atom {idx} lifted {dz} A out of the plane",
+           "an edited drawing: not flat any more, but every bond projects to one drawing length")
+for smi, nm in (("C1CCNCC1", "piperidine"), ("CCNCC", "diethylamine"), ("CC(C)(C)N", "tbutylamine")):
+    m = Chem.AddHs(Chem.MolFromSmiles(smi))
+    AllChem.EmbedMolecule(m, randomSeed=7)
+    AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=5000)
+    _write(f"real_{nm}_noH_3d", Chem.RemoveHs(m), True, REAL, "geometry", "geometry",
+           "RDKit ETKDG + MMFF94s, H removed, not flattened",
+           "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A")
+
+# Probe round 4: a lifted atom on a TILTED drawing. The lift tilts the fitted
+# plane and z = 0 foreshortens, so neither projection is clean; one atom out
+# of place must not move the plane. And a one-element-pair drawing (H-free
+# decalin) with a lifted C: a symmetric real skeleton could in principle
+# project evenly, so refusing it is the safe answer, never a geometry.
+for smi, nm, idx, dz, ax, ay in (("CCOC(C)=O", "methylpropanoate", 3, 0.8, 60.0, 0.0),
+                                 ("Clc1ccccc1", "chlorobenzene", 0, 1.0, 45.0, 30.0)):
+    m = _depiction(smi, 1.5)
+    X = _xyz(m)
+    X[idx, 2] = dz
+    _write(f"draw_{nm}_atom{idx}_up_{dz}_tilted{int(ax)}_{int(ay)}_1.5", _tilted(_set_xyz(m, X), ax, ay),
+           True, DRAW, "drawing", "drawing",
+           f"RDKit depiction at 1.5 A, atom {idx} lifted {dz} A along the page normal, then rotated "
+           f"{ax:.0f} deg about x and {ay:.0f} about y",
+           "an edited drawing seen at an angle: one lifted atom must not decide its plane")
+m = _depiction("C1CCC2CCCCC2C1", 1.5)
+X = _xyz(m)
+X[2, 2] = 0.6
+_write("draw_decalin_noH_atom2_up_0.6_1.5", _set_xyz(m, X), True, DRAW, "drawing", "drawing",
+       "RDKit depiction of H-free decalin at 1.5 A, atom 2 lifted 0.6 A",
+       "one element pair (C-C): a drawing, but a symmetric real skeleton could look alike, so a "
+       "refusal is safe and a geometry is not")
+for smi, nm in (("FC(F)(F)C(F)(F)F", "hexafluoroethane"), ("C1CC2CCC1C2", "norbornane")):
+    m = Chem.AddHs(Chem.MolFromSmiles(smi))
+    AllChem.EmbedMolecule(m, randomSeed=7)
+    AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=5000)
+    h = Chem.RemoveHs(m)
+    _write(f"real_{nm}_noH_3d", h, True, REAL, "geometry", "geometry",
+           "RDKit ETKDG + MMFF94s, H removed", "a real non-flat skeleton")
+    _write(f"real_{nm}_noH_3d_rot90x", _tilted(h, 90.0, 0.0), True, REAL, "geometry", "geometry",
+           "the same, rotated 90 deg about x", "a real non-flat skeleton seen face-on along z")
+
+# Probe round 5: two or three atoms lifted on a small tilted drawing; leaving
+# one atom out of the plane fit is not enough. And real heavy-atom chain
+# esters whose C-C bonds (1.53 A, within 1 % of Marvin's 1.54) mostly lie in
+# one plane: a rule that settled for "most bonds even" would discard them.
+for smi, nm, lifts, ax, ay in (("CCOC(C)=O", "methylpropanoate", ((3, 0.8), (5, 0.8)), 60.0, 0.0),
+                               ("CCOC(C)=O", "methylpropanoate", ((3, 0.8), (1, -0.8)), 60.0, 0.0),
+                               ("Nc1ccccc1Cl", "chloroaniline", ((0, 0.7), (3, -0.6), (6, 0.5)), 45.0, 30.0)):
+    m = _depiction(smi, 1.5)
+    X = _xyz(m)
+    for idx, dz in lifts:
+        X[idx, 2] = dz
+    tag = "_".join(f"{i}{'+' if d > 0 else '-'}{abs(d)}" for i, d in lifts)
+    _write(f"draw_{nm}_lift_{tag}_tilted{int(ax)}_{int(ay)}_1.5", _tilted(_set_xyz(m, X), ax, ay),
+           True, DRAW, "drawing", "drawing",
+           f"RDKit depiction at 1.5 A, atoms {[i for i, _ in lifts]} lifted, then rotated "
+           f"{ax:.0f} deg about x and {ay:.0f} about y",
+           "an edited drawing with several atoms lifted, seen at an angle")
+for smi, nm, seed in (("CCCCCCCCCC/C=C\\CCOC(C)=O", "z3_14_oac_chain", 3),
+                      ("CCCCCCCCCCCCOC(C)=O", "dodecyl_acetate", 5)):
+    m = Chem.AddHs(Chem.MolFromSmiles(smi))
+    AllChem.EmbedMolecule(m, randomSeed=seed)
+    AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=5000)
+    h = Chem.RemoveHs(m)
+    _write(f"real_{nm}_noH_3d", h, True, REAL, "geometry", "geometry",
+           f"RDKit ETKDG (seed {seed}) + MMFF94s, H removed",
+           "a real chain ester: most C-C bonds near 1.53 A, many in one plane, but not all bonds even")
+    _write(f"real_{nm}_noH_3d_rot90x", _tilted(h, 90.0, 0.0), True, REAL, "geometry", "geometry",
+           "the same, rotated 90 deg about x", "a real chain ester seen face-on along z")
+
+# S8: a 2D header is the file's own statement, also when z is not 0.
+m = _depiction("C[C@@H](O)[C@H](N)C(=O)O", 1.5)
+X = _xyz(m)
+for i, a in enumerate(m.GetAtoms()):
+    if a.GetSymbol() in ("O", "N") and a.GetDegree() == 1:
+        X[i, 2] = 0.8 if i % 2 else -0.8                   # wedge ends lifted, as some editors do
+_write("draw2d_threonine_wedge_z_1.5", _set_xyz(m, X), False, DRAW, "drawing", "drawing",
+       "RDKit depiction at 1.5 A, 2D header, terminal O/N at z +-0.8",
+       "a 2D drawing whose editor wrote wedge depth into z; the header says 2D")
+for smi, nm in (("Clc1ccccc1", "chlorobenzene"), ("CC(O)CN", "aminopropanol")):
+    m = _depiction(smi, 1.5)
+    X = _xyz(m)
+    X[0, 2] = 0.3
+    _write(f"draw2d_{nm}_one_z_1.5", _set_xyz(m, X), False, DRAW, "drawing", "drawing",
+           "RDKit depiction at 1.5 A, 2D header, atom 0 at z = 0.3",
+           "one atom nudged out of the plane in an editor; the header still says 2D")
+m = Chem.AddHs(Chem.MolFromSmiles("CC(O)CC"))
+AllChem.EmbedMolecule(m, randomSeed=0xC0FFEE)
+AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=2000)
+_write("real_2butanol_2Dheader", m, False, DRAW, "drawing", "geometry",
+       "RDKit ETKDG + MMFF94s 2-butanol saved with a 2D header",
+       "the header is the file's own statement; the reader cannot overrule it (as "
+       "real_chlorobenzene_2Dheader, but not flat)")
+
 (OUT / "manifest.json").write_text(json.dumps(
     {"about": __doc__.split("\n\n")[0], "severity": SEVERITY, "cases": CASES}, indent=1) + "\n", encoding="utf-8")
 print(len(CASES), "cases")
