@@ -958,9 +958,10 @@ def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None,
                         f"--require-stereo, but {len(left)} stereo element(s) are not "
                         f"fixed by the input: "
                         + "; ".join(f"{w} ({why})" for w, why in left),
-                        "give every centre a wedge or @/@@, every double bond a drawn "
-                        "or /\\ geometry; an atropisomer or helix can only be fixed "
-                        "by 3D coordinates (MOL/SDF with z, XYZ)"))
+                        "give every centre a wedge or @/@@, every ordinary double bond "
+                        "a drawn or /\\ geometry; a stereogenic allene or cumulene, an "
+                        "atropisomer or a helix can only be fixed by 3D coordinates "
+                        "(MOL/SDF with z, XYZ), as SMILES marks on them are dropped"))
 
     # --- 4. tautomers: the drawn form is a choice, often an unconscious one ---
     try:

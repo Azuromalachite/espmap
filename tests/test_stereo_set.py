@@ -131,3 +131,16 @@ def test_the_cli_flag_blocks_before_compute(monkeypatch):
     assert run("--smiles", "C[C@H](N)C(=O)O", "--check", "--require-stereo") == 0
     assert run("--atoms", (_DIR / "atoms_ala.atoms").read_text(encoding="utf-8").strip(),
                "--check", "--require-stereo") == 0
+
+
+@pytest.mark.parametrize("smiles", ["CC=C=C=CC", "C/C=C=C=C/C", "C/C=C=C=C\C", "CC=C=CC"])
+def test_a_cumulene_names_the_only_remedy_that_works(smiles):
+    """RDKit drops / and \ on a cumulene (both butatriene forms parse to
+    STEREONONE), so the remedy must not offer them: only 3D coordinates fix a
+    stereogenic allene or cumulene. Held-out probe of #69 at c3e137b."""
+    from rdkit import Chem
+    v, findings = em.check_structure(Chem.MolFromSmiles(smiles), smiles=smiles,
+                                     require_stereo=True)
+    assert v == em.BLOCK
+    req = next(f for f in findings if f[1] == "STEREO_REQUIRED")
+    assert "cumulene" in req[3] and "3D" in req[3], req[3]

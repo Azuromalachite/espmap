@@ -31,7 +31,7 @@ enough to support a novelty claim.
 | Expected bond lengths from covalent radii | RDKit's radii table, scaled for bond order, to ask whether a flat MOL/SDF file can be a real geometry (`coordinate_kind`, review 5 R11) | Cordero et al. 2008 `cordero2008` |
 | Atropisomer axes classed by rotation barrier: below about 20 kcal/mol they interconvert within a minute and are not stereo for practical purposes | `--require-stereo` treats tri- and tetra-ortho biaryl axes (peri fusions weighted 2) as stable, an approximation from the graph alone (`atropisomer_axes`) | LaPlante et al. 2011 `laplante2011` |
 | A positive HOMO marks an anion the basis set cannot bind | `unbound_anion_warning` → `results.electronic.problems` (`UNBOUND_ANION_GAS`) | Galbraith & Schaefer 1996 `galbraith1996`, with the comment by Rösch & Trickey 1997 `rosch1997`; Jensen 2010 `jensen2010` |
-| Average local ionisation energy | roadmap (v0.3) | Sjoberg et al. 1990 `sjoberg1990`; Bulat et al. 2010 |
+| Average local ionisation energy | P4, specified in `docs/p4-spec.md` (not implemented) | Sjoberg et al. 1990 `sjoberg1990`; Murray, Brinck & Politzer 1992 `murray1992`; Bulat et al. 2010 |
 | Marching cubes | scikit-image `measure.marching_cubes` | Lorensen & Cline 1987 `lorensen1987`; Lewiner et al. 2003 `lewiner2003` |
 | Perceptual colormaps; diverging maps neutral at zero | `build_maps`, the colormap policy | Crameri et al. 2020 `crameri2020`, `crameri_scm`; Moreland 2009 `moreland2009` |
 
@@ -40,6 +40,20 @@ The ~98 % often quoted for the density surface is Bader's figure for the
 surface espmap uses, `bench/isosurface_enclosed.jsonl` measures 98.5–99.1 %
 of the electrons inside it for water, chlorobenzene, acetate and decanoic acid
 (B3LYP/def2-TZVP, molecular quadrature grid).
+
+## Experimental chemistry the P4 calibration rests on
+
+`tests/data/p4_calibration` grades ALIE against reactive sites known from
+experiment, so those sites are cited like any method. Each was read in full
+except Stock & Brown, and the manifest records how far each was read.
+
+| case | what the source establishes | reference |
+| --- | --- | --- |
+| thiocyanate | kinetic S-alkylation, kS/kN 10²–10³ (SN2) and 10³–10⁴ (activation-controlled cations) | Loos, Kobayashi & Mayr 2003 `loos2003` |
+| nitrite | the O/N ratio of SN2 alkylation depends on solvent and reagent | Tishkov et al. 2005 `tishkov2005`; Kornblum et al. 1955 `kornblum1955` |
+| enolate, and ambident anions in general | O kinetically, C thermodynamically, for a free enolate; ambident selectivity is set by intrinsic barriers and product stability rather than hard/soft matching | Mayr, Breugst & Ofial 2011 `mayr2011` |
+| phenoxide | O-alkylation in most solvents, C-alkylation in water, phenol and fluorinated alcohols, attributed to hydrogen bonding | Kornblum, Berrigan & le Noble 1963 `kornblum1963` |
+| substituted benzenes | ortho/para vs meta directing effects (partial rate factors) | Stock & Brown 1963 `stock1963` |
 
 ## Methods and software espmap runs
 
