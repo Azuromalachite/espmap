@@ -1,0 +1,337 @@
+{
+ "about": "P4 calibration set (docs/p4-spec.md section 6): reactions whose reactive\nsite is known from the literature, with what ALIE is expected to show,\ncommitted BEFORE ALIE is implemented. Run from the repository root:",
+ "cases": [
+  {
+   "name": "enolate",
+   "smiles": "C=C[O-]",
+   "file": "enolate.sdf",
+   "geometry_source": "bench/fixtures/enolate.sdf (B3LYP/def2-TZVP, PCM water, DFT-optimised)",
+   "settings": {
+    "xc": "b3lyp",
+    "basis": "def2-tzvp",
+    "solvent": "water"
+   },
+   "reaction": "SN2 alkylation with alkyl halides goes to C; hard electrophiles (silyl, acyl) to O",
+   "sources": [
+    {
+     "key": "mayr2011",
+     "doi": "10.1002/anie.201007100",
+     "evidence": "abstract",
+     "ref": "Mayr, Breugst & Ofial (2011) Farewell to the HSAB Treatment of Ambident Reactivity. Angew. Chem. Int. Ed. 50, 6470-6505"
+    }
+   ],
+   "sites": {
+    "C_CH2": [
+     0
+    ],
+    "C_CO": [
+     1
+    ],
+    "O": [
+     2
+    ]
+   },
+   "expect": {
+    "type": "lower",
+    "a": [
+     "C_CH2"
+    ],
+    "b": [
+     "O"
+    ]
+   },
+   "why": "ESP points to O; the pilot found ALIE min on the CH2 carbon (5.71 vs 7.47 eV)"
+  },
+  {
+   "name": "thiocyanate",
+   "smiles": "[S-]C#N",
+   "file": "thiocyanate.sdf",
+   "geometry_source": "bench/fixtures/thiocyanate.sdf (B3LYP/def2-TZVP, PCM water, DFT-optimised)",
+   "settings": {
+    "xc": "b3lyp",
+    "basis": "def2-tzvp",
+    "solvent": "water"
+   },
+   "reaction": "SN2 alkylation gives R-SCN (S); N attack only for highly stabilised carbocations",
+   "sources": [
+    {
+     "key": "loos2003",
+     "doi": "10.1021/ja037317u",
+     "evidence": "abstract",
+     "ref": "Loos, Kobayashi & Mayr (2003) Ambident Reactivity of the Thiocyanate Anion Revisited. J. Am. Chem. Soc. 125, 14126-14132"
+    },
+    {
+     "key": "mayr2011",
+     "doi": "10.1002/anie.201007100",
+     "evidence": "abstract",
+     "ref": "Mayr, Breugst & Ofial (2011) Farewell to the HSAB Treatment of Ambident Reactivity. Angew. Chem. Int. Ed. 50, 6470-6505"
+    }
+   ],
+   "sites": {
+    "S": [
+     0
+    ],
+    "C": [
+     1
+    ],
+    "N": [
+     2
+    ]
+   },
+   "expect": {
+    "type": "lower",
+    "a": [
+     "S"
+    ],
+    "b": [
+     "N"
+    ]
+   },
+   "why": "ESP points to N; the pilot found ALIE min on S (7.10 vs 8.99 eV)"
+  },
+  {
+   "name": "nitrite",
+   "smiles": "N(=O)[O-]",
+   "file": "nitrite.sdf",
+   "geometry_source": "bench/fixtures/nitrite.sdf (B3LYP/def2-TZVP, PCM water, DFT-optimised)",
+   "settings": {
+    "xc": "b3lyp",
+    "basis": "def2-tzvp",
+    "solvent": "water"
+   },
+   "reaction": "SN2 alkylation gives mainly nitroalkane (N); SN1/Ag+ conditions give alkyl nitrite (O)",
+   "sources": [
+    {
+     "key": "kornblum1955",
+     "doi": "10.1021/ja01628a064",
+     "evidence": "abstract",
+     "ref": "Kornblum, Smiley, Blackwood & Iffland (1955) The Mechanism of the Reaction of Silver Nitrite with Alkyl Halides. J. Am. Chem. Soc. 77, 6269"
+    },
+    {
+     "key": "tishkov2005",
+     "doi": "10.1002/anie.200501274",
+     "evidence": "abstract",
+     "ref": "Tishkov, Schmidhammer, Roth, Riedle & Mayr (2005) Ambident Reactivity of the Nitrite Ion Revisited. Angew. Chem. Int. Ed. 44, 4623-4626"
+    },
+    {
+     "key": "mayr2011",
+     "doi": "10.1002/anie.201007100",
+     "evidence": "abstract",
+     "ref": "Mayr, Breugst & Ofial (2011) Farewell to the HSAB Treatment of Ambident Reactivity. Angew. Chem. Int. Ed. 50, 6470-6505"
+    }
+   ],
+   "sites": {
+    "N": [
+     0
+    ],
+    "O": [
+     1,
+     2
+    ]
+   },
+   "expect": {
+    "type": "not_clearly_lower",
+    "a": [
+     "N"
+    ],
+    "b": [
+     "O"
+    ],
+    "tol_eV": 0.05
+   },
+   "why": "the pilot found O 7.86 vs N 7.89 eV: a tie. ALIE must not be claimed to pick N"
+  },
+  {
+   "name": "anisole",
+   "smiles": "COc1ccccc1",
+   "file": "anisole.sdf",
+   "geometry_source": "RDKit ETKDG + MMFF94s, seed 0xC0FFEE",
+   "settings": {
+    "xc": "b3lyp",
+    "basis": "def2-tzvp",
+    "solvent": "vacuum"
+   },
+   "reaction": "EAS on anisole: ortho/para directing, activated",
+   "sources": [
+    {
+     "key": "stock1963",
+     "doi": "10.1016/S0065-3160(08)60277-4",
+     "evidence": "metadata",
+     "ref": "Stock & Brown (1963) A Quantitative Treatment of Directive Effects in Aromatic Substitution. Adv. Phys. Org. Chem. 1, 35-154"
+    },
+    {
+     "key": "sjoberg1990",
+     "doi": "10.1139/v90-220",
+     "evidence": "metadata",
+     "ref": "Sjoberg, Murray, Brinck & Politzer (1990) Average local ionization energies on the molecular surfaces of aromatic systems as guides to chemical reactivity. Can. J. Chem. 68, 1440-1443"
+    }
+   ],
+   "sites": {
+    "ortho": [
+     3,
+     7
+    ],
+    "meta": [
+     4,
+     6
+    ],
+    "para": [
+     5
+    ]
+   },
+   "expect": {
+    "type": "lower",
+    "a": [
+     "ortho",
+     "para"
+    ],
+    "b": [
+     "meta"
+    ]
+   },
+   "why": "ortho/para partial rate factors far exceed meta"
+  },
+  {
+   "name": "chlorobenzene",
+   "smiles": "Clc1ccccc1",
+   "file": "chlorobenzene.sdf",
+   "geometry_source": "RDKit ETKDG + MMFF94s, seed 0xC0FFEE",
+   "settings": {
+    "xc": "b3lyp",
+    "basis": "def2-tzvp",
+    "solvent": "vacuum"
+   },
+   "reaction": "EAS on chlorobenzene: ortho/para directing, deactivated",
+   "sources": [
+    {
+     "key": "stock1963",
+     "doi": "10.1016/S0065-3160(08)60277-4",
+     "evidence": "metadata",
+     "ref": "Stock & Brown (1963) A Quantitative Treatment of Directive Effects in Aromatic Substitution. Adv. Phys. Org. Chem. 1, 35-154"
+    },
+    {
+     "key": "sjoberg1990",
+     "doi": "10.1139/v90-220",
+     "evidence": "metadata",
+     "ref": "Sjoberg, Murray, Brinck & Politzer (1990) Average local ionization energies on the molecular surfaces of aromatic systems as guides to chemical reactivity. Can. J. Chem. 68, 1440-1443"
+    }
+   ],
+   "sites": {
+    "ortho": [
+     2,
+     6
+    ],
+    "meta": [
+     3,
+     5
+    ],
+    "para": [
+     4
+    ]
+   },
+   "expect": {
+    "type": "lower",
+    "a": [
+     "ortho",
+     "para"
+    ],
+    "b": [
+     "meta"
+    ]
+   },
+   "why": "a halogen deactivates but still directs ortho/para"
+  },
+  {
+   "name": "nitrobenzene",
+   "smiles": "O=[N+]([O-])c1ccccc1",
+   "file": "nitrobenzene.sdf",
+   "geometry_source": "RDKit ETKDG + MMFF94s, seed 0xC0FFEE",
+   "settings": {
+    "xc": "b3lyp",
+    "basis": "def2-tzvp",
+    "solvent": "vacuum"
+   },
+   "reaction": "EAS on nitrobenzene: meta directing, strongly deactivated",
+   "sources": [
+    {
+     "key": "stock1963",
+     "doi": "10.1016/S0065-3160(08)60277-4",
+     "evidence": "metadata",
+     "ref": "Stock & Brown (1963) A Quantitative Treatment of Directive Effects in Aromatic Substitution. Adv. Phys. Org. Chem. 1, 35-154"
+    },
+    {
+     "key": "sjoberg1990",
+     "doi": "10.1139/v90-220",
+     "evidence": "metadata",
+     "ref": "Sjoberg, Murray, Brinck & Politzer (1990) Average local ionization energies on the molecular surfaces of aromatic systems as guides to chemical reactivity. Can. J. Chem. 68, 1440-1443"
+    },
+    {
+     "key": "murray1992",
+     "doi": "10.1016/0166-1280(92)85015-D",
+     "evidence": "metadata",
+     "ref": "Murray, Brinck & Politzer (1992) Applications of calculated local surface ionization energies to chemical reactivity. J. Mol. Struct. THEOCHEM 255, 271-281"
+    }
+   ],
+   "sites": {
+    "ortho": [
+     4,
+     8
+    ],
+    "meta": [
+     5,
+     7
+    ],
+    "para": [
+     6
+    ]
+   },
+   "expect": {
+    "type": "lower",
+    "a": [
+     "meta"
+    ],
+    "b": [
+     "ortho",
+     "para"
+    ]
+   },
+   "why": "meta is the least deactivated position; a hard case for any one-number descriptor"
+  },
+  {
+   "name": "phenoxide",
+   "smiles": "[O-]c1ccccc1",
+   "file": "phenoxide.sdf",
+   "geometry_source": "RDKit ETKDG + MMFF94s, seed 0xC0FFEE (an anion: MMFF is a known weak point, see CLAUDE.md)",
+   "settings": {
+    "xc": "b3lyp",
+    "basis": "def2-tzvp",
+    "solvent": "water"
+   },
+   "reaction": "phenoxide alkylation: O in aprotic solvents, C(ortho/para) in protic ones",
+   "sources": [
+    {
+     "key": "kornblum1963",
+     "doi": "10.1021/ja00891a024",
+     "evidence": "abstract",
+     "ref": "Kornblum, Berrigan & le Noble (1963) Solvation as a Factor in the Alkylation of Ambident Anions. J. Am. Chem. Soc. 85, 1141-1147"
+    }
+   ],
+   "sites": {
+    "O": [
+     0
+    ],
+    "ortho": [
+     2,
+     6
+    ],
+    "para": [
+     4
+    ]
+   },
+   "expect": {
+    "type": "report_only"
+   },
+   "why": "the solvent decides, so no single ground-state number should be read as the answer"
+  }
+ ]
+}
