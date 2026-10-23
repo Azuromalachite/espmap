@@ -67,9 +67,12 @@ way an ensemble can be wrong:
   record, so it isn't enough here.
 
 **Identity at the top.** The ensemble record carries the approved canonical
-isomeric SMILES and its InChIKey, and every member's computed structure (stereo
-included) must match them. An archive can then identify the ensemble without
-opening its members.
+isomeric SMILES and its InChIKey. Every member's computed structure (stereo
+from 3D included) must match the **SMILES**. The InChIKey is a label for
+archives, not the check: standard InChI merges mobile-H tautomers, so
+2-hydroxypyridine and 2-pyridone share one key, and an InChIKey check would
+accept the tautomer mix that E8 must refuse (found by the hostile set's own
+fixture test).
 
 ## 2. Selection (generated ensembles)
 
@@ -314,7 +317,12 @@ None of these defaults is quotable until measured into `bench/`:
   (K = 5, 10, 20), extended and folded separately;
 - the `resolved` rule's thresholds: false-resolution rate on pairs that are
   the same molecule (C1-like) across seeds;
-- contact distance (Bondi + 0.5 Å): its agreement with excess surface genus
+- contact distance (Bondi + 0.5 Å): its agreement with excess surface genus.
+  The E14 fixture (an otherwise all-anti octadecyl acetate with one g+g−
+  kink) has its closest pair ≥ 5 bonds apart 0.58 Å beyond the Bondi sum, so
+  it clears the rule by only 0.08 Å. Real conformers with a kink near a cis
+  alkene may not. Measure the false-folded rate on extended members before
+  fixing the margin;
   on the existing folded and extended C18 members.
 
 Each run is heavy (K SCFs per molecule). One job at a time in WSL, logged
