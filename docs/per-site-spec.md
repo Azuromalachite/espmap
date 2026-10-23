@@ -689,9 +689,10 @@ README's Outputs section lists them; three choices are recorded here:
   a caller-sites file alike. `bench/fixtures` numbered them in SMILES order,
   where map 1 was the acetyl CH₃.
 - **The nitrite input is rotated out of z = 0.** The DFT nitrite is exactly
-  planar with equal N–O bonds, which the gate (H5) cannot tell from a 2D
-  drawing. A rigid rotation is the remedy the gate names, and a test checks
-  that every interatomic distance is unchanged.
+  planar with equal N–O bonds, which v0.2.0's gate (H5) could not tell from
+  a 2D drawing. A rigid rotation was the remedy it named, and a test checks
+  that every interatomic distance is unchanged. The R11 rule now keeps the
+  planar file; the input stays rotated so the frozen records do not change.
 
 Review 5 reads the contract before these records freeze it.
 

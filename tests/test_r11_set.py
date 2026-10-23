@@ -18,19 +18,16 @@ import esp_map as em
 _DIR = Path(__file__).resolve().parent / "data" / "r11"
 _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases"]
 
-# what the rule on master (v0.2.0) gets wrong; a new rule removes entries
-UNSAFE_NOW = {
-    "draw_cyclohexanol_stretched_1.5.mol",   # non-uniform drawing -> computed flat
-    "draw_chlorobenzene_zjitter_1.5.mol",    # z noise in a drawing -> computed flat
-    "real_C6F6.mol", "real_C2F4.mol",        # real, uniform within 3 % -> discarded
-}
+# what the current rule gets wrong; a new rule removes entries. v0.2.0 had 4
+# unsafe and 25 not preferred; the rule written against this set has none
+# unsafe and these two not preferred, both BLOCKs:
+UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
-    "draw_hexane_1.0.mol", "draw_hexane_1.4.mol", "draw_hexane_1.45.mol",
-    "draw_hexane_1.5.mol", "draw_hexane_1.54.mol", "draw_benzene_1.5.mol",
-    "real_benzene_skeleton.mol", "real_anti_butane_skeleton.mol", "dft_nitrite.mol",
-    "real_CO2.mol", "real_azide.mol", "real_nitrate.mol", "real_carbonate.mol",
-    "real_BF3.mol", "real_SO3.mol", "real_ozone.mol", "real_nitronium.mol",
-    "real_water.mol", "real_HCN_heavy.mol", "real_N2.mol", "real_CO.mol",
+    # one element pair, uniform, at 1.5 A: the same evidence as draw_CO2_1.5
+    # and draw_nitrate_1.5, which prefer "ambiguous"
+    "draw_benzene_1.5.mol",
+    # Kekule O=O at 1.278 A is 11 % from its reference: outside PLAUSIBLE_TOL
+    "real_ozone.mol",
 }
 
 
@@ -40,6 +37,21 @@ def _verdict(path):
         return mol.GetProp("_coords")
     assert probs and probs[0][1] == "DIMENSION_AMBIGUOUS", probs
     return "ambiguous"
+
+
+def test_the_header_is_read_from_the_file_per_record(tmp_path):
+    """RDKit calls 3D-headed C2F4 2D (every z = 0 and an "either" double
+    bond), which discarded a real geometry. The reader takes the dimension
+    from line 2 of each record instead."""
+    from rdkit import Chem
+    real = (_DIR / "real_C2F4.mol").read_text(encoding="utf-8")
+    assert not Chem.MolFromMolBlock(real).GetConformer().Is3D()  # the RDKit quirk
+    drawn = (_DIR / "real_chlorobenzene_2Dheader.mol").read_text(encoding="utf-8")
+    p = tmp_path / "two.sdf"
+    p.write_text(drawn.rstrip() + "\n$$$$\n" + real.rstrip() + "\n$$$$\n", encoding="utf-8")
+    assert em._molfile_header_dims(p) == ["2D", "3D"]
+    assert em.read_structure(str(p), record=1)[0].GetProp("_coords") == "drawing"
+    assert em.read_structure(str(p), record=2)[0].GetProp("_coords") == "geometry"
 
 
 def _params(xfail_set, cases):

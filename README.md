@@ -141,9 +141,10 @@ them, and `tests/test_fixtures.py` checks each against:
 Two details of the inputs:
 - **C18 atom maps follow the chain** (map *n* = C*n*; acetyl 21/22, ester O
   31, carbonyl O 32), not SMILES order.
-- **The nitrite input is its DFT geometry rotated rigidly out of z = 0.** An
-  exactly planar nitrite with two equal N–O bonds is refused as
-  `DIMENSION_AMBIGUOUS`, because a 2D drawing looks the same.
+- **The nitrite input is its DFT geometry rotated rigidly out of z = 0.**
+  v0.2.0's gate refused an exactly planar nitrite with two equal N–O bonds
+  as `DIMENSION_AMBIGUOUS`. The current gate keeps it, and the fixture input
+  stays rotated so the frozen records do not change.
 
 ## Input
 
@@ -156,14 +157,24 @@ python esp_map.py --file structure.mol --check              # gate only, no comp
 `--file` reads `.mol .sdf .cdxml .xyz .pdb`. A structure **drawn** in an editor
 and exported as MOL/SDF/CDXML is a picture, so its coordinates are discarded,
 a conformer is generated, and the run says so loudly. A file is treated as a
-drawing when its header says 2D, or when it says 3D but every *z* is zero and
-every bond has the same length across two or more element pairs. A planar
-*geometry* — benzene optimised in the *xy* plane, water from an `.xyz` — is
-kept; `.xyz` and `.pdb` are never drawings. A flat file with a 3D header and
-one element pair (nitrite, nitrate, CO₂) cannot be told apart from a drawing
-and is refused with `DIMENSION_AMBIGUOUS`. A file carrying real 3D
-coordinates is used as-is, with any missing hydrogens added and relaxed
-against frozen heavy atoms.
+drawing when its header says 2D. A file whose header says 3D but whose atoms
+all lie within 10⁻³ Å of *z* = 0 is judged from its bonds and angles:
+- an sp³ atom lying flat where no real molecule can put it (three or more
+  neighbours, a ring of five or more, a 120° zigzag) makes it a drawing;
+- every bond the same length at a drawing program's standard (1.5, 1.54 or
+  0.825 Å) makes it a drawing across two or more element pairs, and refuses
+  it with `DIMENSION_AMBIGUOUS` with one pair (CO₂ or nitrate drawn at 1.5 Å
+  look like the real symmetric ions);
+- otherwise it is kept as a geometry if every bond is within 10 % of its
+  covalent-radius length for its bond order (C₆F₆, BF₃, the DFT nitrite);
+- anything else is a drawing if its bonds are uniform across two or more
+  element pairs, and is refused otherwise.
+
+`.xyz` and `.pdb` are never drawings. The rule was written against 80
+hostile flat files built first (`tests/data/r11`); two of them are refused
+where a better answer exists (benzene drawn at 1.5 Å, real ozone). A file
+carrying real 3D coordinates is used as-is, with any missing hydrogens added
+and relaxed against frozen heavy atoms.
 
 A file with more than one record (an SDF of docking poses) is refused; pass
 `--record N` to compute record *N*. The JSON records which one under
