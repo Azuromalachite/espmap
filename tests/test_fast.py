@@ -2293,14 +2293,15 @@ def test_declared_geometry_origin_is_normalised(text, label):
 def _nitrite_files(tmp_path):
     """One nitrite geometry, written twice: an SDF that declares a DFT origin
     and an XYZ that cannot declare anything."""
+    import math
     from rdkit import Chem
-    from rdkit.Chem import AllChem
-    m = Chem.AddHs(Chem.MolFromSmiles("N(=O)[O-]"))
-    AllChem.EmbedMolecule(m, randomSeed=1)
-    c = m.GetConformer()
-    for i in range(m.GetNumAtoms()):           # tilt out of z = 0 (DIMENSION_AMBIGUOUS)
-        p = c.GetAtomPosition(i)
-        c.SetAtomPosition(i, (p.x, p.y + 0.3 * p.x, p.z + 0.4 * p.x))
+    m = Chem.MolFromSmiles("N(=O)[O-]")
+    c = Chem.Conformer(3)
+    t = math.radians(35)                       # bench/fixtures/nitrite.sdf, tilted rigidly
+    for i, (x, y) in enumerate([(0.0037, 0.4427), (-1.0666, -0.2126), (1.0628, -0.2301)]):
+        c.SetAtomPosition(i, (x, y * math.cos(t), y * math.sin(t)))
+    c.Set3D(True)
+    m.AddConformer(c)
     sdf = tmp_path / "nitrite.sdf"
     m.SetProp("geometry", "B3LYP/def2-TZVP, PCM water, Cartesian BFGS")
     w = Chem.SDWriter(str(sdf)); w.write(m); w.close()

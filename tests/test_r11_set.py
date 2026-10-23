@@ -54,6 +54,70 @@ def test_the_header_is_read_from_the_file_per_record(tmp_path):
     assert em.read_structure(str(p), record=2)[0].GetProp("_coords") == "geometry"
 
 
+# Off the frozen set: classes an independent probe of #60's first head found
+# (squashed chains, tilted, moved and noisy drawings, flat cyclobutane), and
+# real flat rings whose lone CH2 is planar in reality too.
+
+def _flat_file(tmp_path, name, smiles, length=None, sy=1.0, tilt=0.0, dz=0.0,
+               noise=0.0, real=False):
+    import math
+    import numpy as np
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    if real:      # MMFF94s heavy atoms, rotated into the xy plane
+        m = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        AllChem.EmbedMolecule(m, randomSeed=0xC0FFEE)
+        AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=5000)
+        m = Chem.RemoveHs(m)
+        X = m.GetConformer().GetPositions()
+        X -= X.mean(axis=0)
+        X = X @ np.linalg.svd(X)[2].T
+        X[:, 2] = 0.0
+    else:         # an RDKit depiction at a uniform bond length
+        m = Chem.MolFromSmiles(smiles)
+        AllChem.Compute2DCoords(m, canonOrient=True)
+        X = m.GetConformer().GetPositions() * length / 1.5
+        X[:, 1] *= sy
+        X[:, 2] = 0.0
+    t = math.radians(tilt)
+    X = X @ np.array([[1, 0, 0], [0, math.cos(t), -math.sin(t)], [0, math.sin(t), math.cos(t)]]).T
+    X[:, 2] += dz + noise * np.where(np.arange(len(X)) % 2, 1, -1)
+    c = m.GetConformer()
+    for i, p in enumerate(X):
+        c.SetAtomPosition(i, p.tolist())
+    c.Set3D(True)
+    p = tmp_path / f"{name}.mol"
+    p.write_text(Chem.MolToMolBlock(m), encoding="utf-8")
+    return p
+
+
+@pytest.mark.parametrize("name, kw", [
+    ("hexane squashed", dict(smiles="CCCCCC", length=1.5, sy=0.8)),
+    ("hexane stretched", dict(smiles="CCCCCC", length=1.5, sy=1.25)),
+    ("ether squashed", dict(smiles="CCOCC", length=1.45, sy=0.8)),
+    ("ether stretched", dict(smiles="CCOCC", length=1.45, sy=1.25)),
+    ("cyclobutane", dict(smiles="C1CCC1", length=1.45)),
+    ("chlorobenzene tilted", dict(smiles="Clc1ccccc1", length=1.4, tilt=35)),
+    ("chlorobenzene at z = 5", dict(smiles="Clc1ccccc1", length=1.45, dz=5.0)),
+    ("chlorobenzene z noise", dict(smiles="Clc1ccccc1", length=1.5, noise=0.01)),
+    ("thf z noise", dict(smiles="C1CCOC1", length=1.45, noise=0.05)),
+    ("cyclohexanol tilted", dict(smiles="OC1CCCCC1", length=1.5, tilt=20)),
+    ("cyclopentadiene", dict(smiles="C1=CCC=C1", length=1.45)),
+])
+def test_an_off_set_drawing_is_never_computed_flat(tmp_path, name, kw):
+    assert _verdict(_flat_file(tmp_path, "d", **kw)) in ("drawing", "ambiguous"), name
+
+
+@pytest.mark.parametrize("name, smiles", [
+    ("fluorene", "c1ccc2c(c1)Cc1ccccc1-2"), ("cyclopentadiene", "C1=CCC=C1"),
+    ("1,4-cyclohexadiene", "C1=CCC=CC1"), ("thiophene", "c1ccsc1"),
+])
+def test_a_real_flat_ring_with_a_lone_ch2_is_kept(tmp_path, name, smiles):
+    """A flat ring puckers only with a bond between two sp3 ring atoms."""
+    for tilt in (0, 35):
+        assert _verdict(_flat_file(tmp_path, "r", smiles, real=True, tilt=tilt)) == "geometry", name
+
+
 def _params(xfail_set, cases):
     return [pytest.param(c, id=c["file"],
                          marks=[pytest.mark.xfail(strict=True, reason="review 5 R11")]

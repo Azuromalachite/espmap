@@ -158,23 +158,31 @@ python esp_map.py --file structure.mol --check              # gate only, no comp
 and exported as MOL/SDF/CDXML is a picture, so its coordinates are discarded,
 a conformer is generated, and the run says so loudly. A file is treated as a
 drawing when its header says 2D. A file whose header says 3D but whose atoms
-all lie within 10⁻³ Å of *z* = 0 is judged from its bonds and angles:
-- an sp³ atom lying flat where no real molecule can put it (three or more
-  neighbours, a ring of five or more, a 120° zigzag) makes it a drawing;
+all lie within 0.1 Å of one plane (anywhere, tilted or not) is judged from
+its bonds and angles:
+- an sp³ atom lying flat where no real molecule can put it makes it a
+  drawing: three or more neighbours, a ring with a bond between two sp³
+  atoms (cyclohexane, THF; fluorene's lone CH₂ is flat in reality too), or
+  an open-chain bend outside 90–118°;
 - every bond the same length at a drawing program's standard (1.5, 1.54 or
   0.825 Å) makes it a drawing across two or more element pairs, and refuses
   it with `DIMENSION_AMBIGUOUS` with one pair (CO₂ or nitrate drawn at 1.5 Å
   look like the real symmetric ions);
-- otherwise it is kept as a geometry if every bond is within 10 % of its
-  covalent-radius length for its bond order (C₆F₆, BF₃, the DFT nitrite);
+- otherwise it is kept as a geometry if every bond is near its
+  covalent-radius length for its bond order: within 5 % for a bond to an
+  sp³ carbon or a C=C, 10 % otherwise (C₆F₆, BF₃, the DFT nitrite);
 - anything else is a drawing if its bonds are uniform across two or more
-  element pairs, and is refused otherwise.
+  element pairs, and is refused otherwise. A flat sp³ four-membered ring is
+  refused too.
 
 `.xyz` and `.pdb` are never drawings. The rule was written against 80
 hostile flat files built first (`tests/data/r11`); two of them are refused
-where a better answer exists (benzene drawn at 1.5 Å, real ozone). A file
-carrying real 3D coordinates is used as-is, with any missing hydrogens added
-and relaxed against frozen heavy atoms.
+where a better answer exists (benzene drawn at 1.5 Å, real ozone). Known
+limits: a drawing within those tolerances of a real geometry is computed as
+one, and a real H-free isoxazole (aromatic N–O 10 % long against the
+reference) is discarded as a drawing. A file carrying real 3D coordinates
+is used as-is, with any missing hydrogens added and relaxed against frozen
+heavy atoms.
 
 A file with more than one record (an SDF of docking poses) is refused; pass
 `--record N` to compute record *N*. The JSON records which one under
