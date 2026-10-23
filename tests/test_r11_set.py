@@ -23,9 +23,9 @@ _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases
 # unsafe and these not preferred, every one a BLOCK:
 UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
-    # one element pair, uniform, at 1.5 A: the same evidence as draw_CO2_1.5
-    # and draw_nitrate_1.5, which prefer "ambiguous"
-    "draw_benzene_1.5.mol",
+    # C=O at 1.5 A is +21 % from its reference, which no real CO2 has, so the
+    # rule calls it a drawing; the set's change of preference is pending
+    "draw_CO2_1.5.mol",
     # Kekule O=O at 1.278 A is 11 % from its reference: outside PLAUSIBLE_TOL
     "real_ozone.mol",
     # aromatic N-O is 10.0 % long against the covalent-radius reference; only
@@ -33,6 +33,9 @@ NOT_PREFERRED_NOW = UNSAFE_NOW | {
     "real_isoxazole.mol", "real_isoxazole_noH.mol",
     # a flat sp3 four-membered ring is refused: oxetane is nearly planar
     "draw_cyclobutane_1.45.mol",
+    # a flat sp3-sp3 ring 0.05 A off its plane is refused, not called a
+    # drawing, so a nearly flat real ring (1,3-cyclohexadiene) is not discarded
+    "draw_thf_znoise_0.05_1.45.mol",
     # C-C up to +6.6 %, past the 5 % for sp3 carbon, so not a geometry; with
     # one element pair an implausible file is refused, not called a drawing
     "draw_hexane_squash_1.25_1.5.mol",
@@ -70,7 +73,7 @@ def test_the_header_is_read_from_the_file_per_record(tmp_path):
 # real flat rings whose lone CH2 is planar in reality too.
 
 def _flat_file(tmp_path, name, smiles, length=None, sy=1.0, tilt=0.0, dz=0.0,
-               noise=0.0, real=False):
+               noise=0.0, real=False, flatten=True):
     import math
     import numpy as np
     from rdkit import Chem
@@ -83,7 +86,8 @@ def _flat_file(tmp_path, name, smiles, length=None, sy=1.0, tilt=0.0, dz=0.0,
         X = m.GetConformer().GetPositions()
         X -= X.mean(axis=0)
         X = X @ np.linalg.svd(X)[2].T
-        X[:, 2] = 0.0
+        if flatten:
+            X[:, 2] = 0.0
     else:         # an RDKit depiction at a uniform bond length
         m = Chem.MolFromSmiles(smiles)
         AllChem.Compute2DCoords(m, canonOrient=True)
@@ -127,6 +131,14 @@ def test_a_real_flat_ring_with_a_lone_ch2_is_kept(tmp_path, name, smiles):
     """A flat ring puckers only with a bond between two sp3 ring atoms."""
     for tilt in (0, 35):
         assert _verdict(_flat_file(tmp_path, "r", smiles, real=True, tilt=tilt)) == "geometry", name
+
+
+def test_a_nearly_flat_real_ring_is_refused_not_discarded(tmp_path):
+    """H-free 1,3-cyclohexadiene (MMFF94s) lies within FLAT_TOL of a plane
+    and has a CH2-CH2 ring bond; it was discarded as a drawing until a ring
+    measurably off its plane was refused instead (re-probe of #60)."""
+    p = _flat_file(tmp_path, "chd", "C1=CC=CCC1", real=True, flatten=False)
+    assert _verdict(p) == "ambiguous"
 
 
 def _params(xfail_set, cases):

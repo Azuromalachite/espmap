@@ -309,8 +309,11 @@ def coordinate_kind(mol, fmt, tol=0.03):
         AMBIGUOUS;
       - every bond the same length (within tol) at a drawing program's
         standard (DRAWING_BOND_LENGTHS) makes it a DRAWING with two or more
-        element pairs, and AMBIGUOUS with one (CO2, nitrate): a symmetric
-        molecule looks the same. An acyclic two-coordinate sp3 atom at a
+        element pairs. With one pair a symmetric molecule could look the
+        same, so it is AMBIGUOUS unless the length fits none of the bonds
+        drawn: benzene and CO2 at 1.5 A are DRAWINGS (aromatic C-C +7.3 %,
+        C=O +21 %), nitrate is AMBIGUOUS (its N-O single bond fits 1.5 A,
+        +9.5 %). An acyclic two-coordinate sp3 atom at a
         real angle is evidence against a drawing and skips this test
         (anti-butane's carbon skeleton, 1.53 A, 112 deg);
       - otherwise it is a GEOMETRY if every bond is within tolerance of its
@@ -340,13 +343,17 @@ def coordinate_kind(mol, fmt, tol=0.03):
         return "drawing"
     X = np.array([list(c.GetAtomPosition(i)) for i in range(mol.GetNumAtoms())])
     X -= X.mean(axis=0)
-    if len(X) > 3 and np.abs(X @ np.linalg.svd(X)[2][-1]).max() > FLAT_TOL:
+    dev = np.abs(X @ np.linalg.svd(X)[2][-1]).max() if len(X) > 3 else 0.0
+    if dev > FLAT_TOL:
         return "geometry"
     if mol.GetNumBonds() == 0:
         return "geometry"
     sp3_problems, real_angles, ring4 = flat_sp3_problems(mol)
     if sp3_problems:
-        return "drawing"
+        # a nearly flat real ring (H-free 1,3-cyclohexadiene, 0.09 A off its
+        # plane) is refused, not discarded; a drawing is flat to ~0
+        rings_only = all(p.startswith("flat ") for p in sp3_problems)
+        return "ambiguous" if rings_only and dev > RING_OFF_PLANE else "drawing"
     if ring4:
         return "ambiguous"
     pairs, lengths = set(), []
@@ -359,7 +366,14 @@ def coordinate_kind(mol, fmt, tol=0.03):
     uniform = max(abs(x - mean) for x in lengths) <= tol * mean
     at_drawing_length = any(abs(mean - d) <= tol * d for d in DRAWING_BOND_LENGTHS)
     if uniform and at_drawing_length and not real_angles:
-        return "drawing" if len(pairs) > 1 else "ambiguous"
+        if len(pairs) > 1:
+            return "drawing"
+        # one pair: a symmetric molecule could look the same, unless the
+        # length fits none of the bonds drawn (benzene, CO2 at 1.5 A; nitrate's
+        # N-O single bond fits 1.5 A, so it stays undecided)
+        if len(flat_length_problems(mol, lengths)) == len(lengths):
+            return "drawing"
+        return "ambiguous"
     if not flat_length_problems(mol, lengths):
         return "geometry"
     if uniform and len(pairs) > 1 and flat_length_problems(mol, lengths, DRAWN_BOND_FACTOR):
@@ -371,6 +385,9 @@ def coordinate_kind(mol, fmt, tol=0.03):
 # A real non-planar molecule leaves it by far more (a CH2's hydrogens by
 # ~0.9, ammonia's N by ~0.3); a converter's z noise stays well inside it.
 FLAT_TOL = 0.1
+# A flat file whose only sp3 problem is a ring is refused rather than called
+# a drawing when it sits further than this off its plane (A).
+RING_OFF_PLANE = 0.01
 # Standard bond lengths drawing programs write (A): RDKit and most editors
 # 1.5, Marvin 1.54, ChemDraw 0.825 (its 14.4 pt default in MOL units).
 DRAWING_BOND_LENGTHS = (1.5, 1.54, 0.825)
@@ -381,11 +398,12 @@ DRAWING_BOND_LENGTHS = (1.5, 1.54, 0.825)
 # +11.3, falls outside and is refused rather than computed. A chlorobenzene
 # drawing at 1.4 A has C-Cl -21 %.
 PLAUSIBLE_TOL = 0.10
-# A bond to an sp3 carbon, or a localised C=C, has no Kekule ambiguity, and
-# real ones sit within 4 % of the reference (C-C 1.50-1.54, C-O 1.43, C-N
-# 1.47, C-F up to 1.38, C-Cl 1.78; C=C 1.33, the enolate's 1.37 +3.6 %).
-# A squashed hexane drawn at 1.5 A has C-C +5.3 %; cyclopentadiene drawn at
-# 1.45 A has C=C +9.6 %.
+# A bond to an sp3 carbon, a localised C=C or an aromatic C-C has no Kekule
+# ambiguity, and real ones sit within 4 % of the reference (C-C 1.50-1.54,
+# C-O 1.43, C-N 1.47, C-F up to 1.38, C-Cl 1.78; C=C 1.33, the enolate's
+# 1.37 +3.6 %; aromatic C-C worst +2.3 %, furan). A squashed hexane drawn at
+# 1.5 A has C-C +5.3 %; cyclopentadiene drawn at 1.45 A has C=C +9.6 %;
+# benzene drawn at 1.5 A has C-C +7.3 %.
 TIGHT_BOND_TOL = 0.05
 # single, aromatic, double, triple: fraction of the single-bond length
 _ORDER_FACTOR = {1.0: 1.0, 1.5: 0.92, 2.0: 0.87, 3.0: 0.79}
@@ -422,7 +440,7 @@ def flat_length_problems(mol, lengths, factor=1.0):
         ref = bond_reference_length(b)
         ends = (b.GetBeginAtom(), b.GetEndAtom())
         tight = (any(a.GetSymbol() == "C" and a.GetHybridization() == sp3 for a in ends)
-                 or (b.GetBondTypeAsDouble() == 2.0
+                 or (b.GetBondTypeAsDouble() in (1.5, 2.0)
                      and ends[0].GetSymbol() == ends[1].GetSymbol() == "C"))
         tol = (TIGHT_BOND_TOL if tight else PLAUSIBLE_TOL) * factor
         if abs(L / ref - 1) > tol:

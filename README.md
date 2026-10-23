@@ -163,22 +163,26 @@ its bonds and angles:
 - an sp³ atom lying flat where no real molecule can put it makes it a
   drawing: three or more neighbours, a ring with a bond between two sp³
   atoms (cyclohexane, THF; fluorene's lone CH₂ is flat in reality too), or
-  an open-chain bend outside 90–118°;
+  an open-chain bend outside 90–118°. A file whose only such problem is a
+  ring, and which sits more than 0.01 Å off its plane, is refused instead:
+  real 1,3-cyclohexadiene is nearly flat;
 - every bond the same length at a drawing program's standard (1.5, 1.54 or
-  0.825 Å) makes it a drawing across two or more element pairs, and refuses
-  it with `DIMENSION_AMBIGUOUS` with one pair (CO₂ or nitrate drawn at 1.5 Å
-  look like the real symmetric ions);
+  0.825 Å) makes it a drawing across two or more element pairs. With one
+  pair it is a drawing only if that length fits none of the bonds drawn
+  (benzene or CO₂ drawn at 1.5 Å), and is otherwise refused with
+  `DIMENSION_AMBIGUOUS` (nitrate drawn at 1.5 Å: its N–O single bond could
+  be that long);
 - otherwise it is kept as a geometry if every bond is near its
   covalent-radius length for its bond order: within 5 % for a bond to an
-  sp³ carbon or a C=C, 10 % otherwise (C₆F₆, BF₃, the DFT nitrite);
+  sp³ carbon, a C=C or an aromatic C–C, 10 % otherwise (C₆F₆, BF₃, the DFT
+  nitrite);
 - anything else is a drawing if its bonds are uniform across two or more
   element pairs and some bond is well outside its tolerance (1.3 times),
   and is refused otherwise. A flat sp³ four-membered ring is refused too.
 
 `.xyz` and `.pdb` are never drawings. The rule was written against 100
 hostile flat files built first (`tests/data/r11`); seven of them are refused
-where a better answer exists, among them benzene drawn at 1.5 Å, real ozone
-and real isoxazole (aromatic N–O 10 % long against the reference). Known
+where a better answer exists, among them real ozone and real isoxazole (aromatic N–O 10 % long against the reference). Known
 limit: a drawing within those tolerances of a real geometry is computed as
 one. A file carrying real 3D coordinates
 is used as-is, with any missing hydrogens added and relaxed against frozen
