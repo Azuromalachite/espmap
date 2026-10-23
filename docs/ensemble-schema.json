@@ -583,7 +583,7 @@
   },
   "convergence": {
    "type": "object",
-   "description": "spec section 5. conv_tol_kcal is PROVISIONAL (1 kcal/mol, not yet measured) and the record says so in status; converged is null when there are too few members to judge"
+   "description": "spec section 5. Per site and rule: converged true, false, or null when not judgeable (fewer than 3 usable values, e.g. an atom with no surface under one rule). Overall converged: false if any judgeable site fails, true if any is judgeable and none fails, null if none is; not_judgeable lists the rest. conv_tol_kcal is PROVISIONAL (1 kcal/mol, not yet measured) and status says so"
   },
   "kish_n": {
    "type": [

@@ -2618,8 +2618,14 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                 conv[f"{key} | {rule}"] = c
                 if c["converged"] is False:
                     not_conv.append(f"{key} | {rule}")
-    converged = (not not_conv) if conv and all(c["converged"] is not None
-                                               for c in conv.values()) else None
+    # per site: true, false, or null (fewer than 3 usable values, e.g. an
+    # atom with no surface under one rule). Overall: false if any judgeable
+    # site fails, true if any is judgeable and none fails, null if none is
+    # judgeable. A never-judgeable site used to make the whole ensemble null,
+    # hiding E4's 7 non-converged sites (the v0.3.0 acceptance run).
+    judged = [c["converged"] for c in conv.values() if c["converged"] is not None]
+    not_judgeable = [k for k, c in conv.items() if c["converged"] is None]
+    converged = (False if False in judged else True) if judged else None
     first = recs[0][2] if recs else None
     sel = plan["protocol"]
     generated = plan["source"] == "generated"
@@ -2670,7 +2676,8 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                          source=CONTACT_RULE_STATUS.split(": ", 1)[1]),
         members=members, excluded=excluded,
         convergence=dict(conv_tol_kcal=CONV_TOL_KCAL, status="provisional",
-                         converged=converged, not_converged=not_conv, per_site=conv),
+                         converged=converged, not_converged=not_conv,
+                         not_judgeable=not_judgeable, per_site=conv),
         kish_n=(float(1 / np.sum(weights ** 2)) if weights is not None else None),
         results=results, sites=sites,
         validity=dict(members=bool(members) and not excluded,

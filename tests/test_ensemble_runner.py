@@ -360,7 +360,6 @@ class BuriedOne(Stub):
         return rc
 
 
-@pytest.mark.xfail(strict=True, reason="one never-judgeable site makes the whole ensemble null")
 def test_an_unjudgeable_site_does_not_hide_a_verdict(plan, tmp_path):
     """Found by the v0.3.0 acceptance run: E4 had 7 sites not converged and
     reported null, because atoms buried under nearest-nucleus are never
