@@ -1770,6 +1770,198 @@
    "source": "record 1: ETKDG + MMFF94s alanine; record 2: a plain 2D drawing",
    "why": "--record 2 picks the drawing, whose centre has no wedge",
    "record": 2
+  },
+  {
+   "name": "draw3d_ala_znoise_0.02_s1",
+   "route": "file",
+   "input": "draw3d_ala_znoise_0.02_s1.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.02 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_ala_znoise_0.02_s2",
+   "route": "file",
+   "input": "draw3d_ala_znoise_0.02_s2.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.02 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_ala_znoise_0.02_s3",
+   "route": "file",
+   "input": "draw3d_ala_znoise_0.02_s3.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.02 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_ala_znoise_0.05_s1",
+   "route": "file",
+   "input": "draw3d_ala_znoise_0.05_s1.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.05 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_ala_znoise_0.05_s2",
+   "route": "file",
+   "input": "draw3d_ala_znoise_0.05_s2.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.05 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_ala_znoise_0.05_s3",
+   "route": "file",
+   "input": "draw3d_ala_znoise_0.05_s3.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.05 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_threonine_znoise_0.02_s1",
+   "route": "file",
+   "input": "draw3d_threonine_znoise_0.02_s1.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@@H](O)[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.02 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_threonine_znoise_0.02_s2",
+   "route": "file",
+   "input": "draw3d_threonine_znoise_0.02_s2.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@@H](O)[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.02 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_threonine_znoise_0.02_s3",
+   "route": "file",
+   "input": "draw3d_threonine_znoise_0.02_s3.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@@H](O)[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.02 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_threonine_znoise_0.05_s1",
+   "route": "file",
+   "input": "draw3d_threonine_znoise_0.05_s1.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@@H](O)[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.05 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_threonine_znoise_0.05_s2",
+   "route": "file",
+   "input": "draw3d_threonine_znoise_0.05_s2.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@@H](O)[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.05 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
+  },
+  {
+   "name": "draw3d_threonine_znoise_0.05_s3",
+   "route": "file",
+   "input": "draw3d_threonine_znoise_0.05_s3.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@@H](O)[C@H](N)C(=O)O, stereo stripped, 3D header, z uniform in +-0.05 A",
+   "why": "an unwedged drawing with z noise: any chirality read from 3D is the noise's"
   }
  ]
 }

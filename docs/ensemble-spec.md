@@ -79,7 +79,7 @@ fixture test).
 1. **Embed and minimise** `n_embed` conformers (default 100; the protocol
    records it) with ETKDGv3 + MMFF94s, as today.
 2. **Deduplicate** by symmetry-aware heavy-atom RMSD (`rdMolAlign.GetBestRMS`)
-   below `dedup_rmsd` (default 0.5 Å, to be measured, §6), keeping the lower
+   below `dedup_rmsd` (default 0.35 Å, measured in §8.2), keeping the lower
    MMFF energy. Methyl and hydroxyl rotors don't make a new conformer.
 3. **Choose K for DFT** by a declared rule. The default is the one already
    validated in `bench/conformers.py`: the lowest-MMFF conformer, plus K−1
@@ -114,14 +114,17 @@ Per member, recorded:
 - radius of gyration (heavy atoms) and maximum heavy-atom extent;
 - asphericity, from the gyration tensor;
 - surface genus and component count (`mesh_topology`, as today);
-- **intramolecular contacts:** pairs of heavy atoms at least 5 bonds apart
-  and closer than the sum of their Bondi radii plus 0.5 Å.
+- **intramolecular contacts:** pairs of heavy atoms at least 6 bonds apart
+  and closer than the sum of their Bondi radii plus 0.5 Å (measured, §8.2;
+  the first draft said 5 bonds).
 
 **Folded** is a property with a stated rule, not a label someone assigns:
 - a member is **folded** if it has an intramolecular contact. The contact
-  rule (≥ 5 bonds apart, Bondi sum + 0.5 Å) excludes the 1,5 pairs of an
-  ordinary gauche kink, which are 4 bonds apart, and E14 tests that a single
-  g+g− kink isn't called folded;
+  rule (≥ 6 bonds apart, Bondi sum + 0.5 Å) excludes the 1,5 pairs of an
+  ordinary gauche kink, which are 4 bonds apart, and the 5-bond pairs of a
+  g+g− kink or a cis-alkene neighbourhood, none of which closed a surface
+  loop in the conformers measured (§8.2); E14 tests that a single g+g− kink
+  isn't called folded;
 - surface genus is a **diagnostic**, not part of the rule, because a ring's
   own genus can't be predicted before computing it: a macrocycle may or may
   not open a hole at ρ = 0.002. Each member records `genus_excess`, its genus
@@ -135,7 +138,11 @@ Per member, recorded:
 ## 4. The ensemble record (`espmap.ensemble/1`)
 
 The schema is `docs/ensemble-schema.json`, reviewed by a consumer (Arrowfield,
-against the Atlas's `spa.espmap_ensemble/0`) before the runner was written.
+against the Atlas's `spa.espmap_ensemble/0`) before the runner was written, and
+**frozen with v0.3.0**: a change is `espmap.ensemble/2`, never an edit in place.
+Its status fields say what is measured and what is not: `folded_rule` and the
+selection's dedup threshold are measured (§8.2); the convergence tolerance is
+provisional.
 Members are labelled `conf_00`, `conf_01`, ... in selection order, zero-based,
 so files already written under the Atlas's index stay valid. The Atlas's
 `protocol` string is its own directory label and is not this record's
@@ -159,7 +166,7 @@ convergence: {...}                          # §5
 results: global V_min / V_max / surface stats per member, and over members
 sites: per site and per rule: per-member means, then over members:
        mean, sd, min, max, range, n; and the same over extended members
-validity: {members, convergence, unbiased}
+validity: {members, convergence (true | false | null: not judgeable), unbiased}
 ```
 
 - **Members are verifiable.** `member_id` is the sha1 of the member's
@@ -354,6 +361,111 @@ None of these defaults is quotable until measured into `bench/`:
 
 Each run is heavy (K SCFs per molecule). One job at a time in WSL, logged
 like `bench/timing.py`: resumable, one process per member.
+
+### 8.1 Measured so far without an SCF (`bench/ensemble_rdkit.jsonl`)
+
+RDKit only, seed 0xC0FFEE, 100 embedded, espmap's own embedder and
+selection. These settle the structural half of three questions; none of
+the constants is changed here (thresholds change in their own PRs).
+
+**Dedup threshold.** Truth for chains: the backbone torsion string (anti,
+g+, g−), canonical under reversal and reflection. A false merge is a
+torsion class lost.
+
+| threshold (Å) | n-butane | n-pentane | n-hexane | n-heptane | 1-hexanol |
+| --- | --- | --- | --- | --- | --- |
+| 0.25 | 0 | 0 | 0 | 0 | 0 |
+| 0.35 | 0 | 0 | 0 | 0 | 0 |
+| **0.5 (current)** | 0 | **1** | **1** | **2** | **2** |
+| 0.75 | 1 | 2 | 7 | 12 | 13 |
+
+(false merges; classes present: 2, 4, 9, 17, 19.) 0.5 Å loses real
+conformers from pentane on; 0.35 Å loses none here. Below 0.35 Å a few
+same-class pairs stay separate (hexane, heptane: 1; hexanol: up to 10,
+largely hydroxyl-rotor variants a 3-state backbone class does not
+distinguish). Cyclohexane has no backbone torsions, so the class truth
+does not apply to it. **Not yet settled:** whether a merged pair's site
+means differ by more than the grid row (0.15 kcal/mol), the spec's actual
+criterion: `bench/ensemble_dft.py dedup_esp` runs the 5 pairs.
+
+**Contact rule vs measured genus** (the 10 bench C18 conformers; genus from
+`conformers.jsonl` χ and `f9_recheck.jsonl`), and the folded rate over all
+100:
+
+| min bonds | slack 0.3 Å | slack 0.5 Å |
+| --- | --- | --- |
+| **5 (current)** | 10/10 agree, 17 % folded | 9/10 (conformer 57 genus 0, called folded), 36 % |
+| 6 | 10/10, 2 % | 10/10, 5 % |
+| 7 | 10/10, 2 % | 10/10, 2 % |
+
+At 5 bonds, 53 of the 58 contacts in 100 conformers are 5 bonds apart (the
+g+g− and cis-alkene neighbourhoods review 6 S3 found). The rules ≥ 6 and
+≥ 7 bonds differ only on conformers 3, 7 and 70 (6-bond contacts):
+`bench/ensemble_dft.py genus` computes their genus, with four 5-bond-only
+ones as controls, and decides between them.
+
+**Re-spread after a collision** (review 6 S4), largest Rg gap left among the
+selected members, Å:
+
+| case | bench rule | re-spread | Rg range |
+| --- | --- | --- | --- |
+| C18 acetate, K = 10 | 1.16 | 1.19 | 2.53 |
+| 1-octanol, K = 3 | 0.74 | 0.64 | 0.76 |
+| 1-octanol, K = 5 | 0.36 | 0.25 | 0.76 |
+| 1-hexanol, K = 6 | 0.20 | 0.17 | 0.61 |
+
+Re-spreading helps at small K and does nothing for the C18 selection the
+measured conformer rows used, so it stays deferred: a change would move
+those rows' members for no gain on them.
+
+### 8.2 Measured with an SCF (`bench/ensemble_dft.jsonl`)
+
+**Contact rule vs surface genus.** Seven more C18 conformers were computed
+(B3LYP/def2-SVP + RI, gas, 0.26 bohr, as the bench conformer rows):
+
+| conformer | contacts | genus | ≥ 5 bonds | ≥ 6 bonds | ≥ 7 bonds |
+| --- | --- | --- | --- | --- | --- |
+| 70 | 6 bonds apart | **2** | folded | folded | **missed** |
+| 3, 7 | 6 bonds apart | 0 | folded | folded | extended |
+| 2, 5, 8, 11 | 5 bonds apart only | 0 | **folded** | extended | extended |
+
+Over the 17 conformers with a measured genus, ≥ 5 bonds (current) is wrong on
+7. ≥ 7 bonds is wrong on 1, but that one is a folded member counted as
+extended, the error that contaminates the extended statistics. ≥ 6 bonds is
+wrong on 2, both conservative (a genus-0 member left out of the extended
+population), and misses no folded member. **The measurements favour ≥ 6
+bonds with the 0.5 Å slack**; the change is its own PR.
+
+**Adopted** (the threshold PR after #81): `CONTACT_MIN_BONDS` 6 and
+`DEDUP_RMSD` 0.35 Å. Records state both as measured, citing this section.
+
+**Dedup threshold vs site means.** Every pair that 0.5 Å merges and 0.35 Å
+keeps differs in its largest site mean by more than the grid row
+(0.15 kcal/mol), under both rules:
+
+| pair | torsion classes | largest site-mean difference (kcal/mol) |
+| --- | --- | --- |
+| n-pentane 22 / 25 | (+,−) / (+,+) | 0.71 |
+| n-hexane 5 / 76 | (+,−,a) / (+,a,a) | 0.48 |
+| n-heptane 41 / 90 | same class | 0.59 |
+| n-heptane 59 / 20 | (+,−,a,+) / (+,+,a,−) | 0.86 |
+| n-heptane 85 / 62 | (+,−,a,a) / (+,a,a,−) | 0.78 |
+
+So 0.5 Å merges conformers the ESP can tell apart. **The measurements favour
+0.35 Å or lower**; the change is its own PR, and E2 and E6's expectations
+(at most 2 members) still hold at 0.35 Å (`ensemble_rdkit.jsonl`).
+
+**Review 6 S1's size.** (R)-trans-cyclooct-4-enol, one MMFF conformer per
+ring helicity, B3LYP/def2-SVP, PCM water: V_min −45.63 vs −40.74, V_max
+55.21 vs 60.83 kcal/mol, and per-site means differing by up to 12.2 kcal/mol
+(C5). An ensemble mixing the two helicities would average numbers 5–12
+kcal/mol apart; the configuration check (`configuration_signs`) is not a
+formality.
+
+**Review 6 S25.** Bromobenzene σ-hole V_max, gas, idealised geometry:
+def2-SVP 16.81, def2-TZVP 16.05, def2-TZVPP 16.08 kcal/mol. SVP → TZVPP is
+**−0.74**, against the −0.76 quoted in `CLAUDE.md` and the README: the claim
+reproduces within 0.02 and now has a bench row.
 
 ## 9. Order of work
 

@@ -24,9 +24,12 @@ class Stub:
     """A member run. V_min is -10 - (member number), so statistics are known;
     fail/invalid/key name the conformers to break."""
 
-    def __init__(self, fail=(), invalid=(), key_for=None, kill_after_json=()):
+    def __init__(self, fail=(), invalid=(), key_for=None, kill_after_json=(), site=None,
+                 optimize=False):
+        self.optimize = optimize                       # write an optimised geometry, as --optimize does
         self.calls, self.fail, self.invalid = [], set(fail), set(invalid)
         self.key_for, self.kill = key_for or {}, set(kill_after_json)
+        self.site = site or (lambda n: 1.0 + n)       # member number -> nearest-nucleus mean
 
     def __call__(self, argv, cwd, env, timeout):
         sdf = Path(_arg(argv, "--file"))
@@ -37,23 +40,27 @@ class Stub:
         n = int(label.split("_")[1])
         m = Chem.MolFromMolFile(str(sdf), removeHs=False)
         sha1 = em.spec_sha1(em._mol_to_spec(m))
+        # --optimize: the record's geometry is the optimised one, and it names
+        # the input it was optimised from
+        geom = (dict(sha1=em._sha1(sha1 + "optimised"), optimised_from_sha1=sha1) if self.optimize
+                else dict(sha1=sha1))
         rec = dict(schema="espmap.record/1", analysis_key=self.key_for.get(label, "a" * 40),
                    key_fields=dict(analysis=dict(xc="b3lyp", basis="def2svp")),
                    validity=dict(input=True, surface=label not in self.invalid,
                                  electronic=True, sites=label not in self.invalid),
-                   geometry=dict(sha1=sha1), settings=dict(optimize=False),
+                   geometry=geom, settings=dict(optimize=self.optimize),
                    provenance=dict(espmap_version=em.__version__, code="0123abc",
                                    rdkit="x", pyscf="y"),
                    results=dict(e_tot_Ha=-100.0 - 0.001 * n, V_min_kcal_mol=-10.0 - n,
                                 V_max_kcal_mol=20.0 + n, surface=dict(genus=0)),
                    sites=dict(atoms=[dict(index=0, atom_map=0, element="C",
-                                          nearest_nucleus=dict(V_area_mean_kcal_mol=1.0 + n),
-                                          radius_scaled=dict(V_area_mean_kcal_mol=2.0 + n))],
+                                          nearest_nucleus=dict(V_area_mean_kcal_mol=self.site(n)),
+                                          radius_scaled=dict(V_area_mean_kcal_mol=self.site(n) + 1.0))],
                               reaction_sites=[]))
         Path(_arg(argv, "--json")).write_text(json.dumps(rec), encoding="utf-8")
         if label in self.kill:
             return -9, 1.0, "killed"
-        np.savez_compressed(_arg(argv, "--npz"), geometry_sha1=sha1)
+        np.savez_compressed(_arg(argv, "--npz"), geometry_sha1=geom["sha1"])
         return 0, 3.0, ""
 
 
@@ -256,3 +263,113 @@ def test_a_supplied_file_refusal_names_the_record(tmp_path):
                                  "E8_ligand_and_tautomer.sdf"), "--ensemble", "supplied",
                    cwd=tmp_path)
     assert rc != 0 and "MEMBER_IDENTITY" in out and "record 4" in out
+
+
+def test_the_record_states_the_measured_thresholds(plan, tmp_path):
+    rec = em.run_ensemble(plan, tmp_path, runner=Stub(), log=lambda s: None)
+    fr, sel = rec["folded_rule"], rec["protocol"]["selection"]
+    assert (fr["min_bonds"], fr["slack_A"], fr["status"]) == (6, 0.5, "measured")
+    assert fr["source"] == sel["dedup_source"] == "docs/ensemble-spec.md 8.2"
+    assert (sel["dedup_rmsd_A"], sel["dedup_status"]) == (0.35, "measured")
+
+
+def test_the_record_carries_relabelling_and_the_isotope_rule(tmp_path):
+    """Review 6 S10 and S11 in espmap.ensemble/1: which members were relabelled
+    to member 1's diastereotopic labels, and that isotope labels must match."""
+    plan = em.plan_ensemble(path=Path(__file__).parent / "data" / "ensemble" /
+                            "E7_poses_one_ligand.sdf", ensemble="supplied")
+    plan = dict(plan, members=plan["members"][:4])
+    rec = em.run_ensemble(plan, tmp_path, runner=Stub(), log=lambda s: None)
+    assert [bool(m["relabelled"]) for m in rec["members"]] == [False, True, False, True]
+    assert rec["identity"]["isotopes"] == "must_match" and rec["identity"]["isotope_labels"] == []
+
+
+# --- convergence: not judgeable is not failed (the v0.3.0 acceptance run) -------------
+def _conv_rec(plan, n, tmp_path, site=None):
+    p = dict(plan, members=plan["members"][:n])
+    return em.run_ensemble(p, tmp_path, runner=Stub(site=site), log=lambda s: None)
+
+
+@pytest.mark.parametrize("n", [1, 2])
+def test_too_few_members_is_not_judgeable_not_failed(plan, tmp_path, n):
+    rec = _conv_rec(plan, n, tmp_path)
+    assert rec["convergence"]["converged"] is None
+    assert rec["validity"]["convergence"] is None
+    assert rec["validity"]["members"] is True
+
+
+def test_three_or_more_members_that_converge_are_true(plan, tmp_path):
+    rec = _conv_rec(plan, 4, tmp_path, site=lambda n: 1.0 + 0.1 * n)
+    assert rec["convergence"]["converged"] is True and rec["validity"]["convergence"] is True
+
+
+def test_three_or_more_members_that_do_not_converge_are_false(plan, tmp_path):
+    rec = _conv_rec(plan, 4, tmp_path, site=lambda n: 9.0 if n == 3 else 0.0)
+    assert rec["convergence"]["converged"] is False and rec["validity"]["convergence"] is False
+
+
+def test_not_judgeable_convergence_is_null_in_validity_and_allowed_by_the_schema(plan, tmp_path):
+    """The invariant: convergence.converged is null => validity.convergence is null."""
+    types = _SCHEMA["properties"]["validity"]["properties"]["convergence"]["type"]
+    assert "null" in (types if isinstance(types, list) else [types])
+    for n in (1, 2, 4):
+        rec = _conv_rec(plan, n, tmp_path / str(n))
+        if rec["convergence"]["converged"] is None:
+            assert rec["validity"]["convergence"] is None
+
+
+@pytest.mark.parametrize("origin, moves", [("etkdg_mmff94s", False), ("etkdg_uff", False),
+                                           ("mmff94s", False), (None, True),
+                                           ("dft:b3lyp/def2tzvp", True), ("undeclared", True)])
+def test_optimize_may_move_only_a_generated_geometry(origin, moves):
+    """The guard protects a pose or a reference geometry from --optimize. A
+    member file the ensemble wrote from its own embedder (etkdg_mmff94s) is
+    neither, and --weight dft needs those members optimised."""
+    gi = {"source": "file 3D coordinates used as-is", "declared_geometry": origin}
+    assert em.optimize_would_move_supplied(gi) is moves
+
+
+
+def test_optimised_members_are_complete_and_resumed(tmp_path):
+    """Found by the v0.3.0 acceptance run: with --optimize every member ran
+    (rc 0) and was then counted failed, because its record's geometry is the
+    optimised one. The input is named by optimised_from_sha1."""
+    plan = em.plan_ensemble(smiles="CCCCCCO", ensemble=3, weight="dft", optimize=True)
+    rec = em.run_ensemble(plan, tmp_path, runner=Stub(optimize=True), log=lambda s: None)
+    assert rec["excluded"] == [] and rec["k_obtained"] == 3
+    assert all(m["optimized"] for m in rec["members"])
+    again = Stub(optimize=True)
+    em.run_ensemble(plan, tmp_path, runner=again, log=lambda s: None)
+    assert again.calls == []                           # resumed, not recomputed
+
+
+
+class BuriedOne(Stub):
+    """Members with a second atom that has no surface under nearest-nucleus
+    in every member (as most heavy atoms of a chain do): never judgeable."""
+
+    def __call__(self, argv, cwd, env, timeout):
+        rc = super().__call__(argv, cwd, env, timeout)
+        js = Path(_arg(argv, "--json"))
+        if js.exists():
+            rec = json.loads(js.read_text())
+            rec["sites"]["atoms"].append(dict(index=1, atom_map=0, element="C",
+                                              nearest_nucleus=dict(V_area_mean_kcal_mol=None),
+                                              radius_scaled=dict(V_area_mean_kcal_mol=3.0)))
+            js.write_text(json.dumps(rec))
+        return rc
+
+
+def test_an_unjudgeable_site_does_not_hide_a_verdict(plan, tmp_path):
+    """Found by the v0.3.0 acceptance run: E4 had 7 sites not converged and
+    reported null, because atoms buried under nearest-nucleus are never
+    judgeable. Overall: false if any judgeable site fails, else true if any
+    is judgeable, else null; the unjudgeable sites stay listed."""
+    p = dict(plan, members=plan["members"][:4])
+    ok = em.run_ensemble(p, tmp_path / "ok", runner=BuriedOne(site=lambda n: 1.0 + 0.1 * n),
+                         log=lambda s: None)
+    assert ok["convergence"]["converged"] is True and ok["validity"]["convergence"] is True
+    assert ok["convergence"]["not_judgeable"] == ["atom 1 map 0 C | nearest_nucleus"]
+    bad = em.run_ensemble(p, tmp_path / "bad", runner=BuriedOne(site=lambda n: 9.0 if n == 3 else 0.0),
+                          log=lambda s: None)
+    assert bad["convergence"]["converged"] is False and bad["validity"]["convergence"] is False

@@ -27,7 +27,11 @@ _BY_ID = {c["id"]: c for c in _CASES}
 # with review 6's fixes E18, E20-E22, E24 and E25 (E23 refused already).
 NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "E16",
                                        "E17", "E18", "E20", "E21", "E22", "E23",
-                                       "E24", "E25", "C3", "C8", "C9"}
+                                       "E24", "E25", "E26", "E27", "E28",
+                                       # the v0.3.0 acceptance run, on #76's final head
+                                       "E1", "E2", "E3", "E4", "E5", "E6", "E7",
+                                       "E10", "E11", "E19",
+                                       "C3", "C8", "C9"}
 
 
 def _records(name):
@@ -46,8 +50,8 @@ def _key(m, stereo=True):
 
 def test_the_manifest_is_complete_and_consistent():
     ids = [c["id"] for c in _CASES]
-    assert len(ids) == len(set(ids)) == 37
-    assert {i for i in ids if i[0] == "E"} == {f"E{i}" for i in range(1, 26)}
+    assert len(ids) == len(set(ids)) == 40
+    assert {i for i in ids if i[0] == "E"} == {f"E{i}" for i in range(1, 29)}
     assert {i for i in ids if i[0] == "C"} == {f"C{i}" for i in range(1, 13)}
     files = {c["recipe"]["file"] for c in _CASES if "file" in c["recipe"]}
     assert files == {p.name for p in _DIR.glob("*.sdf")}
@@ -140,11 +144,35 @@ def test_E25_record_2_is_unreadable_and_the_others_are_not():
     assert [m is None for m in _records(_BY_ID["E25"]["recipe"]["file"])] == [False, True, False]
 
 
+def test_E26_swaps_labels_only():
+    a, b = _records(_BY_ID["E26"]["recipe"]["file"])
+    assert _key(a) == _key(b)                          # one molecule, one configuration
+    pa, pb = a.GetConformer().GetPositions(), b.GetConformer().GetPositions()
+    assert not np.allclose(pa, pb)                     # the labels moved
+    assert sorted(map(tuple, np.round(pa, 4))) == sorted(map(tuple, np.round(pb, 4)))  # the points did not
+
+
+def test_E27_E28_are_two_isotopologues_in_both_orders():
+    for cid in ("E27", "E28"):
+        ms = _records(_BY_ID[cid]["recipe"]["file"])
+        assert sorted(sum(a.GetIsotope() == 2 for a in m.GetAtoms()) for m in ms) == [0, 3]
+        assert len({_key(m, stereo=False) for m in ms}) == 2         # SMILES shows the labels
+
+
 def _params(cost):
     return [pytest.param(c, id=c["id"],
                          marks=[pytest.mark.xfail(strict=True, reason="ensembles not implemented")]
                          if c["id"] in NOT_YET else [])
             for c in _CASES if c["cost"] == cost]
+
+
+def _mol_block_from_spec(spec, recipe):
+    """The file's first record carrying spec's coordinates (same atom order)."""
+    m = Chem.Mol(_records(recipe["file"])[0])
+    conf = m.GetConformer()
+    for i, row in enumerate(spec.split(";")):
+        conf.SetAtomPosition(i, [float(x) for x in row.split()[1:]])
+    return Chem.MolToMolBlock(m)
 
 
 def _refused_before_compute(expect):
@@ -207,6 +235,17 @@ def _run(case, tmp_path=None):
     if r.get("classify_only"):
         got = em.shape_descriptors(_records(r["file"])[0])
         assert {k: got[k] for k in e["checks"]} == e["checks"]
+        return
+    if r.get("plan_only"):
+        # an expectation decided before compute (E26: relabelling)
+        plan = em.plan_ensemble(**_plan_kwargs(r))
+        for name, want in e["checks"].items():
+            if name == "relabelled_records":
+                assert [m["record"] for m in plan["members"] if m["relabelled"]] == want
+            elif name == "pro_labels_agree":
+                mols = [Chem.MolFromMolBlock(_mol_block_from_spec(m["spec"], r)) for m in plan["members"]]
+                labels = {json.dumps(sorted(em.prochiral_labels(x).items(), key=str)) for x in mols}
+                assert (len(labels) == 1) == want
         return
     if "ensemble" in r and _refused_before_compute(e):
         # plan_ensemble is everything before the first SCF. A case whose

@@ -1,8 +1,8 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://github.com/Azuromalachite/espmap/docs/ensemble-schema.json",
- "title": "espmap.ensemble/1 (DRAFT for review, step 4 of docs/ensemble-spec.md)",
- "description": "One conformer ensemble of one molecule, every member an ordinary espmap.record/1 written beside this file and listed with its sha256, so an archive can check each member without trusting this record. Field names follow the Atlas's spa.espmap_ensemble/0 index where the two describe the same thing (marked 'Atlas:'). Additions from review 6's 'before espmap.ensemble/1 is frozen' list are marked 'R6:'. NOT the Atlas's 'protocol': there it is a string, the consumer's own directory label (e.g. b3lyp_def2-svp_gas_espmap-v0.2.1), derived from analysis and espmap.version and never stored here. Here 'protocol' is how the members were chosen. Do not map one onto the other.",
+ "title": "espmap.ensemble/1",
+ "description": "Frozen with espmap v0.3.0: any change to this schema is a new version (espmap.ensemble/2), never an edit in place. One conformer ensemble of one molecule, every member an ordinary espmap.record/1 written beside this file and listed with its sha256, so an archive can check each member without trusting this record. Field names follow the Atlas's spa.espmap_ensemble/0 index where the two describe the same thing (marked 'Atlas:'). Additions from review 6's 'before espmap.ensemble/1 is frozen' list are marked 'R6:'. NOT the Atlas's 'protocol': there it is a string, the consumer's own directory label (e.g. b3lyp_def2-svp_gas_espmap-v0.2.1), derived from analysis and espmap.version and never stored here. Here 'protocol' is how the members were chosen. Do not map one onto the other.",
  "type": "object",
  "additionalProperties": false,
  "required": [
@@ -85,7 +85,8 @@
     "n_radical",
     "atom_maps",
     "configuration",
-    "isotopes"
+    "isotopes",
+    "isotope_labels"
    ],
    "properties": {
     "smiles": {
@@ -125,10 +126,24 @@
      "description": "R6 S1: configuration_signs, the stereo elements RDKit does not perceive (small-ring trans helicity, cumulene axes, biaryl axes), shared by every member. {} when there are none"
     },
     "isotopes": {
-     "enum": [
-      "ignored"
-     ],
-     "description": "R6 S11: isotope labels are not part of identity (the ESP cannot see them). Placeholder until S11 picks the rule; the field forces the choice to be stated"
+     "const": "must_match",
+     "description": "review 6 S11, the user's decision: one isotopologue per ensemble; every member's isotope labels equal member 1's, never normalised"
+    },
+    "isotope_labels": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "prefixItems": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "items": false
+     },
+     "description": "[atom index, mass number] for every labelled atom of the approved structure; [] when none"
     }
    }
   },
@@ -185,7 +200,9 @@
       "mirror_images_merged",
       "n_unique",
       "n_symmetry_matches",
-      "symmetry_match_cap"
+      "symmetry_match_cap",
+      "dedup_status",
+      "dedup_source"
      ],
      "properties": {
       "method": {
@@ -227,6 +244,20 @@
       "symmetry_match_cap": {
        "type": "integer",
        "description": "R6 S5: reaching it refuses, so the list here is never truncated"
+      },
+      "dedup_status": {
+       "enum": [
+        "provisional",
+        "measured",
+        null
+       ],
+       "description": "the dedup threshold's status; null when there is no dedup"
+      },
+      "dedup_source": {
+       "type": [
+        "string",
+        "null"
+       ]
       }
      }
     },
@@ -260,7 +291,9 @@
    "required": [
     "min_bonds",
     "slack_A",
-    "radii"
+    "radii",
+    "status",
+    "source"
    ],
    "properties": {
     "min_bonds": {
@@ -277,10 +310,14 @@
       "provisional",
       "measured"
      ],
-     "description": "R6 S3: provisional until section 8"
+     "description": "provisional until measured; measured since docs/ensemble-spec.md 8.2"
+    },
+    "source": {
+     "type": "string",
+     "description": "where the rule's parameters were measured"
     }
    },
-   "description": "R6 S3: folded names its rule and parameters. A consumer with a free-text field (the Atlas's selection.notes) renders it there, e.g. 'folded: heavy-atom contact >= 5 bonds apart, Bondi + 0.5 A; provisional'"
+   "description": "R6 S3: folded names its rule and parameters. A consumer with a free-text field (the Atlas's selection.notes) renders it there, e.g. 'folded: heavy-atom contact >= 6 bonds apart, Bondi + 0.5 A; measured, espmap ensemble-spec 8.2'"
   },
   "members": {
    "type": "array",
@@ -302,7 +339,8 @@
      "genus_excess",
      "optimized",
      "scf_energy_Ha",
-     "validity"
+     "validity",
+     "relabelled"
     ],
     "properties": {
      "conformer": {
@@ -461,6 +499,22 @@
        "type": "string"
       },
       "description": "every failed attempt, '<kind>, rc <n>: <last stderr line>'. Only an infrastructure failure (killed, no record) is retried; a deterministic one stays excluded across reruns, since rerunning until it passes would be selection on outcome"
+     },
+     "relabelled": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "prefixItems": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "items": false
+      },
+      "description": "review 6 S10: [i, j] pairs: index i now holds what the member's input had at j, so its diastereotopic groups carry member 1's labels; [] when unchanged"
      }
     }
    }
@@ -529,7 +583,7 @@
   },
   "convergence": {
    "type": "object",
-   "description": "spec section 5; shape settled with the runner"
+   "description": "spec section 5. Per site and rule: converged true, false, or null when not judgeable (fewer than 3 usable values, e.g. an atom with no surface under one rule). Overall converged: false if any judgeable site fails, true if any is judgeable and none fails, null if none is; not_judgeable lists the rest. conv_tol_kcal is PROVISIONAL (1 kcal/mol, not yet measured) and status says so"
   },
   "kish_n": {
    "type": [
@@ -563,8 +617,11 @@
      "description": "every member's own validity holds"
     },
     "convergence": {
-     "type": "boolean",
-     "description": "section 5"
+     "type": [
+      "boolean",
+      "null"
+     ],
+     "description": "true: judgeable and converged; false: judgeable and not converged; null: not judgeable (fewer than 3 usable members, or no site table). Always equal to convergence.converged"
     },
     "unbiased": {
      "type": "boolean",

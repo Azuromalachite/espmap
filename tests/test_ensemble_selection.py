@@ -3,6 +3,7 @@
 fields only, no SCF. The hostile set's own cases are in test_ensemble_set.py;
 these pin WHY each refusal happens, so a refusal for the wrong reason fails.
 """
+import json
 from pathlib import Path
 
 import numpy as np
@@ -119,7 +120,7 @@ def test_the_embedder_returns_every_converged_conformer():
 
 @pytest.mark.parametrize("smiles, k, obtained", [
     ("c1ccccc1", 10, 1),       # E1: rigid
-    ("C1CCCCC1", 10, 1),       # E2: the chair (a twist-boat only if distinct)
+    ("C1CCCCC1", 10, 2),       # E2: the chair and a twist-boat, distinct at 0.35 A
     ("CCCC", 10, 2),           # E6: anti and gauche; gauche- is gauche+'s mirror
 ])
 def test_selection_never_pads(smiles, k, obtained):
@@ -382,11 +383,20 @@ def test_a_generated_member_that_fails_identity_is_refused(monkeypatch):
 
 
 def test_the_contact_rule_is_the_spec_s_numbers():
-    """S14 (M7, M8): docs/ensemble-spec.md section 3 states >= 5 bonds apart and
-    Bondi + 0.5 A; a test that reads the module's constants checks nothing."""
-    assert (em.CONTACT_MIN_BONDS, em.CONTACT_SLACK) == (5, 0.5)
-    # and on a geometry: pentan-1-ol's C1...O pair is 5 bonds apart
-    m = Chem.AddHs(Chem.MolFromSmiles("CCCCCO"))
+    """S14 (M7, M8): docs/ensemble-spec.md section 3 states >= 6 bonds apart and
+    Bondi + 0.5 A (measured, section 8.2); a test that reads the module's
+    constants checks nothing."""
+    assert (em.CONTACT_MIN_BONDS, em.CONTACT_SLACK) == (6, 0.5)
+    # a 5-bond pair is never a contact, however close: pentan-1-ol's C1...O
+    m5 = Chem.AddHs(Chem.MolFromSmiles("CCCCCO"))
+    em._embed_and_minimise(m5, 1, 1)
+    c5 = m5.GetConformer()
+    o5 = next(a.GetIdx() for a in m5.GetAtoms() if a.GetSymbol() == "O")
+    p5 = c5.GetPositions()
+    c5.SetAtomPosition(0, (p5[o5] + (p5[0] - p5[o5]) / np.linalg.norm(p5[0] - p5[o5]) * 3.0).tolist())
+    assert (0, o5) not in {(i, j) for i, j, *_ in em.intramolecular_contacts(m5)}
+    # and on a geometry: hexan-1-ol's C1...O pair is 6 bonds apart
+    m = Chem.AddHs(Chem.MolFromSmiles("CCCCCCO"))
     em._embed_and_minimise(m, 1, 1)
     conf = m.GetConformer()
     o = next(a.GetIdx() for a in m.GetAtoms() if a.GetSymbol() == "O")
@@ -396,3 +406,83 @@ def test_the_contact_rule_is_the_spec_s_numbers():
         conf.SetAtomPosition(0, (pos[o] + v / np.linalg.norm(v) * d).tolist())
         got = {(i, j) for i, j, *_ in em.intramolecular_contacts(m)}
         assert ((0, o) in got) is contact, d
+
+
+
+# --- review 6 S10, S11: guards (what must still be accepted) -------------------------
+def test_an_achiral_molecules_mirror_conformers_are_not_refused(tmp_path):
+    """S10 checks prochiral labels only in a chiral molecule: a conformer and
+    its mirror image are both valid members of an achiral one, and the mirror
+    swaps enantiotopic labels."""
+    mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)CO"))
+    em._embed_and_minimise(mol, 2, 3)
+    mirror = Chem.Mol(mol, confId=0)
+    c = mirror.GetConformer(0)
+    for i, p in enumerate(c.GetPositions()):
+        c.SetAtomPosition(i, (p[0], p[1], -p[2]))
+    path = _write(tmp_path / "mirror.sdf", [Chem.Mol(mol, confId=0), mirror])
+    assert em.plan_ensemble(path=path, ensemble="supplied")["protocol"]["k_obtained"] == 2
+
+
+def test_two_unswapped_conformers_of_a_chiral_molecule_are_accepted(tmp_path):
+    mol = Chem.AddHs(Chem.MolFromSmiles("C[C@H](O)C(C)C"))
+    *_, conv = em._embed_and_minimise(mol, 4, 11)
+    path = _write(tmp_path / "ok.sdf", [Chem.Mol(mol, confId=c) for c, _ in conv[:2]])
+    assert em.plan_ensemble(path=path, ensemble="supplied")["protocol"]["k_obtained"] == 2
+
+
+def test_two_conformers_of_one_isotopologue_are_accepted(tmp_path):
+    mol = Chem.AddHs(Chem.MolFromSmiles("[2H]C([2H])([2H])O"))
+    *_, conv = em._embed_and_minimise(mol, 4, 5)
+    path = _write(tmp_path / "d3.sdf", [Chem.Mol(mol, confId=c) for c, _ in conv[:2]])
+    assert em.plan_ensemble(path=path, ensemble="supplied")["protocol"]["k_obtained"] == 2
+
+
+def test_tert_butyl_rotation_is_not_a_label_swap(tmp_path):
+    """Three equivalent groups rotate into each other: no fixed pro-label."""
+    mol = Chem.AddHs(Chem.MolFromSmiles("C[C@H](O)C(C)(C)C"))
+    *_, conv = em._embed_and_minimise(mol, 6, 2)
+    path = _write(tmp_path / "tbu.sdf", [Chem.Mol(mol, confId=c) for c, _ in conv[:3]])
+    assert em.plan_ensemble(path=path, ensemble="supplied")["protocol"]["k_obtained"] == 3
+
+
+
+# --- review 6 S10: canonical diastereotopic labels -------------------------------
+def test_twenty_poses_get_one_labelling_and_keep_their_points():
+    """E7's poses come from ETKDG, which puts the isobutyl methyls either way
+    round; after planning every member carries record 1's labels, and each
+    member's set of points is unchanged."""
+    path = _DIR / "E7_poses_one_ligand.sdf"
+    raw = list(Chem.SDMolSupplier(str(path), removeHs=False))
+    p = em.plan_ensemble(path=path, ensemble="supplied")
+    target = em.prochiral_labels(raw[0])
+    assert sum(bool(m["relabelled"]) for m in p["members"]) >= 1
+    for m, r in zip(p["members"], raw):
+        x = Chem.Mol(r)
+        conf = x.GetConformer()
+        pts = np.array([[float(v) for v in row.split()[1:]] for row in m["spec"].split(";")])
+        for i, q in enumerate(pts):
+            conf.SetAtomPosition(i, q.tolist())
+        assert em.prochiral_labels(x) == target
+        before = sorted(map(tuple, np.round(r.GetConformer().GetPositions(), 4)))
+        assert sorted(map(tuple, np.round(pts, 4))) == before
+
+
+def test_generated_members_share_one_labelling():
+    p = em.plan_ensemble(smiles="CC(C)C[C@H](C)C(=O)O", ensemble=6)
+    mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)C[C@H](C)C(=O)O"))
+    labels = set()
+    for m in p["members"]:
+        x = Chem.Mol(mol)
+        c = Chem.Conformer(x.GetNumAtoms())
+        for i, row in enumerate(m["spec"].split(";")):
+            c.SetAtomPosition(i, [float(v) for v in row.split()[1:]])
+        c.Set3D(True)
+        x.AddConformer(c, assignId=True)
+        labels.add(json.dumps(sorted(em.prochiral_labels(x).items(), key=str)))
+    assert len(labels) == 1
+
+
+def test_an_achiral_molecule_is_never_relabelled():
+    p = em.plan_ensemble(smiles="CC(C)CCO", ensemble=4)
+    assert all(m["relabelled"] == [] for m in p["members"])

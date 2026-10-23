@@ -152,6 +152,7 @@ WHAT THIS IS AND IS NOT
     than the convergence tests reported in the review.
 """
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -368,14 +369,25 @@ def coordinate_kind(mol, fmt, tol=0.03):
     if fmt in ("xyz", "pdb"):
         return "geometry"
     c = mol.GetConformer()
-    header_3d = mol.HasProp("_header_dim") and mol.GetProp("_header_dim") == "3D"
-    if not (c.Is3D() or header_3d):
+    header = mol.GetProp("_header_dim") if mol.HasProp("_header_dim") else None
+    # Review 6 S8: a 2D header is the file's own statement, also when some z
+    # is not 0 (an editor writing wedge depth, a nudged atom).
+    if header == "2D" or not (c.Is3D() or header == "3D"):
         return "drawing"
     X = np.array([list(c.GetAtomPosition(i)) for i in range(mol.GetNumAtoms())])
     X -= X.mean(axis=0)
-    dev = np.abs(X @ np.linalg.svd(X)[2][-1]).max() if len(X) > 3 else 0.0
+    # Flat when one plane holds every atom within FLAT_TOL. The least-squares
+    # plane can tilt to fit z noise and leave a larger maximum deviation than
+    # the z = const plane does (review 6 S16: a drawing with |z| <= 0.08 A
+    # was 0.101 A off its fitted plane); both are planes, so take the smaller.
+    # The best z = const plane sits at the midrange: half the z span.
+    dev = (min(np.abs(X @ np.linalg.svd(X)[2][-1]).max(), np.ptp(X[:, 2]) / 2)
+           if len(X) > 3 else 0.0)
     if dev > FLAT_TOL:
-        return "geometry"
+        # An edited drawing (one atom lifted out of the page) is not flat, but
+        # its bonds still project to one drawing-program length; no real
+        # non-flat molecule's do (held-out probe of the review 6 fix).
+        return _projected_kind(mol, X) or "geometry"
     if mol.GetNumBonds() == 0:
         return "geometry"
     sp3_problems, real_angles, ring4 = flat_sp3_problems(mol)
@@ -411,6 +423,60 @@ def coordinate_kind(mol, fmt, tol=0.03):
     return "ambiguous"
 
 
+def _projected_kind(mol, X):
+    """"drawing", "ambiguous" or None for a non-flat file whose bonds,
+    projected onto a plane, are all within PROJECTED_TOL of one
+    drawing-program length (DRAWING_BOND_LENGTHS): a drawing with an atom
+    lifted out of the page keeps its in-plane lengths. The planes tried are
+    z = 0, the best-fit plane, and the best-fit plane with each atom left out
+    in turn, so one lifted atom cannot tilt the plane (probe round 4: a lift
+    on a drawing tilted 60 deg defeated the first two). Two or more element
+    pairs make it a drawing; with one pair a symmetric real skeleton could
+    project evenly, so it is refused. A real non-flat heavy-atom skeleton
+    (piperidine, norbornane, C2F6, face-on too) projects far less evenly."""
+    import numpy as np
+    bonds = [(b.GetBeginAtomIdx(), b.GetEndAtomIdx()) for b in mol.GetBonds()]
+    if len(bonds) < 2:
+        return None
+    pairs = {tuple(sorted((mol.GetAtomWithIdx(i).GetSymbol(), mol.GetAtomWithIdx(j).GetSymbol())))
+             for i, j in bonds}
+    D = np.array([X[j] - X[i] for i, j in bonds])
+
+    def even(L):
+        return any(np.all(np.abs(L / d - 1) <= PROJECTED_TOL) for d in DRAWING_BOND_LENGTHS)
+
+    def normal(Y):
+        return np.linalg.svd(Y - Y.mean(axis=0))[2][-1]
+    normals = [normal(X)] + [normal(np.delete(X, k, axis=0)) for k in range(len(X))
+                             if len(X) > 3]
+    # Probe round 5: two or three lifted atoms on a small tilted drawing move
+    # every fitted plane. In a small file, try the plane through every triple
+    # of atoms: three atoms left on the page define it exactly. Every bond
+    # must still project evenly, so trying more planes cannot make a real
+    # skeleton look drawn (its C-N or C-O bonds are shorter than any drawing
+    # length, and projection only shortens). Larger files need none of this:
+    # a few lifted atoms barely move their fit.
+    if len(X) <= PROJECTED_TRIPLES_MAX:
+        from itertools import combinations
+        T = np.array(list(combinations(range(len(X)), 3)))
+        N = np.cross(X[T[:, 1]] - X[T[:, 0]], X[T[:, 2]] - X[T[:, 0]])
+        size = np.linalg.norm(N, axis=1)
+        normals += list(N[size > 1e-6] / size[size > 1e-6, None])
+    if not (even(np.linalg.norm(D[:, :2], axis=1))
+            or any(even(np.sqrt(np.maximum((D ** 2).sum(1) - (D @ n) ** 2, 0.0))) for n in normals)):
+        return None
+    return "drawing" if len(pairs) > 1 else "ambiguous"
+
+
+# A non-flat file is still a drawing when every bond projects to within this
+# fraction of one drawing length (_projects_to_a_drawing). A drawing program
+# writes them equal to the last decimal; real skeletons differ by 4 % or more
+# (C-C 1.53 vs C-N 1.47) before projection shortens them unevenly.
+PROJECTED_TOL = 0.01
+# Up to this many atoms, _projected_kind tries the plane through every atom
+# triple (2024 planes at 24 atoms, milliseconds); above it a few lifted atoms
+# barely move the fitted plane (a 160-atom drawing with two lifts is caught).
+PROJECTED_TRIPLES_MAX = 24
 # A file is flat when every atom lies within this of its best-fit plane (A).
 # A real non-planar molecule leaves it by far more (a CH2's hydrogens by
 # ~0.9, ammonia's N by ~0.3); a converter's z noise stays well inside it.
@@ -517,6 +583,11 @@ def flat_sp3_problems(mol):
                 out.append(f"flat {len(ring)}-ring with an sp3-sp3 bond")
     for a in mol.GetAtoms():
         if a.GetHybridization() != sp3:
+            continue
+        # Review 6 S17: O and N bonded to silicon are wide or planar in
+        # reality (Si-O-Si 142-150 deg, N(SiH3)3 planar), so their angle and
+        # flatness say nothing about a drawing; the bond lengths still decide.
+        if a.GetSymbol() in ("O", "N") and any(n.GetSymbol() == "Si" for n in a.GetNeighbors()):
             continue
         nb = [n.GetIdx() for n in a.GetNeighbors()]
         tag = f"sp3 {a.GetSymbol()}{a.GetIdx()}"
@@ -1276,26 +1347,62 @@ def _perceive_bonds(m, charge, fmt):
     return mol
 
 
-def _molfile_header_dims(path):
-    """The dimension code on line 2 of each MOL/SDF record ("2D", "3D" or
-    ""), in file order. coordinate_kind needs what the file says: RDKit's
-    conformer flag turns a 3D header into 2D when every z is 0 and a bond
-    carries a stereo mark."""
+def _molfile_records(path):
+    """The MOL blocks of a MOL/SDF file, in file order: the text before each
+    $$$$ that holds a counts line (V2000 or V3000). Text that is not a record
+    -- a comment or a converter's trailer after the last $$$$ -- is not one,
+    so it cannot shift which header belongs to which record (review 6 S15: a
+    C2F4 SDF with one trailing line was read under no header and discarded)."""
     import re
     from pathlib import Path
     try:
-        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        text = Path(path).read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
     except OSError:
         return []
     out = []
     for k, rec in enumerate(re.split(r"^\$\$\$\$[^\n]*$", text, flags=re.M)):
         if k:
-            if not rec.strip():
-                continue
             rec = rec[1:] if rec.startswith("\n") else rec
+        if re.search(r"^.{33,39}V[23]000\s*$", rec, flags=re.M):
+            out.append(rec)
+    return out
+
+
+def _molfile_header_dims(path):
+    """The dimension code on line 2 of each MOL/SDF record ("2D", "3D" or
+    ""), in file order. coordinate_kind needs what the file says: RDKit's
+    conformer flag turns a 3D header into 2D when every z is 0 and a bond
+    carries a stereo mark."""
+    out = []
+    for rec in _molfile_records(path):
         lines = rec.split("\n")
         out.append(lines[1][20:22].strip().upper() if len(lines) > 1 else "")
     return out
+
+
+def _as_drawing(m, block):
+    """A record judged a drawing, re-read as the 2D drawing it is: z set to
+    0 and the header to 2D, so its stereo comes from its wedges and drawn
+    double bonds only. Read under a 3D header, RDKit takes chirality from z,
+    and z noise in an unwedged drawing then fixes a configuration nobody drew
+    (review 6 S7: two seeds of one threonine drawing gave two diastereomers,
+    both passing --require-stereo). The record's properties are kept."""
+    from rdkit import Chem
+    lines = block.split("\n")
+    if len(lines) < 4 or "V2000" not in lines[3]:
+        return m                                    # V3000: left as RDKit read it
+    n_at = int(lines[3][:3])
+    lines[1] = lines[1][:20] + "2D" + lines[1][22:] if len(lines[1]) >= 22 else lines[1]
+    for k in range(4, 4 + n_at):
+        lines[k] = lines[k][:20] + f"{0.0:10.4f}" + lines[k][30:]
+    d = Chem.MolFromMolBlock("\n".join(lines), removeHs=False)
+    if d is None or d.GetNumAtoms() != m.GetNumAtoms():
+        return m
+    d.GetConformer().Set3D(False)
+    for p in m.GetPropNames(includePrivate=True, includeComputed=False):
+        if not d.HasProp(p):
+            d.SetProp(p, m.GetProp(p))
+    return d
 
 
 def read_structure(path, charge=0, record=None):
@@ -1314,6 +1421,7 @@ def read_structure(path, charge=0, record=None):
     from rdkit import Chem
     _quiet_rdkit()
     ext = str(path).lower().rsplit(".", 1)[-1]
+    blocks = []                                     # MOL blocks, aligned with mols
     try:
         if ext == "cdxml":
             mols = [m for m in Chem.MolsFromCDXMLFile(str(path)) if m is not None]
@@ -1321,11 +1429,14 @@ def read_structure(path, charge=0, record=None):
             mols = (list(Chem.SDMolSupplier(str(path), removeHs=False))
                     if ext == "sdf" else
                     [Chem.MolFromMolFile(str(path), removeHs=False)])
-            dims = _molfile_header_dims(path)
-            if len(dims) == len(mols):
-                for m, d in zip(mols, dims):
+            recs = _molfile_records(path)
+            if len(recs) == len(mols):
+                blocks = recs
+                for m, rec in zip(mols, recs):
                     if m is not None:
-                        m.SetProp("_header_dim", d)
+                        lines = rec.split("\n")
+                        m.SetProp("_header_dim", lines[1][20:22].strip().upper()
+                                  if len(lines) > 1 else "")
         elif ext in ("xyz", "pdb"):
             # Neither format carries trustworthy bond ORDERS. XYZ has no bonds
             # at all (v3 rejected every xyz as "MULTIPLE_FRAGMENTS"). PDB has
@@ -1382,6 +1493,9 @@ def read_structure(path, charge=0, record=None):
                            f"cannot tell a drawing from a real planar molecule",
                            "write a 2D header if this is a drawing; if it is a "
                            "geometry, save it as .xyz")]
+        if kind == "drawing" and blocks and m.GetConformer().Is3D():
+            m = _as_drawing(m, blocks[r - 1])
+            m.SetProp("_format", ext)
         m.SetProp("_coords", kind)
         return m, []
 
@@ -1599,9 +1713,19 @@ def verify_mapping(spec, probe, reference=False, tol=1e-3):
 # docs/ensemble-spec.md sections 1-3, written against tests/data/ensemble.
 # Everything here runs BEFORE any SCF: an ensemble that mixes molecules,
 # tautomers or stereoisomers is refused here, not averaged later.
-CONTACT_MIN_BONDS = 5          # a 1,5 pair of a gauche kink is 4 bonds apart
+# Measured in docs/ensemble-spec.md section 8.2 (bench/ensemble_rdkit.jsonl,
+# bench/ensemble_dft.jsonl). Contacts at 5 bonds are the g+g- and cis-alkene
+# neighbourhoods (53 of 58 contacts over 100 C18 conformers); every 5-bond-only
+# conformer computed had genus 0, and >= 7 bonds missed conformer 70 (genus 2).
+# Over 17 conformers with a measured genus, >= 6 bonds misses no folded one.
+CONTACT_MIN_BONDS = 6          # heavy-atom pairs at least this many bonds apart
 CONTACT_SLACK = 0.5            # A over the Bondi sum
-DEDUP_RMSD = 0.5               # A, heavy atoms; provisional until section 8
+# 0.5 A merged real conformers from n-pentane on, and every merged pair
+# differed in a site mean by 0.48-0.86 kcal/mol, beyond the 0.15 grid row;
+# 0.35 A lost no backbone-torsion class in the chains measured.
+DEDUP_RMSD = 0.35              # A, heavy atoms
+CONTACT_RULE_STATUS = "measured: docs/ensemble-spec.md 8.2"
+DEDUP_STATUS = "measured: docs/ensemble-spec.md 8.2"
 N_EMBED = 100
 SELECTION_RULES = ("rg_spread",)
 
@@ -1664,6 +1788,91 @@ def shape_descriptors(mol, conf_id=-1):
                 if lam.sum() > 0 else 0.0,
                 contacts=[[int(i), int(j), round(d, 3)] for i, j, d, _ in contacts],
                 folded=bool(contacts))
+
+
+def prochiral_labels(mol, conf_id=-1):
+    """{(centre, a, b): CIP label} for every atom with exactly two
+    graph-equivalent heavy-atom neighbours a < b (equal canonical rank,
+    breakTies=False): the label the centre takes, from conformer conf_id,
+    when a is tagged with an isotope. In a chiral molecule a and b are
+    diastereotopic, and the label says which of the two sits where. Three or
+    more equivalent groups (tert-butyl methyls) rotate into each other and
+    carry no fixed label, so they are not used; hydrogens (CH2) are not
+    either."""
+    from rdkit import Chem
+    from rdkit.Chem import rdCIPLabeler
+    ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=False))
+    one = Chem.Mol(mol, confId=conf_id) if conf_id != -1 else Chem.Mol(mol)
+    out = {}
+    for c in mol.GetAtoms():
+        groups = {}
+        for n in c.GetNeighbors():
+            if n.GetAtomicNum() > 1:
+                groups.setdefault(ranks[n.GetIdx()], []).append(n.GetIdx())
+        for same in groups.values():
+            if len(same) != 2:
+                continue
+            a, b = sorted(same)
+            x = Chem.Mol(one)
+            tag = x.GetAtomWithIdx(a)
+            tag.SetIsotope(int(round(tag.GetMass())) + 1)
+            Chem.AssignStereochemistryFrom3D(x, replaceExistingTags=True)
+            rdCIPLabeler.AssignCIPLabels(x)
+            ca = x.GetAtomWithIdx(c.GetIdx())
+            out[(c.GetIdx(), a, b)] = ca.GetProp("_CIPCode") if ca.HasProp("_CIPCode") else None
+    return out
+
+
+def relabel_prochiral(mol, conf_id, target, max_matches=None):
+    """Review 6 S10, the user's decision: give conformer conf_id of mol the
+    same diastereotopic labels as `target` (prochiral_labels of member 1) by
+    exchanging the coordinates of graph-equivalent groups, never by
+    refusing. ETKDG embeds each conformer independently and places
+    diastereotopic groups either way round, so without this "methyl 4" is the
+    pro-R methyl in some members and pro-S in others, and per-atom rows and
+    maps on it mix the two.
+
+    For each centre whose label differs, the heavy-atom graph automorphism
+    that exchanges its two groups and moves the fewest atoms is applied to
+    the coordinates, each heavy atom's hydrogens following it in index order
+    (a methyl's three are interchangeable). The set of points is unchanged;
+    only which index sits where. Modifies the conformer in place and returns
+    the moved index pairs [[i, j], ...] (i now holds what j held), or raises
+    ValueError when no automorphism reaches the target."""
+    from rdkit import Chem
+    max_matches = max_matches or SYMMETRY_MATCH_CAP
+    have = prochiral_labels(mol, conf_id)
+    if have == target:
+        return []
+    heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
+    pos_of = {i: k for k, i in enumerate(heavy)}
+    hm = Chem.RemoveHs(Chem.Mol(mol), sanitize=False)
+    hm.UpdatePropertyCache(strict=False)
+    autos = hm.GetSubstructMatches(hm, uniquify=False, useChirality=False, maxMatches=max_matches)
+    if len(autos) >= max_matches:
+        raise ValueError(f"{max_matches} or more automorphisms; cannot relabel")
+    conf = mol.GetConformer(conf_id)
+    moved = []
+    for (c, a, b), want in sorted(target.items()):
+        if prochiral_labels(mol, conf_id).get((c, a, b)) == want:
+            continue
+        ka, kb = pos_of[a], pos_of[b]
+        cands = [s for s in autos if s[ka] == kb and s[kb] == ka]
+        if not cands:
+            raise ValueError(f"no automorphism exchanges atoms {a} and {b}")
+        s = min(cands, key=lambda s: sum(1 for k, v in enumerate(s) if k != v))
+        P = conf.GetPositions()
+        perm = {heavy[k]: heavy[v] for k, v in enumerate(s) if k != v}
+        for i, j in list(perm.items()):
+            hi = sorted(n.GetIdx() for n in mol.GetAtomWithIdx(i).GetNeighbors() if n.GetAtomicNum() == 1)
+            hj = sorted(n.GetIdx() for n in mol.GetAtomWithIdx(j).GetNeighbors() if n.GetAtomicNum() == 1)
+            perm.update(zip(hi, hj))
+        for i, j in perm.items():
+            conf.SetAtomPosition(i, P[j].tolist())
+        moved += [[int(i), int(j)] for i, j in sorted(perm.items())]
+    if prochiral_labels(mol, conf_id) != target:
+        raise ValueError("relabelling did not reach member 1's labels")
+    return moved
 
 
 def _is_achiral(mol):
@@ -1869,7 +2078,8 @@ def supplied_members(path, charge=None, basis="def2-tzvp", spin=0):
 
     def state(m):
         return (Chem.GetFormalCharge(m), sum(a.GetNumRadicalElectrons() for a in m.GetAtoms()),
-                tuple(a.GetAtomMapNum() for a in m.GetAtoms() if a.GetAtomicNum() > 1))
+                tuple(a.GetAtomMapNum() for a in m.GetAtoms() if a.GetAtomicNum() > 1),
+                tuple(a.GetIsotope() for a in m.GetAtoms()))
 
     ref_state, ref_signs = state(first), None
     for r, m in enumerate(members, start=1):
@@ -1883,15 +2093,24 @@ def supplied_members(path, charge=None, basis="def2-tzvp", spin=0):
                 out += blocks
                 continue
             got = state(m)
+            # isotopes are compared atom by atom only when the atom counts agree;
+            # a member with other atoms is refused below (hydrogens, identity)
+            same_n = len(got[3]) == len(ref_state[3])
+            iso = [i for i, (x, y) in enumerate(zip(got[3], ref_state[3])) if x != y] if same_n else []
             for code, what, a, b in (("MEMBER_CHARGE", "formal charge", got[0], ref_state[0]),
                                      ("MEMBER_SPIN", "unpaired electrons", got[1], ref_state[1]),
-                                     ("MEMBER_MAPS", "atom maps", got[2], ref_state[2])):
+                                     ("MEMBER_MAPS", "atom maps", got[2], ref_state[2]),
+                                     # S11, the user's decision: one isotopologue per
+                                     # ensemble, never normalised away
+                                     ("MEMBER_ISOTOPES", "isotope labels at atoms",
+                                      [(i, got[3][i]) for i in iso],
+                                      [(i, ref_state[3][i]) for i in iso])):
                 if a != b:
                     out.append(_ensemble_block(
                         code, f"record {r}: {what} {a}, record 1 {b}",
                         f"remove record {r}: one ensemble is one species, its atoms "
                         f"named the same way in every record"))
-            if got != ref_state:
+            if got[:3] != ref_state[:3] or iso:
                 continue
         if not coordinates_fix_stereo(m):
             out.append(_ensemble_block(
@@ -1938,6 +2157,17 @@ def supplied_members(path, charge=None, basis="def2-tzvp", spin=0):
                 f"remove record {r}, or compute each stereoisomer as its own ensemble"))
     if out:
         raise EnsembleRefused(out)
+    # review 6 S10: one labelling of diastereotopic groups across the members
+    if not _is_achiral(first):
+        target = prochiral_labels(first)
+        for r, m in enumerate(members[1:], start=2):
+            try:
+                moved = relabel_prochiral(m, -1, target)
+            except ValueError as e:
+                raise EnsembleRefused([_ensemble_block(
+                    "MEMBER_ATOM_ORDER", f"record {r}: {e}",
+                    f"write record {r} with record 1's atom order")]) from None
+            m.SetProp("_relabelled", json.dumps(moved))
     return first, members
 
 
@@ -1986,6 +2216,7 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
     if supplied:
         first, mols = supplied_members(path, charge=charge, basis=basis, spin=spin)
         members = [dict(record=r, spec=_mol_to_spec(m), _mol=m, _cid=-1,
+                        relabelled=json.loads(m.GetProp("_relabelled")) if m.HasProp("_relabelled") else [],
                         geometry_origin=next((m.GetProp(k) for k in ("espmap_geometry_origin",
                                                                       "geometry")
                                               if m.HasProp(k)), None),
@@ -2030,7 +2261,16 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
                 "fix every stereo element in the input")])
         approval = Chem.RemoveHs(probe)
         members, bad = [], []
+        # review 6 S10: ETKDG places diastereotopic groups either way round
+        target = None if _is_achiral(mol) else prochiral_labels(mol, sel["members"][0][0])
         for cid, e in sel["members"]:
+            moved = []
+            if target is not None:
+                try:
+                    moved = relabel_prochiral(mol, cid, target)
+                except ValueError as err:
+                    bad.append(_ensemble_block("MEMBER_ATOM_ORDER", f"embedded conformer {cid}: {err}",
+                                               "report this"))
             spec = _mol_to_spec(mol, cid)
             ok, computed, why = verify_computed(spec, approval)
             mapped, why_m = verify_mapping(spec, approval)
@@ -2039,7 +2279,7 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
                     "MEMBER_IDENTITY", f"embedded conformer {cid}: {why or why_m}",
                     "report this: the embedder changed the approved structure"))
             members.append(dict(embed_conf_id=cid, mmff_energy=e, spec=spec, _mol=mol,
-                                _cid=cid,
+                                _cid=cid, relabelled=moved,
                                 geometry_origin=("etkdg_mmff94s" if ff == "MMFF94s"
                                                  else "etkdg_uff"),
                                 configuration=signs[len(members)],
@@ -2054,6 +2294,8 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
     identity.update(charge=Chem.GetFormalCharge(probe),
                     n_radical=int(sum(a.GetNumRadicalElectrons() for a in probe.GetAtoms())),
                     atom_maps=[a.GetAtomMapNum() for a in probe.GetAtoms() if a.GetAtomicNum() > 1],
+                    isotope_labels=[[a.GetIdx(), a.GetIsotope()] for a in probe.GetAtoms()
+                                    if a.GetIsotope()],
                     configuration=members[0].get("configuration", {}) if members else {})
     return dict(identity=identity, source=protocol["source"], protocol=protocol,
                 gate=findings, members=members,
@@ -2062,7 +2304,10 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
 
 
 ENSEMBLE_SCHEMA = "espmap.ensemble/1"
-# Provisional until the spec's section 8 measures them; the record says so.
+# CONV_TOL_KCAL is the one ensemble constant still PROVISIONAL: section 5's
+# convergence tolerance has not been measured, and the record says so
+# (convergence.status). The thresholds that decide membership are measured
+# (DEDUP_RMSD, CONTACT_MIN_BONDS: section 8.2).
 CONV_TOL_KCAL = 1.0
 BOOTSTRAP_N = 1000
 BOLTZMANN_T = 298.15
@@ -2108,7 +2353,11 @@ def _member_complete(json_path, npz_path, sha1):
             npz_sha1 = str(z["geometry_sha1"])
     except Exception:
         return False
-    return rec.get("geometry", {}).get("sha1") == sha1 == npz_sha1
+    # an optimised member's record holds the optimised geometry and names
+    # the input it started from (E11, found by the v0.3.0 acceptance run)
+    g = rec.get("geometry", {})
+    started_from = g.get("sha1") if g.get("optimised_from_sha1") is None else g["optimised_from_sha1"]
+    return started_from == sha1 and g.get("sha1") == npz_sha1
 
 
 def failure_kind(rc, stderr):
@@ -2338,6 +2587,7 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
             contacts=m["contacts"], folded=m["folded"], genus=genus, genus_excess=g_ex,
             folded_genus_disagree=bool(g_ex is not None and m["folded"] != (g_ex > 0)),
             configuration=m.get("configuration", {}),
+            relabelled=m.get("relabelled", []),
             optimized=bool(rec["settings"].get("optimize")),
             scf_energy_Ha=rec["results"].get("e_tot_Ha"),
             weight=float(weights[k]) if weights is not None else None,
@@ -2368,8 +2618,14 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                 conv[f"{key} | {rule}"] = c
                 if c["converged"] is False:
                     not_conv.append(f"{key} | {rule}")
-    converged = (not not_conv) if conv and all(c["converged"] is not None
-                                               for c in conv.values()) else None
+    # per site: true, false, or null (fewer than 3 usable values, e.g. an
+    # atom with no surface under one rule). Overall: false if any judgeable
+    # site fails, true if any is judgeable and none fails, null if none is
+    # judgeable. A never-judgeable site used to make the whole ensemble null,
+    # hiding E4's 7 non-converged sites (the v0.3.0 acceptance run).
+    judged = [c["converged"] for c in conv.values() if c["converged"] is not None]
+    not_judgeable = [k for k, c in conv.items() if c["converged"] is None]
+    converged = (False if False in judged else True) if judged else None
     first = recs[0][2] if recs else None
     sel = plan["protocol"]
     generated = plan["source"] == "generated"
@@ -2387,6 +2643,8 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
             rg_definition="rdkit_Descriptors3D_mass_weighted_all_atoms",
             dedup_rmsd_A=sel.get("dedup_rmsd") if generated else None,
             dedup_atoms="heavy" if generated else None,
+            dedup_status=DEDUP_STATUS.split(": ", 1)[0] if generated else None,
+            dedup_source=DEDUP_STATUS.split(": ", 1)[1] if generated else None,
             mirror_images_merged=bool(sel.get("mirror_images_merged")),
             n_unique=sel.get("n_unique", sel.get("k_obtained")),
             n_symmetry_matches=sel.get("n_symmetry_matches"),
@@ -2409,17 +2667,23 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                       charge=plan["identity"]["charge"], n_radical=plan["identity"]["n_radical"],
                       atom_maps=plan["identity"].get("atom_maps", []),
                       configuration=plan["identity"].get("configuration", {}),
-                      isotopes="ignored"),
+                      isotopes="must_match",
+                      isotope_labels=plan["identity"].get("isotope_labels", [])),
         protocol=protocol, k_requested=sel["k_requested"], k_obtained=len(members),
         folded_rule=dict(min_bonds=CONTACT_MIN_BONDS, slack_A=CONTACT_SLACK,
-                         radii="Bondi; Mantina 2009 for B", status="provisional"),
+                         radii="Bondi; Mantina 2009 for B",
+                         status=CONTACT_RULE_STATUS.split(": ", 1)[0],
+                         source=CONTACT_RULE_STATUS.split(": ", 1)[1]),
         members=members, excluded=excluded,
         convergence=dict(conv_tol_kcal=CONV_TOL_KCAL, status="provisional",
-                         converged=converged, not_converged=not_conv, per_site=conv),
+                         converged=converged, not_converged=not_conv,
+                         not_judgeable=not_judgeable, per_site=conv),
         kish_n=(float(1 / np.sum(weights ** 2)) if weights is not None else None),
         results=results, sites=sites,
         validity=dict(members=bool(members) and not excluded,
-                      convergence=bool(converged),
+                      # null when not judgeable (fewer than 3 usable values, or no
+                      # site table): not measured is not failed
+                      convergence=converged,
                       unbiased=not any(e["folded"] for e in excluded)))
 
 
@@ -2481,7 +2745,8 @@ def ensemble_main(a, argv):
     pr = plan["protocol"]
     print(f"ensemble of {label}: {pr['k_obtained']} member(s) "
           f"({pr['source']}{', ' + str(pr['k_requested']) + ' requested' if pr['source'] == 'generated' else ''}), "
-          f"{plan['folded_count']} folded under the provisional contact rule")
+          f"{plan['folded_count']} folded (heavy-atom contact >= {CONTACT_MIN_BONDS} bonds "
+          f"apart, Bondi + {CONTACT_SLACK} A; measured, ensemble-spec 8.2)")
     if a.check:
         return 0
     rec = run_ensemble(plan, a.ensemble_dir, member_argv(argv), subject=a.subject)
@@ -3837,6 +4102,22 @@ _FORCE_FIELDS = {"mmff94s": "mmff94s", "mmff94": "mmff94", "uff": "uff"}
 # every label geometry_method() emits besides dft:..., each with an optional
 # hydrogen suffix for a file whose hydrogens were added here
 _BASE_LABELS = (*_FORCE_FIELDS, "etkdg_mmff94s", "etkdg_uff", "idealised", "undeclared")
+# origins that are a force-field or embedder guess, not a pose or a reference
+# geometry: --optimize may move them (optimize_would_move_supplied)
+_GENERATED_ORIGINS = ("etkdg_mmff94s", "etkdg_uff", *_FORCE_FIELDS)
+
+
+def optimize_would_move_supplied(gi):
+    """True when --optimize would replace coordinates a file supplied as a pose
+    or a reference geometry, which main refuses without --force. A file that
+    declares a generated origin (an ETKDG or force-field geometry, as every
+    member file of a generated ensemble does) is neither, and --weight dft
+    needs those members optimised (E11, found by the v0.3.0 acceptance run:
+    every generated member was refused)."""
+    if not (gi or {}).get("source", "").startswith("file 3D coordinates used as-is"):
+        return False
+    label = declared_geometry_method(gi.get("declared_geometry") or "") or ""
+    return label.split("+")[0] not in _GENERATED_ORIGINS
 _H_SUFFIXES = ("+mmff94s_h", "+added_h")
 
 
@@ -4731,7 +5012,7 @@ def main():
         # did not do this: it is the input string, or the reader's own output
         # (review 3, H2).
         kept = gi["source"].startswith("file 3D coordinates used as-is")
-        if kept and a.optimize and not a.force:
+        if a.optimize and optimize_would_move_supplied(gi) and not a.force:
             # checked before any compute: optimising a supplied pose discards
             # exactly what the pose was for (its placement in an environment)
             raise SystemExit("--optimize would move the coordinates this file "
