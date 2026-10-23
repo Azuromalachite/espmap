@@ -341,3 +341,36 @@ def test_optimised_members_are_complete_and_resumed(tmp_path):
     again = Stub(optimize=True)
     em.run_ensemble(plan, tmp_path, runner=again, log=lambda s: None)
     assert again.calls == []                           # resumed, not recomputed
+
+
+
+class BuriedOne(Stub):
+    """Members with a second atom that has no surface under nearest-nucleus
+    in every member (as most heavy atoms of a chain do): never judgeable."""
+
+    def __call__(self, argv, cwd, env, timeout):
+        rc = super().__call__(argv, cwd, env, timeout)
+        js = Path(_arg(argv, "--json"))
+        if js.exists():
+            rec = json.loads(js.read_text())
+            rec["sites"]["atoms"].append(dict(index=1, atom_map=0, element="C",
+                                              nearest_nucleus=dict(V_area_mean_kcal_mol=None),
+                                              radius_scaled=dict(V_area_mean_kcal_mol=3.0)))
+            js.write_text(json.dumps(rec))
+        return rc
+
+
+@pytest.mark.xfail(strict=True, reason="one never-judgeable site makes the whole ensemble null")
+def test_an_unjudgeable_site_does_not_hide_a_verdict(plan, tmp_path):
+    """Found by the v0.3.0 acceptance run: E4 had 7 sites not converged and
+    reported null, because atoms buried under nearest-nucleus are never
+    judgeable. Overall: false if any judgeable site fails, else true if any
+    is judgeable, else null; the unjudgeable sites stay listed."""
+    p = dict(plan, members=plan["members"][:4])
+    ok = em.run_ensemble(p, tmp_path / "ok", runner=BuriedOne(site=lambda n: 1.0 + 0.1 * n),
+                         log=lambda s: None)
+    assert ok["convergence"]["converged"] is True and ok["validity"]["convergence"] is True
+    assert ok["convergence"]["not_judgeable"] == ["atom 1 map 0 C | nearest_nucleus"]
+    bad = em.run_ensemble(p, tmp_path / "bad", runner=BuriedOne(site=lambda n: 9.0 if n == 3 else 0.0),
+                          log=lambda s: None)
+    assert bad["convergence"]["converged"] is False and bad["validity"]["convergence"] is False
