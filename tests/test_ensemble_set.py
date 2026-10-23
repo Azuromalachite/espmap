@@ -223,6 +223,21 @@ def _run(case, tmp_path=None):
     if "A" in r:
         _run_compare(case, tmp_path)
         return
+    if r.get("inject") == "surface_failure_on_folded":
+        # E5: a folded member's surface fails integrity (a 0.5 bohr box clips
+        # it, and espmap refuses a clipped surface), as the chi = 2 check once
+        # did to exactly the folded C18 members (F9)
+        plan = em.plan_ensemble(**_plan_kwargs(r))
+        folded = {em.member_label(i) for i, m in enumerate(plan["members"]) if m["folded"]}
+        assert folded, "E5 needs a folded member in the plan"
+
+        def runner(argv, cwd, env, timeout):
+            label = Path(argv[argv.index("--file") + 1]).stem
+            extra = ["--margin", "0.5"] if label in folded else []
+            return em._run_member_process(argv + extra, cwd, env, timeout)
+        rec = em.run_ensemble(plan, tmp_path, PROTOCOL, runner=runner)
+        _check(rec, e["checks"])
+        return
     if r.get("inject"):
         raise NotImplementedError(f"injection {r['inject']!r} is not wired yet")
     if "members_from" in r:
