@@ -2323,6 +2323,125 @@
    "why": "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A"
   },
   {
+   "file": "draw_methylpropanoate_atom3_up_0.8_tilted60_0_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 3 lifted 0.8 A along the page normal, then rotated 60 deg about x and 0 about y",
+   "why": "an edited drawing seen at an angle: one lifted atom must not decide its plane"
+  },
+  {
+   "file": "draw_chlorobenzene_atom0_up_1.0_tilted45_30_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 0 lifted 1.0 A along the page normal, then rotated 45 deg about x and 30 about y",
+   "why": "an edited drawing seen at an angle: one lifted atom must not decide its plane"
+  },
+  {
+   "file": "draw_decalin_noH_atom2_up_0.6_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction of H-free decalin at 1.5 A, atom 2 lifted 0.6 A",
+   "why": "one element pair (C-C): a drawing, but a symmetric real skeleton could look alike, so a refusal is safe and a geometry is not"
+  },
+  {
+   "file": "real_hexafluoroethane_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed",
+   "why": "a real non-flat skeleton"
+  },
+  {
+   "file": "real_hexafluoroethane_noH_3d_rot90x.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "the same, rotated 90 deg about x",
+   "why": "a real non-flat skeleton seen face-on along z"
+  },
+  {
+   "file": "real_norbornane_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed",
+   "why": "a real non-flat skeleton"
+  },
+  {
+   "file": "real_norbornane_noH_3d_rot90x.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "the same, rotated 90 deg about x",
+   "why": "a real non-flat skeleton seen face-on along z"
+  },
+  {
    "file": "draw2d_threonine_wedge_z_1.5.mol",
    "kind": "drawing",
    "allowed": [

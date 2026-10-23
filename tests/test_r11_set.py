@@ -40,6 +40,9 @@ UNSAFE_NOW = {
     # plane is not flat, so no drawing test runs and it is kept as a geometry
     "draw_methylpropanoate_atom3_up_0.35_1.5.mol", "draw_methylpropanoate_atom3_up_0.8_1.5.mol",
     "draw_chlorobenzene_atom0_up_0.5_1.5.mol", "draw_aminopropanol_atom1_up_1.0_1.5.mol",
+    # probe round 4: the same on a tilted drawing, and a one-element-pair one
+    "draw_methylpropanoate_atom3_up_0.8_tilted60_0_1.5.mol",
+    "draw_chlorobenzene_atom0_up_1.0_tilted45_30_1.5.mol", "draw_decalin_noH_atom2_up_0.6_1.5.mol",
 }
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
     # S17: delocalised N-C 1.31 A is 11 % short of its reference: refused

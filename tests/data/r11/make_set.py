@@ -452,6 +452,38 @@ for smi, nm in (("C1CCNCC1", "piperidine"), ("CCNCC", "diethylamine"), ("CC(C)(C
            "RDKit ETKDG + MMFF94s, H removed, not flattened",
            "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A")
 
+# Probe round 4: a lifted atom on a TILTED drawing. The lift tilts the fitted
+# plane and z = 0 foreshortens, so neither projection is clean; one atom out
+# of place must not move the plane. And a one-element-pair drawing (H-free
+# decalin) with a lifted C: a symmetric real skeleton could in principle
+# project evenly, so refusing it is the safe answer, never a geometry.
+for smi, nm, idx, dz, ax, ay in (("CCOC(C)=O", "methylpropanoate", 3, 0.8, 60.0, 0.0),
+                                 ("Clc1ccccc1", "chlorobenzene", 0, 1.0, 45.0, 30.0)):
+    m = _depiction(smi, 1.5)
+    X = _xyz(m)
+    X[idx, 2] = dz
+    _write(f"draw_{nm}_atom{idx}_up_{dz}_tilted{int(ax)}_{int(ay)}_1.5", _tilted(_set_xyz(m, X), ax, ay),
+           True, DRAW, "drawing", "drawing",
+           f"RDKit depiction at 1.5 A, atom {idx} lifted {dz} A along the page normal, then rotated "
+           f"{ax:.0f} deg about x and {ay:.0f} about y",
+           "an edited drawing seen at an angle: one lifted atom must not decide its plane")
+m = _depiction("C1CCC2CCCCC2C1", 1.5)
+X = _xyz(m)
+X[2, 2] = 0.6
+_write("draw_decalin_noH_atom2_up_0.6_1.5", _set_xyz(m, X), True, DRAW, "drawing", "drawing",
+       "RDKit depiction of H-free decalin at 1.5 A, atom 2 lifted 0.6 A",
+       "one element pair (C-C): a drawing, but a symmetric real skeleton could look alike, so a "
+       "refusal is safe and a geometry is not")
+for smi, nm in (("FC(F)(F)C(F)(F)F", "hexafluoroethane"), ("C1CC2CCC1C2", "norbornane")):
+    m = Chem.AddHs(Chem.MolFromSmiles(smi))
+    AllChem.EmbedMolecule(m, randomSeed=7)
+    AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=5000)
+    h = Chem.RemoveHs(m)
+    _write(f"real_{nm}_noH_3d", h, True, REAL, "geometry", "geometry",
+           "RDKit ETKDG + MMFF94s, H removed", "a real non-flat skeleton")
+    _write(f"real_{nm}_noH_3d_rot90x", _tilted(h, 90.0, 0.0), True, REAL, "geometry", "geometry",
+           "the same, rotated 90 deg about x", "a real non-flat skeleton seen face-on along z")
+
 # S8: a 2D header is the file's own statement, also when z is not 0.
 m = _depiction("C[C@@H](O)[C@H](N)C(=O)O", 1.5)
 X = _xyz(m)
