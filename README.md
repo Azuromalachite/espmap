@@ -297,7 +297,8 @@ sign and a fifth the magnitude. Across four target molecules in
 Checking one molecule licenses nothing about another.
 
 **Conformation moves shape more than extrema, until the molecule folds.**
-Across eight extended conformers of the C18 acetate, V<sub>min</sub>/V<sub>max</sub> varied by
+Across eight extended conformers of the C18 acetate (extended: a genus-0
+surface; the two folded ones have genus 2 and 3), V<sub>min</sub>/V<sub>max</sub> varied by
 ~1.1 kcal/mol while the dipole varied 43 % and the negative surface area 13 %.
 The two folded conformers moved V<sub>min</sub> by up to 5.2 kcal/mol and the negative
 area by 60 % (`bench/conformers.jsonl`, `bench/f9_recheck.jsonl`). For a
@@ -321,8 +322,9 @@ Two consequences for anyone quoting a number from this:
   electronic properties at 0.40 kcal/mol on chlorobenzene, **not** for small
   anions (up to 6.5 kcal/mol), and **not** for conformational energies or
   barriers. `--optimize` runs a DFT optimisation (needs
-  `pip install 'espmap[opt]'`, which adds pyberny) and is exercised on one
-  molecule only.
+  `pip install 'espmap[opt]'`, which adds pyberny). It is exercised on
+  methanol, glycine and three small anions (nitrite, SCN⁻, an enolate at
+  def2-TZVP in water), not on neutral flexible molecules.
 - The gate checks that a structure is *unambiguous*. It cannot tell you it is
   the molecule you meant to draw: a cleanly drawn wrong tautomer passes with a
   note.

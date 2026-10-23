@@ -10,7 +10,7 @@ A single-module tool: SMILES or a structure file → DFT → electrostatic
 potential on the ρ = 0.002 e·bohr⁻³ isosurface → a rendered image with a
 colour scale chosen from the data.
 
-`esp_map.py` (~1700 lines) is the whole program. There is no package layout
+`esp_map.py` (~3000 lines) is the whole program. There is no package layout
 and that is intentional — it stays readable end to end, and `pyproject.toml`
 exposes it as a `py-modules` entry plus an `espmap` console script.
 
@@ -193,7 +193,10 @@ rule as if the partition were a fact.
   untested. Do not claim functional convergence beyond the four tested.
 - **Excited states, periodic systems, transition metals.** `TESTED_ELEMENTS`
   is the validated set; anything outside warns rather than refuses.
-- **`--optimize`** exists but is exercised on one molecule.
+- **`--optimize`** is exercised on methanol and glycine in the slow tests,
+  and on nitrite, SCN⁻ and the enolate at def2-TZVP/water, where it
+  re-verified and reproduced the DFT rows of `bench/anion_geometry.jsonl`
+  (review 5). Its effect on neutral, flexible molecules is unmeasured.
 - **Fluorine reports no σ-hole**, because it does not form one. This is a
   deliberate exclusion in `main`, not an oversight.
 - **Intent checking.** The gate verifies a structure is *unambiguous*, never
@@ -214,7 +217,7 @@ Any change to basis, functional, grid, surface definition or solvent handling
 invalidates the table above. Re-measure the affected axis and update both this
 file and `README.md` — the numbers appear in both and in the module docstring.
 
-`docs/adversarial-review-1.md`, `-2.md` and `-3.md` record every
+`docs/adversarial-review-1.md` to `-5.md` record every
 defect found so far, with the reproduction for each. If a test fails in a way
 that looks familiar, it is probably in there.
 
@@ -244,5 +247,6 @@ ones:
 - Raise PySCF's `max_memory` for `--density-fit` runs and re-time the C18
   acetate: at 898 nao density fitting was slower than exact (1,175 s vs
   875 s) with peak memory under the default 4 GB cap.
-- Reduce the slow suite's runtime; 4 minutes is near the limit of what anyone
-  runs locally before pushing.
+- Keep the slow suite's runtime down: the whole suite, slow tests included,
+  took 165 s at 4 threads on v0.2.0 (528 tests, 34 slow), and a few minutes
+  is near the limit of what anyone runs locally before pushing.
