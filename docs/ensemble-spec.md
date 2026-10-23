@@ -384,6 +384,52 @@ Re-spreading helps at small K and does nothing for the C18 selection the
 measured conformer rows used, so it stays deferred: a change would move
 those rows' members for no gain on them.
 
+### 8.2 Measured with an SCF (`bench/ensemble_dft.jsonl`)
+
+**Contact rule vs surface genus.** Seven more C18 conformers were computed
+(B3LYP/def2-SVP + RI, gas, 0.26 bohr, as the bench conformer rows):
+
+| conformer | contacts | genus | ≥ 5 bonds | ≥ 6 bonds | ≥ 7 bonds |
+| --- | --- | --- | --- | --- | --- |
+| 70 | 6 bonds apart | **2** | folded | folded | **missed** |
+| 3, 7 | 6 bonds apart | 0 | folded | folded | extended |
+| 2, 5, 8, 11 | 5 bonds apart only | 0 | **folded** | extended | extended |
+
+Over the 17 conformers with a measured genus, ≥ 5 bonds (current) is wrong on
+7. ≥ 7 bonds is wrong on 1, but that one is a folded member counted as
+extended, the error that contaminates the extended statistics. ≥ 6 bonds is
+wrong on 2, both conservative (a genus-0 member left out of the extended
+population), and misses no folded member. **The measurements favour ≥ 6
+bonds with the 0.5 Å slack**; the change is its own PR.
+
+**Dedup threshold vs site means.** Every pair that 0.5 Å merges and 0.35 Å
+keeps differs in its largest site mean by more than the grid row
+(0.15 kcal/mol), under both rules:
+
+| pair | torsion classes | largest site-mean difference (kcal/mol) |
+| --- | --- | --- |
+| n-pentane 22 / 25 | (+,−) / (+,+) | 0.71 |
+| n-hexane 5 / 76 | (+,−,a) / (+,a,a) | 0.48 |
+| n-heptane 41 / 90 | same class | 0.59 |
+| n-heptane 59 / 20 | (+,−,a,+) / (+,+,a,−) | 0.86 |
+| n-heptane 85 / 62 | (+,−,a,a) / (+,a,a,−) | 0.78 |
+
+So 0.5 Å merges conformers the ESP can tell apart. **The measurements favour
+0.35 Å or lower**; the change is its own PR, and E2 and E6's expectations
+(at most 2 members) still hold at 0.35 Å (`ensemble_rdkit.jsonl`).
+
+**Review 6 S1's size.** (R)-trans-cyclooct-4-enol, one MMFF conformer per
+ring helicity, B3LYP/def2-SVP, PCM water: V_min −45.63 vs −40.74, V_max
+55.21 vs 60.83 kcal/mol, and per-site means differing by up to 12.2 kcal/mol
+(C5). An ensemble mixing the two helicities would average numbers 5–12
+kcal/mol apart; the configuration check (`configuration_signs`) is not a
+formality.
+
+**Review 6 S25.** Bromobenzene σ-hole V_max, gas, idealised geometry:
+def2-SVP 16.81, def2-TZVP 16.05, def2-TZVPP 16.08 kcal/mol. SVP → TZVPP is
+**−0.74**, against the −0.76 quoted in `CLAUDE.md` and the README: the claim
+reproduces within 0.02 and now has a bench row.
+
 ## 9. Order of work
 
 1. This spec (docs PR).
