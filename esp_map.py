@@ -2073,6 +2073,20 @@ def _member_complete(json_path, npz_path, sha1):
     return rec.get("geometry", {}).get("sha1") == sha1 == npz_sha1
 
 
+def failure_kind(rc, stderr):
+    """Whether a failed member run may be retried. Only an infrastructure
+    failure may: a signal or OOM kill, a timeout, a MemoryError. A kill is
+    infrastructure whatever partial output it left: *.part files are not
+    records, and they are never renamed into place. Anything else (a gate refusal, a failed surface check, an
+    SCF that did not converge) is a property of the geometry under the
+    protocol, and rerunning until it passes would be selection on outcome
+    (Arrowfield's review of #76)."""
+    if rc == 0:
+        return "ok"
+    killed = rc < 0 or rc in (137, 139) or "MemoryError" in (stderr or "")
+    return "infrastructure" if killed else "deterministic"
+
+
 def _run_member_process(argv, cwd, env, timeout):
     import subprocess
     import time
@@ -2116,6 +2130,11 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     conf_dir = out / "conformers"
     conf_dir.mkdir(parents=True, exist_ok=True)
     log_path = out / "run_log.jsonl"
+    history = {}
+    if log_path.exists():
+        for line in log_path.read_text(encoding="utf-8").splitlines():
+            x = json.loads(line)
+            history.setdefault(x["conformer"], []).append(x)
     done, failed = [], []
     for i, m in enumerate(plan["members"]):
         label = member_label(i)
@@ -2128,6 +2147,11 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
         if _member_complete(js, nz, sha1):
             log(f"{label}: done earlier, kept")
             done.append((i, label))
+            continue
+        final = next((x for x in history.get(label, []) if x.get("kind") == "deterministic"), None)
+        if final:
+            log(f"{label}: failed deterministically earlier, not retried")
+            failed.append((i, label, final["rc"], final["stderr_tail"]))
             continue
         part_js, part_nz = conf_dir / f"{label}.part.json", out / f"{label}.part.npz"
         tmp = out / "pyscf_tmp" / label
@@ -2142,12 +2166,15 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
             os.replace(part_js, js)
             ok = _member_complete(js, nz, sha1)
         tail = "\n".join((err or "").strip().splitlines()[-5:])
+        kind = "ok" if ok else failure_kind(rc if rc != 0 else 1, err)
+        entry = dict(conformer=label, rc=rc, wall_s=round(wall, 1), ok=ok, kind=kind,
+                     stderr_tail=tail)
+        history.setdefault(label, []).append(entry)
         with log_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(dict(conformer=label, rc=rc, wall_s=round(wall, 1),
-                                    ok=ok, stderr_tail=tail)) + "\n")
+            f.write(json.dumps(entry) + "\n")
         log(f"{label}: {'ok' if ok else f'FAILED rc={rc}'} ({wall:.0f} s)")
         (done if ok else failed).append((i, label) if ok else (i, label, rc, tail))
-    rec = assemble_ensemble(plan, out, done, failed)
+    rec = assemble_ensemble(plan, out, done, failed, history)
     (out / "ensemble.json").write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
     return rec
 
@@ -2202,7 +2229,7 @@ def _convergence(series):
                 shift_last_third=shift, converged=bool(shift <= CONV_TOL_KCAL))
 
 
-def assemble_ensemble(plan, outdir, done, failed):
+def assemble_ensemble(plan, outdir, done, failed, history=None):
     """The espmap.ensemble/1 record from the member records on disk. Every
     member must share one analysis_key (E10): a mixed-level ensemble raises
     EnsembleRefused here, after compute, rather than being averaged."""
@@ -2212,7 +2239,14 @@ def assemble_ensemble(plan, outdir, done, failed):
     from pathlib import Path
     out = Path(outdir)
     members, excluded, recs = [], [], []
-    by_index = {i: lab for i, lab in done}
+    history = history or {}
+
+    def attempts(label):
+        h = history.get(label, [])
+        return dict(attempts=len(h),
+                    earlier_failures=[f"{x['kind']}, rc {x['rc']}: "
+                                      f"{(x['stderr_tail'] or '').splitlines()[-1:] or ''}"
+                                      for x in h if not x.get("ok")])
     for i, label in done:
         js = out / "conformers" / f"{label}.json"
         rec = json.loads(js.read_text(encoding="utf-8"))
@@ -2227,7 +2261,7 @@ def assemble_ensemble(plan, outdir, done, failed):
         excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
                              source_record=m.get("record"), code="MEMBER_RUN_FAILED",
                              reason=f"member run failed, rc {rc}: {tail.splitlines()[-1] if tail else ''}",
-                             folded=m["folded"], rg_angstrom=m["rg"]))
+                             folded=m["folded"], rg_angstrom=m["rg"], **attempts(label)))
     kept = []
     for i, label, rec, js in recs:
         m = plan["members"][i]
@@ -2237,7 +2271,7 @@ def assemble_ensemble(plan, outdir, done, failed):
             excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
                                  source_record=m.get("record"), code="MEMBER_INVALID",
                                  reason=f"member validity false: {', '.join(why)}",
-                                 folded=m["folded"], rg_angstrom=m["rg"]))
+                                 folded=m["folded"], rg_angstrom=m["rg"], **attempts(label)))
             continue
         kept.append((i, label, rec, js))
     rg_by = {i: plan["members"][i]["rg"] for i, *_ in kept}
@@ -2270,7 +2304,7 @@ def assemble_ensemble(plan, outdir, done, failed):
             optimized=bool(rec["settings"].get("optimize")),
             scf_energy_Ha=rec["results"].get("e_tot_Ha"),
             weight=float(weights[k]) if weights is not None else None,
-            validity=rec["validity"]))
+            validity=rec["validity"], **attempts(label)))
     ext = [mm["conformer"] for mm in members if not mm["folded"]]
     pops = {"all": [mm["conformer"] for mm in members], "extended": ext}
     by_label = {label: rec for _, label, rec, _ in kept}

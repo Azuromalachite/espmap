@@ -449,6 +449,18 @@
      "validity": {
       "type": "object",
       "description": "the member record's validity block, copied"
+     },
+     "attempts": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "member runs logged for this conformer (run_log.jsonl); 0 when it was done by an earlier invocation that left no log"
+     },
+     "earlier_failures": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "every failed attempt, '<kind>, rc <n>: <last stderr line>'. Only an infrastructure failure (killed, no record) is retried; a deterministic one stays excluded across reruns, since rerunning until it passes would be selection on outcome"
      }
     }
    }
@@ -498,6 +510,18 @@
        "number",
        "null"
       ]
+     },
+     "attempts": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "member runs logged for this conformer (run_log.jsonl); 0 when it was done by an earlier invocation that left no log"
+     },
+     "earlier_failures": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "every failed attempt, '<kind>, rc <n>: <last stderr line>'. Only an infrastructure failure (killed, no record) is retried; a deterministic one stays excluded across reruns, since rerunning until it passes would be selection on outcome"
      }
     }
    },

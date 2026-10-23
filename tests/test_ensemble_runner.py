@@ -170,3 +170,47 @@ def test_a_supplied_ensemble_keeps_the_file_numbers(tmp_path):
     rec = em.run_ensemble(plan, tmp_path, runner=Stub(), log=lambda s: None, subject="spa.cmpd.x")
     assert [m["source_record"] for m in rec["members"]] == [1, 2, 3]
     assert rec["protocol"]["selection"]["dedup_atoms"] is None and rec["subject"] == "spa.cmpd.x"
+
+
+def test_a_deterministic_failure_is_not_retried_on_a_rerun(plan, tmp_path):
+    """Rerunning until a member passes would be selection on outcome."""
+    em.run_ensemble(plan, tmp_path, runner=Stub(fail={"conf_02"}), log=lambda s: None)
+    again = Stub()
+    rec = em.run_ensemble(plan, tmp_path, runner=again, log=lambda s: None)
+    assert again.calls == []
+    (e,) = rec["excluded"]
+    assert e["conformer"] == "conf_02" and e["attempts"] == 1
+    assert e["earlier_failures"][0].startswith("deterministic, rc 1")
+
+
+def test_an_infrastructure_failure_is_retried_and_its_attempts_kept(plan, tmp_path):
+    em.run_ensemble(plan, tmp_path, runner=Stub(kill_after_json=set()), log=lambda s: None)
+    # a kill with no record written: the stub's -9 path writes the JSON first,
+    # so model the OOM kill directly
+    class OOM(Stub):
+        def __call__(self, argv, cwd, env, timeout):
+            if Path(_arg(argv, "--file")).stem == "conf_01":
+                return -9, 50.0, "Killed"
+            return super().__call__(argv, cwd, env, timeout)
+    for f in (tmp_path / "conformers").glob("conf_01.*json"):
+        f.unlink()
+    rec = em.run_ensemble(plan, tmp_path, runner=OOM(), log=lambda s: None)
+    assert [e["conformer"] for e in rec["excluded"]] == ["conf_01"]
+    again = Stub()
+    rec = em.run_ensemble(plan, tmp_path, runner=again, log=lambda s: None)
+    assert [c for c, _ in again.calls] == ["conf_01"] and rec["excluded"] == []
+    m = next(m for m in rec["members"] if m["conformer"] == "conf_01")
+    assert m["attempts"] == 3 and len(m["earlier_failures"]) == 1
+    assert m["earlier_failures"][0].startswith("infrastructure, rc -9")
+
+
+@pytest.mark.parametrize("rc, err, kind", [
+    (0, "", "ok"),
+    (-9, "Killed", "infrastructure"),
+    (137, "", "infrastructure"),
+    (1, "MemoryError", "infrastructure"),
+    (1, "structure rejected", "deterministic"),
+    (1, "surface not closed", "deterministic"),
+])
+def test_failure_kinds(rc, err, kind):
+    assert em.failure_kind(rc, err) == kind
