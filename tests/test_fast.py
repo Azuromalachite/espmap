@@ -2585,3 +2585,87 @@ def test_alie_refuses_the_gas_phase_enolate():
     mol, mf = em.run_scf(spec, basis="def2-svp", charge=-1)
     with pytest.raises(em.ALIEUnbound):
         em.alie_at_points(mol, mf, np.array([[0.0, 0.0, 4.0]]))
+
+
+# ---------------------------------------- review 6 LOW findings (S18-S23)
+def _separate_triangles(values):
+    """One unit right triangle per value, no shared vertices: equal areas."""
+    P, faces, V = [], [], []
+    for k, v in enumerate(values):
+        base = np.array([3.0 * k, 0.0, 0.0])
+        P += [base, base + [1, 0, 0], base + [0, 1, 0]]
+        faces.append([3 * k, 3 * k + 1, 3 * k + 2])
+        V += [v, v, v]
+    return np.array(P), np.array(faces), np.array(V, float)
+
+
+def test_sigma2_tot_is_null_when_a_sign_is_below_the_floor():
+    vals = [5.0 + 0.1 * i for i in range(49)] + [-10.0 - 0.1 * i for i in range(951)]
+    g = em.gipf_stats(*_separate_triangles(vals))           # 4.9 % positive
+    assert g["sigma2_pos_kcal2_mol2"] is None and g["sigma2_tot_kcal2_mol2"] is None
+
+
+def test_sigma2_tot_is_the_one_variance_when_the_other_sign_has_no_area():
+    vals = [-10.0 - 0.1 * i for i in range(100)]
+    g = em.gipf_stats(*_separate_triangles(vals))
+    assert g["sigma2_tot_kcal2_mol2"] == pytest.approx(g["sigma2_neg_kcal2_mol2"])
+
+
+def test_the_geometry_label_follows_what_b3lyp_means():
+    import subprocess
+    import sys
+    code = ("import pyscf.__config__ as c; c.B3LYP_WITH_VWN5 = True\n"
+            "import esp_map as em\n"
+            "print(em.xc_key('b3lyp'), em._dft_label('b3lyp', 'def2-svp', None))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                         cwd=str(Path(em.__file__).parent)).stdout.split()
+    assert out == ["b3lyp5", "dft:b3lyp5/def2svp"]
+
+
+def test_the_geometry_label_is_unchanged_for_plain_b3lyp():
+    assert em._dft_label("B3LYP", "def2-SVP", "water") == "dft:b3lyp/def2svp/water"
+
+
+def test_a_connectivity_failure_does_not_also_report_the_atom_order():
+    from rdkit import Chem
+    probe = Chem.AddHs(Chem.MolFromSmiles("CCO"))
+    spec, _ = em.from_smiles("CCO")
+    rows = [r.split() for r in spec.split(";")]
+    rows[1][1:], rows[2][1:] = rows[2][1:], rows[1][1:]       # swap C2 and O
+    swapped = "; ".join(" ".join(r) for r in rows)
+    verified, _, mapped_ok = em.check_identity(swapped, probe, "CCO", False, True, "test")
+    assert verified is False and mapped_ok is None
+    assert "atom order" not in em.input_invalid_reason(None, verified, mapped_ok)
+
+
+@pytest.mark.parametrize("basis", ["sto-6g", "pcseg-0", "6-31++g", "6-31g(2d)", "6-31g(2df,p)",
+                                   "def2-svp", "cc-pvdz", "6-31g*"])
+def test_double_zeta_and_smaller_bases_are_small(basis):
+    assert em.basis_is_small(basis)
+
+
+@pytest.mark.parametrize("basis", ["def2-tzvp", "def2-tzvpp", "cc-pvtz", "6-311g**", "def2-qzvp",
+                                   "pcseg-2", "aug-cc-pvtz"])
+def test_triple_zeta_and_larger_bases_are_not_small(basis):
+    assert not (em.basis_key(basis) in em.SMALL_BASIS)
+    if hasattr(em, "basis_is_small"):
+        assert not em.basis_is_small(basis)
+
+
+def test_alie_chunking_and_spins_against_a_direct_reference():
+    """S18: the identities cannot see a dropped beta channel when alpha and
+    beta agree, beta given alpha's energies, or a chunk skipped. Distinct
+    spins, 60 points and a budget that forces several chunks can."""
+    from pyscf.dft import numint
+    mol, _ = _h2_and_points()
+    rng = np.random.default_rng(7)
+    pts = rng.normal(scale=1.5, size=(60, 3))
+    Ca, Cb = rng.normal(size=(2, mol.nao, mol.nao))
+    ea, eb = [-0.9, -0.5, 0.2, 0.6], [-0.7, -0.3, 0.1, 0.4]
+    na, nb = [1, 1, 0, 0], [1, 0, 0, 0]
+    mf = _fake_mf([Ca, Cb], [ea, eb], [na, nb])
+    ao = numint.eval_ao(mol, pts)
+    wa, wb = (ao @ Ca[:, :2]) ** 2, (ao @ Cb[:, :1]) ** 2
+    want = (wa @ [0.9, 0.5] + wb @ [0.7]) / (wa.sum(1) + wb.sum(1))
+    tiny = 16 * 8 * 2 * mol.nao / 1e9                          # 16 points per chunk
+    assert np.allclose(em.alie_at_points(mol, mf, pts, mem_budget_gb=tiny), want, atol=1e-12)
