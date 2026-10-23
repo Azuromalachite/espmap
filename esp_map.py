@@ -154,6 +154,7 @@ WHAT THIS IS AND IS NOT
 import argparse
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 
@@ -2136,7 +2137,6 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     for tests; the default starts this file as a new process."""
     import json
     import os
-    from pathlib import Path
     if subject is not None:
         plan = dict(plan, subject=subject)
     runner = runner or _run_member_process
@@ -2398,6 +2398,73 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
         validity=dict(members=bool(members) and not excluded,
                       convergence=bool(converged),
                       unbiased=not any(e["folded"] for e in excluded)))
+
+
+# flags the ensemble command sets per member, never passed through
+_ENSEMBLE_OWN = {"--smiles": 1, "--file": 1, "--record": 1, "--json": 1, "--npz": 1,
+                 "--out": 1, "--html": 1, "--ensemble": 1, "--ensemble-dir": 1,
+                 "--subject": 1, "--n-embed": 1, "--weight": 1, "--seed": 1,
+                 "--nconfs": 1, "--geometry-origin": 1, "--check": 0}
+
+
+def member_argv(argv):
+    """The command line every member run gets: everything the user gave
+    (--xc, --basis, --solvent, --density-fit, --sites, --optimize ...)
+    except the flags the ensemble command sets per member."""
+    out, skip = [], 0
+    for x in argv:
+        if skip:
+            skip -= 1
+            continue
+        flag = x.split("=", 1)[0]
+        if flag in _ENSEMBLE_OWN:
+            skip = _ENSEMBLE_OWN[flag] if "=" not in x else 0
+            continue
+        out.append(x)
+    return out
+
+
+def ensemble_main(a, argv):
+    """--ensemble: plan (parse, gate, select or check the supplied records:
+    every refusal before any SCF), then run_ensemble. Returns the exit code."""
+    if a.atoms or not (a.smiles or a.file):
+        raise SystemExit("--ensemble needs --smiles or --file")
+    if a.record is not None:
+        raise SystemExit("--record picks one record; --ensemble supplied uses every "
+                         "record, and --ensemble K needs a one-record file")
+    if a.force:
+        raise SystemExit("--force does not apply to ensembles: an ensemble record has "
+                         "no validity.input to carry a forced member")
+    if a.geometry_origin is not None and a.ensemble != "supplied":
+        raise SystemExit("--geometry-origin describes supplied coordinates; a "
+                         "generated ensemble labels its own (etkdg_mmff94s)")
+    try:
+        k = a.ensemble if a.ensemble == "supplied" else int(a.ensemble)
+    except ValueError:
+        raise SystemExit(f"--ensemble {a.ensemble!r}: give a number of conformers, "
+                         f"or 'supplied'") from None
+    label = a.smiles or str(a.file)
+    try:
+        plan = plan_ensemble(smiles=a.smiles, path=a.file, ensemble=k, charge=a.charge,
+                             spin=a.spin, basis=a.basis, weight=a.weight,
+                             optimize=a.optimize, n_embed=a.n_embed or N_EMBED,
+                             seed=a.seed)
+    except EnsembleRefused as e:
+        print_check(BLOCK, e.findings, label)
+        return 1
+    if a.geometry_origin is not None:
+        for m in plan["members"]:
+            m["geometry_origin"] = m.get("geometry_origin") or a.geometry_origin
+    pr = plan["protocol"]
+    print(f"ensemble of {label}: {pr['k_obtained']} member(s) "
+          f"({pr['source']}{', ' + str(pr['k_requested']) + ' requested' if pr['source'] == 'generated' else ''}), "
+          f"{plan['folded_count']} folded under the provisional contact rule")
+    if a.check:
+        return 0
+    rec = run_ensemble(plan, a.ensemble_dir, member_argv(argv), subject=a.subject)
+    print(f"wrote {Path(a.ensemble_dir) / 'ensemble.json'}: {rec['k_obtained']} computed, "
+          f"{len(rec['excluded'])} excluded; validity {rec['validity']}")
+    return 0
 
 
 def estimate_cost(spec, basis, charge=0, spin=0):
@@ -4145,6 +4212,18 @@ def main():
                                     "reaction sites to report instead of one per heavy "
                                     "atom; atoms by atom-map number or by atom index in "
                                     "file order (heavy atoms only), '3+H' adds 3's hydrogens")
+    ap.add_argument("--ensemble", metavar="K|supplied",
+                    help="compute a conformer ensemble (docs/ensemble-spec.md): K members "
+                         "generated from --smiles or a one-record --file, or 'supplied' for "
+                         "every record of a multi-record --file. Writes --ensemble-dir")
+    ap.add_argument("--ensemble-dir", default="ensemble",
+                    help="where the members and ensemble.json go (default ./ensemble)")
+    ap.add_argument("--subject", help="an opaque label copied into the ensemble record")
+    ap.add_argument("--n-embed", type=int, default=None,
+                    help=f"conformers embedded before selection (default {N_EMBED})")
+    ap.add_argument("--weight", choices=("none", "dft", "mmff"), default="none",
+                    help="ensemble statistics weighting: none, or dft (Boltzmann over "
+                         "members' SCF energies, needs --optimize); mmff is refused")
     a = ap.parse_args()
 
     if a.selftest:
@@ -4178,6 +4257,8 @@ def main():
     err = cmap_preflight(a.scale, a.cmap, a.force_cmap, available=set(build_maps()))
     if err:
         raise SystemExit(err)
+    if a.ensemble is not None:
+        raise SystemExit(ensemble_main(a, sys.argv[1:]))
 
     charge, spin, i_sub = a.charge or 0, a.spin, 6
     sh_reason = None

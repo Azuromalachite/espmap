@@ -214,3 +214,45 @@ def test_an_infrastructure_failure_is_retried_and_its_attempts_kept(plan, tmp_pa
 ])
 def test_failure_kinds(rc, err, kind):
     assert em.failure_kind(rc, err) == kind
+
+
+# --- the --ensemble command line ---------------------------------------------------
+def test_member_runs_get_the_users_settings_and_not_the_ensemble_flags():
+    argv = ["--smiles", "CCO", "--ensemble", "4", "--basis", "def2-svp", "--density-fit",
+            "--ensemble-dir=out", "--subject", "x", "--seed", "7", "--solvent", "water",
+            "--weight", "dft", "--optimize", "--check", "--sites", "s.json", "--json", "r.json"]
+    assert em.member_argv(argv) == ["--basis", "def2-svp", "--density-fit", "--solvent",
+                                    "water", "--optimize", "--sites", "s.json"]
+
+
+def _cli(*args, cwd):
+    import subprocess
+    import sys
+    r = subprocess.run([sys.executable, em.__file__, *args], cwd=cwd, capture_output=True,
+                       text=True, timeout=300)
+    return r.returncode, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize("args, says", [
+    (["--smiles", "CC(O)C(N)C(=O)O", "--ensemble", "4"], "STEREO_REQUIRED"),
+    (["--smiles", "CCCCCCO", "--ensemble", "4", "--weight", "mmff"], "WEIGHT_MMFF"),
+    (["--smiles", "CCO", "--ensemble", "2", "--force"], "--force does not apply"),
+    (["--smiles", "CCO", "--ensemble", "two"], "give a number of conformers"),
+    (["--atoms", "O 0 0 0; H 0 0 1; H 0 1 0", "--ensemble", "2"], "needs --smiles or --file"),
+])
+def test_the_command_line_refuses_before_computing(args, says, tmp_path):
+    rc, out = _cli(*args, cwd=tmp_path)
+    assert rc != 0 and says in out
+    assert not (tmp_path / "ensemble").exists()
+
+
+def test_check_plans_without_computing(tmp_path):
+    rc, out = _cli("--smiles", "CCCCCCO", "--ensemble", "4", "--check", cwd=tmp_path)
+    assert rc == 0 and "4 member(s)" in out and not (tmp_path / "ensemble").exists()
+
+
+def test_a_supplied_file_refusal_names_the_record(tmp_path):
+    rc, out = _cli("--file", str(Path(__file__).parent / "data" / "ensemble" /
+                                 "E8_ligand_and_tautomer.sdf"), "--ensemble", "supplied",
+                   cwd=tmp_path)
+    assert rc != 0 and "MEMBER_IDENTITY" in out and "record 4" in out
