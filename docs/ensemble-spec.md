@@ -328,6 +328,62 @@ None of these defaults is quotable until measured into `bench/`:
 Each run is heavy (K SCFs per molecule). One job at a time in WSL, logged
 like `bench/timing.py`: resumable, one process per member.
 
+### 8.1 Measured so far without an SCF (`bench/ensemble_rdkit.jsonl`)
+
+RDKit only, seed 0xC0FFEE, 100 embedded, espmap's own embedder and
+selection. These settle the structural half of three questions; none of
+the constants is changed here (thresholds change in their own PRs).
+
+**Dedup threshold.** Truth for chains: the backbone torsion string (anti,
+g+, g−), canonical under reversal and reflection. A false merge is a
+torsion class lost.
+
+| threshold (Å) | n-butane | n-pentane | n-hexane | n-heptane | 1-hexanol |
+| --- | --- | --- | --- | --- | --- |
+| 0.25 | 0 | 0 | 0 | 0 | 0 |
+| 0.35 | 0 | 0 | 0 | 0 | 0 |
+| **0.5 (current)** | 0 | **1** | **1** | **2** | **2** |
+| 0.75 | 1 | 2 | 7 | 12 | 13 |
+
+(false merges; classes present: 2, 4, 9, 17, 19.) 0.5 Å loses real
+conformers from pentane on; 0.35 Å loses none here. Below 0.35 Å a few
+same-class pairs stay separate (hexane, heptane: 1; hexanol: up to 10,
+largely hydroxyl-rotor variants a 3-state backbone class does not
+distinguish). Cyclohexane has no backbone torsions, so the class truth
+does not apply to it. **Not yet settled:** whether a merged pair's site
+means differ by more than the grid row (0.15 kcal/mol), the spec's actual
+criterion: `bench/ensemble_dft.py dedup_esp` runs the 5 pairs.
+
+**Contact rule vs measured genus** (the 10 bench C18 conformers; genus from
+`conformers.jsonl` χ and `f9_recheck.jsonl`), and the folded rate over all
+100:
+
+| min bonds | slack 0.3 Å | slack 0.5 Å |
+| --- | --- | --- |
+| **5 (current)** | 10/10 agree, 17 % folded | 9/10 (conformer 57 genus 0, called folded), 36 % |
+| 6 | 10/10, 2 % | 10/10, 5 % |
+| 7 | 10/10, 2 % | 10/10, 2 % |
+
+At 5 bonds, 53 of the 58 contacts in 100 conformers are 5 bonds apart (the
+g+g− and cis-alkene neighbourhoods review 6 S3 found). The rules ≥ 6 and
+≥ 7 bonds differ only on conformers 3, 7 and 70 (6-bond contacts):
+`bench/ensemble_dft.py genus` computes their genus, with four 5-bond-only
+ones as controls, and decides between them.
+
+**Re-spread after a collision** (review 6 S4), largest Rg gap left among the
+selected members, Å:
+
+| case | bench rule | re-spread | Rg range |
+| --- | --- | --- | --- |
+| C18 acetate, K = 10 | 1.16 | 1.19 | 2.53 |
+| 1-octanol, K = 3 | 0.74 | 0.64 | 0.76 |
+| 1-octanol, K = 5 | 0.36 | 0.25 | 0.76 |
+| 1-hexanol, K = 6 | 0.20 | 0.17 | 0.61 |
+
+Re-spreading helps at small K and does nothing for the C18 selection the
+measured conformer rows used, so it stays deferred: a change would move
+those rows' members for no gain on them.
+
 ## 9. Order of work
 
 1. This spec (docs PR).
