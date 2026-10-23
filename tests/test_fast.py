@@ -2493,3 +2493,73 @@ def test_sites_are_withheld_when_the_electronic_structure_is_not_valid():
     sites, why = em.sites_block(valid, P, np.array([[0, 1, 2]]), np.zeros(3),
                                 np.array([[0, 0, 0], [0, 0, 1.2]]), ["C", "O"])
     assert sites is None and "electronic" in why
+
+
+# ------------------------------------------------ P4: ALIE, without an SCF
+def _fake_mf(C, e, n):
+    from types import SimpleNamespace
+    return SimpleNamespace(mo_coeff=np.asarray(C, float), mo_energy=np.asarray(e, float),
+                           mo_occ=np.asarray(n, float))
+
+
+def _h2_and_points():
+    from pyscf import gto
+    mol = gto.M(atom="H 0 0 0; H 0 0 0.74", basis="6-31g", verbose=0)
+    pts = np.array([[0.0, 0.0, 0.7], [1.5, 0.3, -0.4], [0.2, -2.0, 2.5]])
+    return mol, pts
+
+
+def test_alie_one_occupied_orbital_is_its_energy_everywhere():
+    """docs/p4-spec.md acceptance test 1: exact for ANY coefficients, so a
+    wrong weight or a missing |e| cannot hide."""
+    mol, pts = _h2_and_points()
+    rng = np.random.default_rng(1)
+    C = rng.normal(size=(mol.nao, mol.nao))
+    I = em.alie_at_points(mol, _fake_mf(C, [-0.6, -0.2, 0.3, 0.9], [2, 0, 0, 0]), pts)
+    assert np.allclose(I, 0.6, atol=1e-12)
+
+
+def test_alie_is_the_density_weighted_mean_of_occupied_energies():
+    from pyscf.dft import numint
+    mol, pts = _h2_and_points()
+    rng = np.random.default_rng(2)
+    C = rng.normal(size=(mol.nao, mol.nao))
+    e, n = [-0.9, -0.4, 0.2, 0.7], [2, 2, 0, 0]          # virtuals must not count
+    ao = numint.eval_ao(mol, pts)
+    w = 2 * (ao @ C[:, :2]) ** 2
+    want = (w @ np.abs(e[:2])) / w.sum(axis=1)
+    assert np.allclose(em.alie_at_points(mol, _fake_mf(C, e, n), pts), want, atol=1e-12)
+
+
+def test_alie_uks_with_equal_spins_equals_rks():
+    """Acceptance test 2 without an SCF: UKS sums alpha and beta with n = 1,
+    so identical spin channels must reproduce RKS (n = 2) exactly."""
+    mol, pts = _h2_and_points()
+    rng = np.random.default_rng(3)
+    C = rng.normal(size=(mol.nao, mol.nao))
+    e = [-0.9, -0.4, 0.2, 0.7]
+    rks = em.alie_at_points(mol, _fake_mf(C, e, [2, 2, 0, 0]), pts)
+    uks = em.alie_at_points(mol, _fake_mf([C, C], [e, e], [[1, 1, 0, 0], [1, 1, 0, 0]]), pts)
+    assert np.allclose(uks, rks, atol=1e-12)
+
+
+def test_alie_open_shell_counts_each_spin_with_its_own_energy():
+    mol, pts = _h2_and_points()
+    rng = np.random.default_rng(4)
+    C = rng.normal(size=(mol.nao, mol.nao))
+    # alpha: two occupied; beta: one, with different energies
+    mf = _fake_mf([C, C], [[-0.8, -0.3, 0.1, 0.5], [-0.7, 0.0, 0.2, 0.6]],
+                  [[1, 1, 0, 0], [1, 0, 0, 0]])
+    from pyscf.dft import numint
+    ao = numint.eval_ao(mol, pts)
+    wa, wb = (ao @ C[:, :2]) ** 2, (ao @ C[:, :1]) ** 2
+    want = (wa @ [0.8, 0.3] + wb @ [0.7]) / (wa.sum(axis=1) + wb.sum(axis=1))
+    assert np.allclose(em.alie_at_points(mol, mf, pts), want, atol=1e-12)
+
+
+def test_alie_is_nan_where_no_orbital_reaches():
+    mol, _ = _h2_and_points()
+    C = np.eye(mol.nao)
+    I = em.alie_at_points(mol, _fake_mf(C, [-0.6, -0.2, 0.3, 0.9], [2, 0, 0, 0]),
+                          np.array([[0.0, 0.0, 200.0]]))
+    assert np.isnan(I).all()

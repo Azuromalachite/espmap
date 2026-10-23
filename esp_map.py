@@ -1569,6 +1569,43 @@ def esp_at_points(mol, dm, pts, mem_budget_gb=0.5):
     return V
 
 
+def alie_at_points(mol, mf, pts, mem_budget_gb=0.5):
+    """Average local ionisation energy (Hartree) at arbitrary points (bohr).
+
+        I(r) = sum_i n_i |psi_i(r)|^2 |e_i|  /  sum_i n_i |psi_i(r)|^2
+
+    over occupied orbitals (Sjoberg et al. 1990; docs/p4-spec.md section 1),
+    evaluated at the surface vertices like esp_at_points, never on a grid.
+    RKS weights each spatial orbital by its occupation (2); UKS sums alpha and
+    beta separately with occupation 1, so the denominator is rho_a + rho_b,
+    as total_dm gives (invariant 5). Orbital energies are Kohn-Sham, so I
+    depends on the functional far more than V does.
+
+    The one-orbital identity -- a single occupied orbital gives I = |e_1|
+    everywhere, whatever the basis -- is asserted in --selftest.
+    """
+    from pyscf.dft import numint
+    pts = np.asarray(pts, float)
+    C, e, n = (np.asarray(x, dtype=float) for x in (mf.mo_coeff, mf.mo_energy, mf.mo_occ))
+    if C.ndim == 2:                     # RKS: one spin channel
+        C, e, n = C[None], e[None], n[None]
+    chunk = max(16, min(int(mem_budget_gb * 1e9 / (8 * 2 * mol.nao)), 20000))
+    out = np.empty(len(pts))
+    for s in range(0, len(pts), chunk):
+        ao = numint.eval_ao(mol, pts[s:s + chunk], deriv=0)
+        num = np.zeros(len(ao))
+        den = np.zeros(len(ao))
+        for Cs, es, ns in zip(C, e, n):
+            occ = ns > 0
+            w = (ao @ Cs[:, occ]) ** 2 * ns[occ]    # n_i |psi_i|^2 at each point
+            num += w @ np.abs(es[occ])
+            den += w.sum(axis=1)
+        # NaN where no occupied orbital reaches the point (den underflows to 0,
+        # e.g. 25 A out); never on a rho = 0.002 vertex
+        out[s:s + chunk] = np.divide(num, den, out=np.full(len(num), np.nan), where=den > 0)
+    return out
+
+
 def reaction_field_at_points(mf, pts):
     """Potential (Hartree/e) of the PCM surface charges at points (bohr).
 
@@ -2982,6 +3019,27 @@ def selftest(basis="def2-svp"):
     good = bool(V[0] < 0 < V[1])
     ok &= good
     print(f"  {'PASS' if good else 'FAIL'}  lone pair negative AND donor H positive")
+
+    # ALIE (P4): exact identities, so a wrong occupation weight, a missing
+    # |e| or a dropped spin channel fails by far more than rounding
+    near = pts[:2]                      # the 25 A probe is outside every orbital
+    I = alie_at_points(mol, mf, near) * HA2EV
+    good = bool(np.all(np.isfinite(I)) and np.all(I > 0))
+    ok &= good
+    print(f"  {'PASS' if good else 'FAIL'}  ALIE positive at the probes "
+          f"({', '.join(f'{x:.2f}' for x in I)} eV)")
+    for label, atom, spin in (("H2, RKS, one doubly occupied orbital",
+                               "H 0 0 0; H 0 0 0.74", 0),
+                              ("H atom, UKS, one alpha orbital", "H 0 0 0", 1)):
+        m1, f1 = run_scf(atom, basis=basis, spin=spin)
+        e = np.atleast_2d(np.asarray(f1.mo_energy))
+        occ = np.atleast_2d(np.asarray(f1.mo_occ)) > 0
+        want = float(np.abs(e[occ]).max())
+        got = alie_at_points(m1, f1, near)
+        good = bool(np.allclose(got, want, rtol=0, atol=1e-10))
+        ok &= good
+        print(f"  {'PASS' if good else 'FAIL'}  ALIE = |e_1| everywhere: {label} "
+              f"(max dev {np.abs(got - want).max():.1e} Ha)")
 
     # colormap orientation. Caught two inverted sequential maps when added;
     # the convention is intense/warm = electron-rich on every scale.
