@@ -316,7 +316,9 @@ def coordinate_kind(mol, fmt, tol=0.03):
       - otherwise it is a GEOMETRY if every bond is within tolerance of its
         reference length (flat_length_problems);
       - if not, a DRAWING when its bonds are uniform across two or more
-        element pairs (a drawing at an unusual scale), else AMBIGUOUS.
+        element pairs (a drawing at an unusual scale) and some bond is
+        DRAWN_BOND_FACTOR tolerances off, else AMBIGUOUS: a real H-free
+        isoxazole (N-O just over) is refused, not discarded.
     Review 5 R11: master discarded real C6F6 and C2F4, and computed a
     stretched drawing and a z-jittered one flat. Two rules written before a
     test set each opened a silent hole (a chlorobenzene drawing at 1.4 A;
@@ -360,7 +362,9 @@ def coordinate_kind(mol, fmt, tol=0.03):
         return "drawing" if len(pairs) > 1 else "ambiguous"
     if not flat_length_problems(mol, lengths):
         return "geometry"
-    return "drawing" if uniform and len(pairs) > 1 else "ambiguous"
+    if uniform and len(pairs) > 1 and flat_length_problems(mol, lengths, DRAWN_BOND_FACTOR):
+        return "drawing"
+    return "ambiguous"
 
 
 # A file is flat when every atom lies within this of its best-fit plane (A).
@@ -385,6 +389,11 @@ PLAUSIBLE_TOL = 0.10
 TIGHT_BOND_TOL = 0.05
 # single, aromatic, double, triple: fraction of the single-bond length
 _ORDER_FACTOR = {1.0: 1.0, 1.5: 0.92, 2.0: 0.87, 3.0: 0.79}
+# An implausible flat file is called a drawing only when some bond is this
+# many tolerances off; nearer, it is refused. Measured: every drawing that
+# reaches that step is 1.58x or more (phenylacetate drawn at 1.4 A), real
+# H-free isoxazole 1.00x (aromatic N-O +10.0 %).
+DRAWN_BOND_FACTOR = 1.3
 # Angles a real acyclic two-coordinate sp3 atom takes (deg): H2S 92, water
 # 104.5, chains ~112-114. A drawing's zigzag is 120.
 SP3_REAL_ANGLE = (90.0, 118.0)
@@ -402,10 +411,10 @@ def bond_reference_length(bond):
     return r * _ORDER_FACTOR.get(bond.GetBondTypeAsDouble(), 1.0)
 
 
-def flat_length_problems(mol, lengths):
+def flat_length_problems(mol, lengths, factor=1.0):
     """Bonds of a flat file further from their reference length than a real
     bond goes (TIGHT_BOND_TOL for a bond to an sp3 carbon or a C=C, else
-    PLAUSIBLE_TOL); empty if every bond could be real."""
+    PLAUSIBLE_TOL, each times factor); empty if every bond could be real."""
     from rdkit import Chem
     sp3 = Chem.HybridizationType.SP3
     out = []
@@ -415,7 +424,7 @@ def flat_length_problems(mol, lengths):
         tight = (any(a.GetSymbol() == "C" and a.GetHybridization() == sp3 for a in ends)
                  or (b.GetBondTypeAsDouble() == 2.0
                      and ends[0].GetSymbol() == ends[1].GetSymbol() == "C"))
-        tol = TIGHT_BOND_TOL if tight else PLAUSIBLE_TOL
+        tol = (TIGHT_BOND_TOL if tight else PLAUSIBLE_TOL) * factor
         if abs(L / ref - 1) > tol:
             out.append(f"{ends[0].GetSymbol()}-{ends[1].GetSymbol()} {L:.3f} A vs {ref:.2f}")
     return out

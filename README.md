@@ -172,15 +172,15 @@ its bonds and angles:
   covalent-radius length for its bond order: within 5 % for a bond to an
   sp³ carbon or a C=C, 10 % otherwise (C₆F₆, BF₃, the DFT nitrite);
 - anything else is a drawing if its bonds are uniform across two or more
-  element pairs, and is refused otherwise. A flat sp³ four-membered ring is
-  refused too.
+  element pairs and some bond is well outside its tolerance (1.3 times),
+  and is refused otherwise. A flat sp³ four-membered ring is refused too.
 
-`.xyz` and `.pdb` are never drawings. The rule was written against 80
-hostile flat files built first (`tests/data/r11`); two of them are refused
-where a better answer exists (benzene drawn at 1.5 Å, real ozone). Known
-limits: a drawing within those tolerances of a real geometry is computed as
-one, and a real H-free isoxazole (aromatic N–O 10 % long against the
-reference) is discarded as a drawing. A file carrying real 3D coordinates
+`.xyz` and `.pdb` are never drawings. The rule was written against 100
+hostile flat files built first (`tests/data/r11`); seven of them are refused
+where a better answer exists, among them benzene drawn at 1.5 Å, real ozone
+and real isoxazole (aromatic N–O 10 % long against the reference). Known
+limit: a drawing within those tolerances of a real geometry is computed as
+one. A file carrying real 3D coordinates
 is used as-is, with any missing hydrogens added and relaxed against frozen
 heavy atoms.
 

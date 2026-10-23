@@ -18,9 +18,9 @@ import esp_map as em
 _DIR = Path(__file__).resolve().parent / "data" / "r11"
 _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases"]
 
-# what the current rule gets wrong; a new rule removes entries. v0.2.0 had 4
-# unsafe and 25 not preferred; the rule written against this set has none
-# unsafe and these two not preferred, both BLOCKs:
+# what the current rule gets wrong; a new rule removes entries. Against v0.2.0
+# the 100 cases had 15 unsafe and 40 not preferred; the rule now has none
+# unsafe and these not preferred, every one a BLOCK:
 UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
     # one element pair, uniform, at 1.5 A: the same evidence as draw_CO2_1.5
@@ -28,6 +28,17 @@ NOT_PREFERRED_NOW = UNSAFE_NOW | {
     "draw_benzene_1.5.mol",
     # Kekule O=O at 1.278 A is 11 % from its reference: outside PLAUSIBLE_TOL
     "real_ozone.mol",
+    # aromatic N-O is 10.0 % long against the covalent-radius reference; only
+    # just over, so refused rather than discarded (DRAWN_BOND_FACTOR)
+    "real_isoxazole.mol", "real_isoxazole_noH.mol",
+    # a flat sp3 four-membered ring is refused: oxetane is nearly planar
+    "draw_cyclobutane_1.45.mol",
+    # C-C up to +6.6 %, past the 5 % for sp3 carbon, so not a geometry; with
+    # one element pair an implausible file is refused, not called a drawing
+    "draw_hexane_squash_1.25_1.5.mol",
+    # three C-C at 1.502 A, one pair: a drawing length; ring angles are the
+    # same drawn or real
+    "real_cyclopropane_noH.mol",
 }
 
 
