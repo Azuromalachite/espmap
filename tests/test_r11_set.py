@@ -35,6 +35,7 @@ UNSAFE_NOW = {
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
     "draw_hexane_1.0.mol", "draw_hexane_1.4.mol", "draw_hexane_1.45.mol",
     "draw_hexane_1.5.mol", "draw_hexane_1.54.mol", "draw_benzene_1.5.mol",
+    "draw_CO2_1.5.mol",
     "real_benzene_skeleton.mol", "real_anti_butane_skeleton.mol", "dft_nitrite.mol",
     "real_CO2.mol", "real_azide.mol", "real_nitrate.mol", "real_carbonate.mol",
     "real_BF3.mol", "real_SO3.mol", "real_ozone.mol", "real_nitronium.mol",
