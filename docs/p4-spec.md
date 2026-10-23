@@ -11,20 +11,28 @@ functions are outlined in §8 and get their own revision once ALIE has landed.
 
 ## Why
 
-ESP shows where the potential is negative or positive: where a hard,
-charge-controlled electrophile goes. It does not show where electrons are
-most easily given up, which is what soft, orbital-controlled reactions follow.
-The calibration pilot (2026-10-22, §2) measured this on the three ambident
-anions Arrowfield teaches with:
+ESP shows where the potential is negative or positive. It does not show where
+electrons are most easily given up. ALIE does, and on the ρ = 0.002 surface
+its minima are an established guide to the sites of electrophilic aromatic
+substitution: ortho/para over meta for NH₂, CH₃ and F, and meta for CHO and NO₂
+(HF/6-31G*, `sjoberg1990`; `murray1992`). That published, checkable record is
+the reason ALIE comes first.
 
-| anion | ESP points to | ALIE points to | SN2 alkylation |
+**The ambident anions are a weaker test than first planned.** The 2026-10-22
+pilot (§2) found ESP and ALIE pointing to different sites on all three:
+
+| anion | ESP points to | pilot ALIE points to | what the literature says, read in full |
 | --- | --- | --- | --- |
-| enolate | O | **C** | C |
-| thiocyanate | N | **S** | S |
-| nitrite | O | O, a 0.03 eV tie | N |
+| thiocyanate | N | **S** | S: kS/kN = 10²–10³ in SN2 alkylation (`loos2003`) |
+| enolate | O | C | conditions decide: O is kinetically favoured for a free enolate, C is thermodynamic (`mayr2011` §3.4.2) |
+| nitrite | O | a 0.03 eV tie | conditions decide: SN2 O/N from 30:70 (EtOH) to 92:8 (THF) (`tishkov2005`); 55–65 % nitro in DMF (`kornblum1955`) |
 
-ALIE earns its place on two of three, and the third shows where ground-state
-descriptors run out. That is the evidence for doing ALIE first.
+So only thiocyanate grades a descriptor. For the enolate and nitrite, the site
+moves with the counterion, solvent and alkylating agent, so no ground-state
+descriptor can be "right" about them in general. Mayr's review argues that
+these selectivities are set by intrinsic barriers and product stabilities
+(Marcus theory), not by hard/soft matching (`mayr2011`). They are reported,
+not graded (§6).
 
 ## 1. Definition
 
@@ -147,22 +155,24 @@ Before ALIE is implemented, a calibration PR commits:
   so ALIE's first PR must turn each expectation green or justify it in the
   open.
 
-Proposed contents. Each reaction and site still needs its citation:
+Contents, as committed in the calibration PR (#68), with every source checked
+on Crossref and read in full except Stock & Brown 1963:
 
-| molecule | reaction / condition | expectation for ALIE |
+| molecule | known chemistry | expectation for ALIE |
 | --- | --- | --- |
-| enolate | SN2 C-alkylation vs O-silylation | lowest Ī on C |
-| thiocyanate | SN2 S-alkylation | lowest Ī on S |
-| nitrite | SN2 → nitroalkane (N) | **tie or O**: ALIE must not be claimed to pick N |
-| anisole | electrophilic aromatic substitution, o/p | o/p carbons below meta |
-| nitrobenzene | electrophilic aromatic substitution, meta | meta carbons below o/p |
-| pyridine | protonation and alkylation at N; EAS at C3 | N lowest |
-| phenoxide | O- vs C(para)-alkylation | to be decided from the literature |
-| chlorobenzene | EAS, o/p (deactivated) | o/p below meta |
+| thiocyanate | SN2: S, kS/kN 10²–10³ (`loos2003`) | S below N |
+| toluene, fluorobenzene | EAS o/p; ALIE minima over o/p in `sjoberg1990` | o/p below meta |
+| nitrobenzene | EAS meta; ALIE minima over meta in `sjoberg1990`, `murray1992` | meta below o/p |
+| anisole, chlorobenzene | EAS o/p (`stock1963`) | o/p below meta |
+| enolate | conditions decide (`mayr2011` §3.4.2) | report only |
+| nitrite | conditions decide (`tishkov2005`, `kornblum1955`) | report only |
+| phenoxide | O in most solvents; C with water, phenol, fluorinated alcohols, through hydrogen bonding (`kornblum1963`) | report only: PCM cannot represent the cause |
 
-The aromatic cases are the classic published use of surface ALIE minima
-(`sjoberg1990`, `bulat2010`), so they also test the implementation against
-prior work. **Arrowfield is asked to keep a held-out calibration set**,
+The published ALIE work is Hartree–Fock (Koopmans). espmap's ALIE uses
+Kohn–Sham orbitals, so an aromatic case that fails under B3LYP is a finding
+for the functional row of §5, not a reason to edit the case. `murray1992`
+also shows a ranking changing with the basis (pyridine N-oxide: para at
+6-31G*, ortho at 3-21G), which is why §5 measures the basis axis on rankings. **Arrowfield is asked to keep a held-out calibration set**,
 built from the same kind of literature but not shared until ALIE is pushed.
 
 ## 7. Rendering
