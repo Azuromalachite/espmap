@@ -2599,7 +2599,6 @@ def _separate_triangles(values):
     return np.array(P), np.array(faces), np.array(V, float)
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S19: sigma2_tot drops a sign below the floor")
 def test_sigma2_tot_is_null_when_a_sign_is_below_the_floor():
     vals = [5.0 + 0.1 * i for i in range(49)] + [-10.0 - 0.1 * i for i in range(951)]
     g = em.gipf_stats(*_separate_triangles(vals))           # 4.9 % positive
@@ -2612,7 +2611,6 @@ def test_sigma2_tot_is_the_one_variance_when_the_other_sign_has_no_area():
     assert g["sigma2_tot_kcal2_mol2"] == pytest.approx(g["sigma2_neg_kcal2_mol2"])
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S20: the dft label ignores B3LYP_WITH_VWN5")
 def test_the_geometry_label_follows_what_b3lyp_means():
     import subprocess
     import sys
@@ -2628,7 +2626,6 @@ def test_the_geometry_label_is_unchanged_for_plain_b3lyp():
     assert em._dft_label("B3LYP", "def2-SVP", "water") == "dft:b3lyp/def2svp/water"
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S21: a mapping failure named when only connectivity failed")
 def test_a_connectivity_failure_does_not_also_report_the_atom_order():
     from rdkit import Chem
     probe = Chem.AddHs(Chem.MolFromSmiles("CCO"))
@@ -2641,7 +2638,6 @@ def test_a_connectivity_failure_does_not_also_report_the_atom_order():
     assert "atom order" not in em.input_invalid_reason(None, verified, mapped_ok)
 
 
-@pytest.mark.xfail(strict=True, reason="review 6 S23: bases outside the list are not 'small'")
 @pytest.mark.parametrize("basis", ["sto-6g", "pcseg-0", "6-31++g", "6-31g(2d)", "6-31g(2df,p)",
                                    "def2-svp", "cc-pvdz", "6-31g*"])
 def test_double_zeta_and_smaller_bases_are_small(basis):
