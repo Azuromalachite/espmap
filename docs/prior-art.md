@@ -29,6 +29,7 @@ enough to support a novelty claim.
 | Assigning space to the nearest of weighted sites | the radius-scaled rule is a multiplicatively weighted Voronoi assignment (distance / r_Bondi) | Aurenhammer 1991 `aurenhammer1991` |
 | Bonds and bond orders perceived from coordinates (xyz2mol) | RDKit's `rdDetermineBonds`, for XYZ, PDB, `--atoms` and every `verify_computed` | Kim & Kim 2015 `kim2015xyz2mol` |
 | Expected bond lengths from covalent radii | RDKit's radii table, scaled for bond order, to ask whether a flat MOL/SDF file can be a real geometry (`coordinate_kind`, review 5 R11) | Cordero et al. 2008 `cordero2008` |
+| Atropisomer axes classed by rotation barrier: below about 20 kcal/mol they interconvert within a minute and are not stereo for practical purposes | `--require-stereo` treats tri- and tetra-ortho biaryl axes (peri fusions weighted 2) as stable, an approximation from the graph alone (`atropisomer_axes`) | LaPlante et al. 2011 `laplante2011` |
 | A positive HOMO marks an anion the basis set cannot bind | `unbound_anion_warning` → `results.electronic.problems` (`UNBOUND_ANION_GAS`) | Galbraith & Schaefer 1996 `galbraith1996`, with the comment by Rösch & Trickey 1997 `rosch1997`; Jensen 2010 `jensen2010` |
 | Average local ionisation energy | roadmap (v0.3) | Sjoberg et al. 1990 `sjoberg1990`; Bulat et al. 2010 |
 | Marching cubes | scikit-image `measure.marching_cubes` | Lorensen & Cline 1987 `lorensen1987`; Lewiner et al. 2003 `lewiner2003` |

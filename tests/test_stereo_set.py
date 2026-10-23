@@ -10,7 +10,6 @@ when the gate returns BLOCK, else "pass".
 The xfail sets list where the current code fails. They are strict: a rule
 that fixes a case must remove it from the set, so the sets only shrink.
 """
-import inspect
 import json
 from pathlib import Path
 
@@ -20,35 +19,10 @@ import esp_map as em
 
 _DIR = Path(__file__).resolve().parent / "data" / "stereo"
 _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases"]
-# until the rule lands, check_structure has no such argument: master is
-# measured as it stands, with nothing that can require stereo
-_HAS_FLAG = "require_stereo" in inspect.signature(em.check_structure).parameters
-
-# what master (v0.2.1, no --require-stereo) gets wrong; a rule removes entries.
-# Every unspecified case passes: the gate only warns or notes about stereo.
-UNSAFE_NOW = {
-    # tetrahedral centres left open in SMILES, partly or wholly
-    "smi_ala_unspec", "smi_threonine_half", "smi_threonine_none", "smi_tartaric_unspec",
-    "smi_trihydroxyglutaric_C3_unspec", "smi_cholesterol_none", "smi_glucose_open_partial",
-    # ring cis/trans, ring junctions and bridgeheads
-    "smi_14dimethylcyclohexane_unspec", "smi_decalin_unspec", "smi_camphor_unspec",
-    # S, P and N centres
-    "smi_sulfoxide_unspec", "smi_phosphine_unspec", "smi_ammonium_unspec",
-    "smi_troger_unspec", "smi_aziridine_C_unspec",
-    # E/Z: alkenes, large rings, C=N, N=N, an enolate
-    "smi_2butene_unspec", "smi_hexadiene_half", "smi_cyclooctene_unspec",
-    "smi_cyclodecene_unspec", "smi_oxime_unspec", "smi_nmethylimine_unspec",
-    "smi_azobenzene_unspec", "smi_enolate_unspec",
-    # axial and helical: allene, even cumulene, exocyclic alkene, spiro, and
-    # three that RDKit cannot see at all (two atropisomers and a helicene)
-    "smi_allene_unspec", "smi_butatriene_unspec", "smi_ethylidene_cyclohexane",
-    "smi_spiro_unspec", "smi_binol", "smi_nitro_biphenyl", "smi_helicene6",
-    # drawings: no wedge, a wavy bond, an 'either' double bond, a 3D-flagged flat drawing
-    "draw_ala_plain", "draw_threonine_plain", "draw_ala_wavy", "draw_sulfoxide_plain",
-    "draw_14dmch_plain", "draw_2butene_either", "draw_2butene_stripped", "draw3d_ala_plain",
-    # --record 2 picks the unwedged drawing from a two-record SDF
-    "sdf_record2_drawing",
-}
+# what the current rule gets wrong; a rule removes entries. Master (v0.2.1)
+# had no --require-stereo and passed all 39 unspecified cases silently; the
+# rule written against this set (stereo_left_open) leaves none.
+UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | set()
 
 
@@ -60,9 +34,9 @@ def _gate(case, require_stereo):
           {"atoms": (_DIR / inp).read_text(encoding="utf-8").strip()})
     probe, probs = em.parse_for_check(**kw)
     assert probe is not None, probs
-    extra = {"require_stereo": True} if (require_stereo and _HAS_FLAG) else {}
     verdict, findings = em.check_structure(Chem.RemoveHs(probe), maps_from=probe,
-                                           smiles=kw.get("smiles"), **extra)
+                                           smiles=kw.get("smiles"),
+                                           require_stereo=require_stereo)
     return verdict, findings
 
 
@@ -108,3 +82,52 @@ def test_stereo_is_required_safely(case):
                                          [c for c in _CASES if c["prefer"]]))
 def test_stereo_requirement_gives_the_preferred_verdict(case):
     assert _verdict(case) == case["prefer"], case["why"]
+
+
+# Off the frozen set: the rule's own thresholds attacked before review (flat
+# polycyclics that must not read as helicenes, the ortho-count boundary,
+# cumulenes that are not stereogenic). Expected verdicts, not set entries.
+@pytest.mark.parametrize("smiles, verdict", [
+    ("c1ccc2c(c1)ccc1ccccc12", "pass"),                                  # phenanthrene
+    ("c1ccc2c(c1)ccc1c3ccccc3ccc21", "pass"),                           # chrysene
+    ("c1ccc2cc3cc4cc5ccccc5cc4cc3cc2c1", "pass"),                       # pentacene
+    ("c1cc2ccc3ccc4ccc5ccc6ccc1c1c2c3c4c5c61", "pass"),                 # coronene
+    ("c1ccc2c(c1)ccc1ccc3ccccc3c12", "pass"),                           # [4]helicene
+    ("c1ccc2c(c1)ccc1ccc3ccc4ccccc4c3c12", "block"),                    # [5]helicene
+    ("c1ccc2c(c1)ccc1ccc3ccc4ccc5ccc6ccccc6c5c4c3c12", "block"),        # [7]helicene
+    ("Cc1ccccc1-c1ccccc1C", "pass"),                                    # two ortho: rotates
+    ("Cc1cccc(Cl)c1-c1ccccc1Br", "block"),                              # tri-ortho, chiral
+    ("Cc1cccc(C)c1-c1c(C)cccc1Cl", "pass"),                             # one end symmetric
+    ("c1ccc2c(-c3cccc4ccccc34)cccc2c1", "block"),                       # 1,1'-binaphthyl
+    ("c1ccc(-c2ccccn2)cc1", "pass"),                                    # 2-phenylpyridine
+    ("c1ccccc1C=C=Cc1ccccc1", "block"),                                 # 1,3-diphenylallene
+    ("CC(C)=C=C(C)C", "pass"),                                          # tetramethylallene
+    ("CC(C)=C=O", "pass"),                                              # a ketene
+    ("CN=C=NC", "pass"),                                                # a carbodiimide
+    ("CC=C=C=C=CC", "block"),                                           # an odd cumulene
+])
+def test_the_rule_on_its_own_boundaries(smiles, verdict):
+    from rdkit import Chem
+    got = "block" if em.stereo_left_open(Chem.MolFromSmiles(smiles)) else "pass"
+    assert got == verdict, smiles
+
+
+def test_the_cli_flag_blocks_before_compute(monkeypatch):
+    """--check --require-stereo: an open centre exits non-zero with
+    STEREO_REQUIRED; the same SMILES passes without the flag, and a fixed
+    one passes with it."""
+    import sys
+    calls = []
+
+    def run(*args):
+        monkeypatch.setattr(sys, "argv", ["esp_map.py", *args])
+        with pytest.raises(SystemExit) as e:
+            em.main()
+        calls.append(args)
+        return e.value.code
+
+    assert run("--smiles", "CC(N)C(=O)O", "--check", "--require-stereo") not in (0, None)
+    assert run("--smiles", "CC(N)C(=O)O", "--check") == 0
+    assert run("--smiles", "C[C@H](N)C(=O)O", "--check", "--require-stereo") == 0
+    assert run("--atoms", (_DIR / "atoms_ala.atoms").read_text(encoding="utf-8").strip(),
+               "--check", "--require-stereo") == 0
