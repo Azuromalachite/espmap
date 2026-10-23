@@ -366,7 +366,7 @@ def coordinate_kind(mol, fmt, tol=0.03):
         # An edited drawing (one atom lifted out of the page) is not flat, but
         # its bonds still project to one drawing-program length; no real
         # non-flat molecule's do (held-out probe of the review 6 fix).
-        return "drawing" if _projects_to_a_drawing(mol, X) else "geometry"
+        return _projected_kind(mol, X) or "geometry"
     if mol.GetNumBonds() == 0:
         return "geometry"
     sp3_problems, real_angles, ring4 = flat_sp3_problems(mol)
@@ -402,26 +402,36 @@ def coordinate_kind(mol, fmt, tol=0.03):
     return "ambiguous"
 
 
-def _projects_to_a_drawing(mol, X):
-    """True when a non-flat file's bonds, projected onto its best-fit plane or
-    onto z = 0, are all within PROJECTED_TOL of one drawing-program length
-    (DRAWING_BOND_LENGTHS) across two or more element pairs: a drawing with an
-    atom lifted out of the page keeps its in-plane lengths. A real non-flat
-    heavy-atom skeleton (piperidine, diethylamine: C-C 1.53, C-N 1.47) projects
-    to lengths that vary far more than this."""
+def _projected_kind(mol, X):
+    """"drawing", "ambiguous" or None for a non-flat file whose bonds,
+    projected onto a plane, are all within PROJECTED_TOL of one
+    drawing-program length (DRAWING_BOND_LENGTHS): a drawing with an atom
+    lifted out of the page keeps its in-plane lengths. The planes tried are
+    z = 0, the best-fit plane, and the best-fit plane with each atom left out
+    in turn, so one lifted atom cannot tilt the plane (probe round 4: a lift
+    on a drawing tilted 60 deg defeated the first two). Two or more element
+    pairs make it a drawing; with one pair a symmetric real skeleton could
+    project evenly, so it is refused. A real non-flat heavy-atom skeleton
+    (piperidine, norbornane, C2F6, face-on too) projects far less evenly."""
     import numpy as np
     bonds = [(b.GetBeginAtomIdx(), b.GetEndAtomIdx()) for b in mol.GetBonds()]
+    if len(bonds) < 2:
+        return None
     pairs = {tuple(sorted((mol.GetAtomWithIdx(i).GetSymbol(), mol.GetAtomWithIdx(j).GetSymbol())))
              for i, j in bonds}
-    if len(bonds) < 2 or len(pairs) < 2:
-        return False
     D = np.array([X[j] - X[i] for i, j in bonds])
-    normal = np.linalg.svd(X)[2][-1]
-    for L in (np.sqrt(np.maximum((D ** 2).sum(1) - (D @ normal) ** 2, 0.0)),
-              np.linalg.norm(D[:, :2], axis=1)):
-        if any(np.all(np.abs(L / d - 1) <= PROJECTED_TOL) for d in DRAWING_BOND_LENGTHS):
-            return True
-    return False
+
+    def even(L):
+        return any(np.all(np.abs(L / d - 1) <= PROJECTED_TOL) for d in DRAWING_BOND_LENGTHS)
+
+    def normal(Y):
+        return np.linalg.svd(Y - Y.mean(axis=0))[2][-1]
+    normals = [normal(X)] + [normal(np.delete(X, k, axis=0)) for k in range(len(X))
+                             if len(X) > 3]
+    if not (even(np.linalg.norm(D[:, :2], axis=1))
+            or any(even(np.sqrt(np.maximum((D ** 2).sum(1) - (D @ n) ** 2, 0.0))) for n in normals)):
+        return None
+    return "drawing" if len(pairs) > 1 else "ambiguous"
 
 
 # A non-flat file is still a drawing when every bond projects to within this

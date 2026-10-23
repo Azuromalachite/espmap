@@ -25,6 +25,9 @@ UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
     # S17: delocalised N-C 1.31 A is 11 % short of its reference: refused
     "real_dicyanamide.mol",
+    # one element pair projecting evenly is refused, not called a drawing: a
+    # symmetric real skeleton could do the same (_projected_kind)
+    "draw_decalin_noH_atom2_up_0.6_1.5.mol",
     # Kekule O=O at 1.278 A is 11 % from its reference: outside PLAUSIBLE_TOL
     "real_ozone.mol",
     # aromatic N-O is 10.0 % long against the covalent-radius reference; only
