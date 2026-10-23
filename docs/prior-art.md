@@ -28,7 +28,7 @@ enough to support a novelty claim.
 | Van der Waals radii for the radius-scaled partition | `BONDI`, `partition_surface(..., "radius_scaled")`; the record's `"radii": "Bondi; Mantina 2009 for B"` | Bondi 1964 `bondi1964`; Mantina et al. 2009 `mantina2009` (B, which Bondi does not list) |
 | Assigning space to the nearest of weighted sites | the radius-scaled rule is a multiplicatively weighted Voronoi assignment (distance / r_Bondi) | Aurenhammer 1991 `aurenhammer1991` |
 | Bonds and bond orders perceived from coordinates (xyz2mol) | RDKit's `rdDetermineBonds`, for XYZ, PDB, `--atoms` and every `verify_computed` | Kim & Kim 2015 `kim2015xyz2mol` |
-| A positive HOMO marks an anion the basis set cannot bind | `unbound_anion_warning` → `results.electronic.problems` (`UNBOUND_ANION_GAS`) | Rösch & Trickey 1997 `rosch1997`; Jensen 2010 `jensen2010` |
+| A positive HOMO marks an anion the basis set cannot bind | `unbound_anion_warning` → `results.electronic.problems` (`UNBOUND_ANION_GAS`) | Galbraith & Schaefer 1996 `galbraith1996`, with the comment by Rösch & Trickey 1997 `rosch1997`; Jensen 2010 `jensen2010` |
 | Average local ionisation energy | roadmap (v0.3) | Sjoberg et al. 1990 `sjoberg1990`; Bulat et al. 2010 |
 | Marching cubes | scikit-image `measure.marching_cubes` | Lorensen & Cline 1987 `lorensen1987`; Lewiner et al. 2003 `lewiner2003` |
 | Perceptual colormaps; diverging maps neutral at zero | `build_maps`, the colormap policy | Crameri et al. 2020 `crameri2020`, `crameri_scm`; Moreland 2009 `moreland2009` |
