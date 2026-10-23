@@ -358,23 +358,65 @@ def _flat_nitrite_mol(tmp_path, header="3D", r=1.258):
     ("examples/real_3d.mol", "as-is"),
     ("examples/real_3d_noH.mol", "as-is"),
     ("examples/water.xyz", "as-is"),
-    # review 5 R11: real planar molecules whose bonds are near-equal but not
-    # at a drawing program's length were discarded as drawings
-    ("docs/review-5/fx/C6F6.mol", "as-is"),
-    ("docs/review-5/fx/C2F4.mol", "as-is"),
+    # review 5 R11: real planar molecules whose bonds are near-equal, at real
+    # lengths, were discarded as drawings
+    ("tests/data/planar/C6F6.mol", "as-is"),
+    ("tests/data/planar/C2F4.mol", "as-is"),
 ])
 def test_planar_geometry_is_kept_and_drawings_are_discarded(path, expect):
     _, info = em.from_file(str(_ROOT / path))
     assert expect in info["source"], (path, info["source"])
 
 
-@pytest.mark.parametrize("name", ["CO2", "BF3", "azide", "nitrate", "ozone"])
+@pytest.mark.parametrize("name", ["CO2", "BF3", "azide", "nitrate"])
 def test_flat_single_pair_geometries_at_real_lengths_are_kept(name):
-    """Review 5 R11: every bond equal is what a drawing looks like, but only
-    at a drawing program's length. CO2 at 1.16 A or BF3 at 1.31 A is a
-    geometry, and was refused as DIMENSION_AMBIGUOUS."""
-    mol = em.read_structure(str(_ROOT / "docs/review-5/fx" / f"{name}.mol"))[0]
+    """Review 5 R11: CO2 at 1.16 A or BF3 at 1.31 A is a geometry, every
+    bond within 10 % of its pair's reference length, and was refused as
+    DIMENSION_AMBIGUOUS."""
+    mol = em.read_structure(str(_ROOT / "tests/data/planar" / f"{name}.mol"))[0]
     assert em.coordinate_kind(mol, "mol") == "geometry"
+
+
+def test_ozone_stays_ambiguous():
+    """Ozone's resonance O-O (1.272 A) is 10.8 % off the O=O reference, just
+    outside the 10 % window, so a flat ozone file stays a BLOCK, as on
+    master: refused, never computed from a guess."""
+    mol, probs, _ = em.read_structure(str(_ROOT / "tests/data/planar/ozone.mol"))
+    assert mol is None and probs[0][1] == "DIMENSION_AMBIGUOUS"
+
+
+def _flat_chlorobenzene(tmp_path, L):
+    """examples/drawn_2d.mol (a chlorobenzene depiction), 3D-flagged, z = 0,
+    every bond rescaled to one length L."""
+    from rdkit import Chem
+    from rdkit.Geometry import Point3D
+    m = Chem.MolFromMolFile(str(_ROOT / "examples/drawn_2d.mol"), removeHs=False)
+    c = m.GetConformer()
+    L0 = (c.GetAtomPosition(m.GetBondWithIdx(0).GetBeginAtomIdx())
+          - c.GetAtomPosition(m.GetBondWithIdx(0).GetEndAtomIdx())).Length()
+    for i in range(m.GetNumAtoms()):
+        p = c.GetAtomPosition(i)
+        c.SetAtomPosition(i, Point3D(p.x * L / L0, p.y * L / L0, 0.0))
+    c.Set3D(True)
+    p = tmp_path / f"cb_{L}.mol"
+    p.write_text(Chem.MolToMolBlock(m))
+    return p
+
+
+@pytest.mark.parametrize("L", [0.8, 1.0, 1.2, 1.35, 1.4, 1.45, 1.7])
+def test_a_drawing_at_an_unusual_scale_is_refused_not_computed(tmp_path, L):
+    """The first R11 fix read 'uniform and not at a drawing length' as a
+    geometry, so a chlorobenzene drawing at 1.35-1.4 A passed the gate and
+    verify_computed and was computed with C-Cl 1.4 A, silently. Its C-Cl is
+    ~21 % short of a real one, so it is now refused (review of #57)."""
+    mol, probs = em.parse_for_check(path=str(_flat_chlorobenzene(tmp_path, L)))
+    assert mol is None and probs[0][1] == "DIMENSION_AMBIGUOUS"
+
+
+@pytest.mark.parametrize("L", [1.5, 1.54])
+def test_a_drawing_at_a_drawing_length_is_still_discarded(tmp_path, L):
+    _, info = em.from_file(str(_flat_chlorobenzene(tmp_path, L)))
+    assert "DISCARDED" in info["source"]
 
 
 def test_flat_dft_nitrite_is_read_as_its_geometry(tmp_path):
