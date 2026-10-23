@@ -310,10 +310,32 @@ def test_two_records_with_one_unreadable_are_still_two_records():
     assert m is None and n == 3 and probs[0][1] == "MULTIPLE_RECORDS"
 
 
-@pytest.mark.xfail(strict=True, reason="Arrowfield's review of 2887cd2: E/Z is a CIP label")
-@pytest.mark.parametrize("smiles", ["Cl/C1=C/CCCCCC1", "O/C1=C/CCCCCC1"])
+@pytest.mark.parametrize("smiles", ["Cl/C1=C/CCCCCC1", "O/C1=C/CCCCCC1",
+                                    "C/C1=C/CCCCCC1", "C/C1=C(C)/CCCCCC1",
+                                    "C1=C\\CCCCC1"])
 def test_a_specified_cis_ring_bond_written_as_E_is_not_left_open(smiles):
     """1-chloro- and 1-hydroxy-cis-cyclooctene: the substituent outranks the
     ring carbon, so the CIS ring bond is labelled E. Fully specified, it
     must pass --require-stereo."""
     assert em.stereo_left_open(Chem.MolFromSmiles(smiles)) == []
+
+
+@pytest.mark.parametrize("smiles", ["Cl/C1=C\\CCCCCC1", "C/C1=C\\CCCCCC1", "C/C1=C(C)\\CCCCCC1",
+                                    "C1CC/C=C/CCC1", "O[C@H]1CC/C=C/CCC1"])
+def test_a_ring_trans_bond_is_left_open_whatever_its_cip_label(smiles):
+    """The trans rings, labelled E or Z: 1-chloro-trans-cyclooctene is Z."""
+    assert any("trans double bond" in k for k, _ in em.stereo_left_open(Chem.MolFromSmiles(smiles)))
+
+
+def test_the_ring_reading_agrees_with_an_embedded_geometry():
+    """Truth from 3D, as in Arrowfield's probe: the in-ring C-C=C-C torsion."""
+    from rdkit.Chem import rdMolTransforms
+    for smiles in ("Cl/C1=C/CCCCCC1", "Cl/C1=C\\CCCCCC1", "C/C1=C/CCCCCC1",
+                   "C/C1=C\\CCCCCC1", "O/C1=C/CCCCCC1", "C1CC/C=C/CCC1", "C/C1=C(C)\\CCCCCC1",
+                   "C/C1=C(C)/CCCCCC1"):
+        m = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        em._embed_and_minimise(m, 1, 7)
+        b = next(x for x in m.GetBonds() if x.GetBondType() == Chem.BondType.DOUBLE)
+        _, quad = em._ring_neighbours(m, b)
+        trans_3d = abs(rdMolTransforms.GetDihedralDeg(m.GetConformer(), *quad)) > 90
+        assert bool(em.small_ring_trans_bonds(Chem.MolFromSmiles(smiles))) == trans_3d, smiles

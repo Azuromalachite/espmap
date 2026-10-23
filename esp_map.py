@@ -701,6 +701,11 @@ def atropisomer_axes(mol):
     return out
 
 
+# Rings of up to 8 atoms: trans-cyclooctene's helicity is configurationally
+# stable; trans-cyclononene racemises at room temperature, below the ~20
+# kcal/mol barrier that ATROPISOMER_MIN_ORTHO's class follows (laplante2011).
+# Below 8 atoms RDKit does not perceive ring double-bond stereo, so a trans
+# mark there is dropped, not flagged; such a molecule is not isolable anyway.
 SMALL_TRANS_RING = 8
 
 
@@ -724,22 +729,30 @@ def small_ring_trans_bonds(mol):
     fewer atoms (review 6 S1). The E label fixes the bond; the ring then
     twists one way or the other around it (trans-cyclooctene's planar
     chirality), and neither RDKit's stereo perception nor a SMILES sees that.
-    A trans double bond read from 3D coordinates counts too."""
+    A trans double bond read from 3D coordinates counts too.
+
+    Whether the RING is trans is read relative to known atoms, never from the
+    E/Z label: E/Z is a CIP label, and once a substituent outranks the ring
+    carbon (1-chloro-cis-cyclooctene, Cl/C1=C/CCCCCC1) "E" means the ring is
+    cis (Arrowfield's review of #73). FindPotentialStereo gives cis or trans
+    relative to controllingAtoms[0] and [2]; with exactly one of the two in
+    the ring, the ring's relation is the opposite."""
     from rdkit import Chem
     out = []
-    for b in mol.GetBonds():
-        if b.GetBondType() != Chem.BondType.DOUBLE or not b.IsInRing():
+    for si in Chem.FindPotentialStereo(mol):
+        if si.type != Chem.StereoType.Bond_Double or str(si.specified) != "Specified":
+            continue
+        b = mol.GetBondWithIdx(si.centeredOn)
+        if not b.IsInRing():
             continue
         size, quad = _ring_neighbours(mol, b)
         if size > SMALL_TRANS_RING:
             continue
-        trans = b.GetStereo() in (Chem.BondStereo.STEREOE, Chem.BondStereo.STEREOTRANS)
-        if not trans and b.GetStereo() in (Chem.BondStereo.STEREOZ, Chem.BondStereo.STEREOCIS):
-            # stereo atoms may not be the ring neighbours: Z on substituents
-            # can be trans in the ring
-            s = list(b.GetStereoAtoms())
-            trans = len(s) == 2 and ((s[0] in quad) != (s[1] in quad))
-        if trans:
+        ring = set(quad)
+        ref = (si.controllingAtoms[0], si.controllingAtoms[2])
+        n_in = sum(a in ring for a in ref)
+        trans = si.descriptor == Chem.StereoDescriptor.Bond_Trans
+        if (trans if n_in != 1 else not trans):
             out.append(b.GetIdx())
     return out
 
