@@ -4,6 +4,7 @@ Every case here is a defect that actually shipped at some point, lifted from
 docs/adversarial-review-1.md and docs/adversarial-review-2.md. A test that was
 never red is not evidence, so each one names the finding it guards.
 """
+import inspect
 import sys
 
 import numpy as np
@@ -2669,3 +2670,34 @@ def test_alie_chunking_and_spins_against_a_direct_reference():
     want = (wa @ [0.9, 0.5] + wb @ [0.7]) / (wa.sum(1) + wb.sum(1))
     tiny = 16 * 8 * 2 * mol.nao / 1e9                          # 16 points per chunk
     assert np.allclose(em.alie_at_points(mol, mf, pts, mem_budget_gb=tiny), want, atol=1e-12)
+
+
+class _GaussMol:
+    """Two atoms, an analytic density; enough for extract_surface."""
+    nelectron = 2
+
+    def atom_coords(self):
+        return np.array([[0.0, 0.0, 0.0], [2.6, 0.4, -0.3]])
+
+
+def _gauss_density(mol, dm, origin, n, spacing, block=20000):
+    ax = [origin[i] + np.arange(n[i]) * spacing for i in range(3)]
+    P = np.stack(np.meshgrid(*ax, indexing="ij"), axis=-1)
+    return sum(np.exp(-2.0 * np.linalg.norm(P - c, axis=-1))
+               for c in mol.atom_coords())
+
+
+@pytest.mark.xfail(strict=True, reason="R7-6: margin moves the lattice, not the key")
+def test_r7_e11_margin_changes_the_key_or_nothing(monkeypatch):
+    """Review 7 R7-E11. Measured on b11d7c4 (chlorobenzene, butanol, def2-SVP,
+    0.26 bohr): margins 5.0 / 5.13 / 5.20 give one analysis_key but V_min
+    moves 0.13 kcal/mol and a site mean 0.20. Either margin enters the key, or
+    the surface does not depend on it."""
+    monkeypatch.setattr(em, "density_on_grid", _gauss_density)
+    surf = {}
+    for m in (5.0, 5.13, 5.20):
+        v, f, _ = em.extract_surface(_GaussMol(), None, 0.26, iso=0.002, margin=m)
+        surf[m] = {tuple(x) for x in np.round(v, 9)}
+    identical = surf[5.0] == surf[5.13] == surf[5.20]
+    keyed = "margin" in inspect.signature(em.analysis_fields).parameters
+    assert identical or keyed
