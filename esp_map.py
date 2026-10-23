@@ -1282,7 +1282,10 @@ def read_structure(path, charge=0, record=None):
     """The single structure reader. Returns (mol or None, problems, n_found).
 
     record (1-based) picks one record from a multi-record file; without it a
-    file holding more than one record is a BLOCK.
+    file holding more than one record is a BLOCK. record="all" returns
+    ([(mol or None, problems)] for every record in file order, [], n_found)
+    from one parse: a supplied ensemble re-read the file once per record,
+    quadratic in its length (review 6 S13).
 
     charge is needed only for XYZ, which carries coordinates and no bonds:
     bond perception has to be told the net charge or it fails. v4.0 hard-coded
@@ -1343,27 +1346,33 @@ def read_structure(path, charge=0, record=None):
         return None, [(BLOCK, "MULTIPLE_RECORDS",
                        f"{path} holds {n} records; one run computes one",
                        f"pass --record N (1..{n}) to choose one, or split the file")], n
+
+    def finish(m, r):
+        if m is None:
+            return None, [(BLOCK, "RECORD_UNREADABLE",
+                           f"record {r} of {path} could not be read",
+                           f"fix or remove record {r}; the others keep "
+                           f"their numbers")]
+        m.SetProp("_format", ext)
+        kind = coordinate_kind(m, ext)
+        if kind == "ambiguous":
+            return None, [(BLOCK, "DIMENSION_AMBIGUOUS",
+                           f"{path} is flagged 3D but flat (every atom within "
+                           f"{FLAT_TOL} A of one plane), and its bonds and angles "
+                           f"cannot tell a drawing from a real planar molecule",
+                           "write a 2D header if this is a drawing; if it is a "
+                           "geometry, save it as .xyz")]
+        m.SetProp("_coords", kind)
+        return m, []
+
+    if record == "all":
+        return [finish(m, r) for r, m in enumerate(mols, start=1)], [], n
     if record is not None and not 1 <= record <= n:
         return None, [(BLOCK, "RECORD_OUT_OF_RANGE",
                        f"--record {record}, but {path} holds {n} record(s)",
                        f"pass --record between 1 and {n}")], n
-    m = mols[(record or 1) - 1]
-    if m is None:
-        return None, [(BLOCK, "RECORD_UNREADABLE",
-                       f"record {record or 1} of {path} could not be read",
-                       f"fix or remove record {record or 1}; the others keep "
-                       f"their numbers")], n
-    m.SetProp("_format", ext)
-    kind = coordinate_kind(m, ext)
-    if kind == "ambiguous":
-        return None, [(BLOCK, "DIMENSION_AMBIGUOUS",
-                       f"{path} is flagged 3D but flat (every atom within "
-                       f"{FLAT_TOL} A of one plane), and its bonds and angles "
-                       f"cannot tell a drawing from a real planar molecule",
-                       "write a 2D header if this is a drawing; if it is a "
-                       "geometry, save it as .xyz")], n
-    m.SetProp("_coords", kind)
-    return m, [], n
+    m, problems = finish(mols[(record or 1) - 1], record or 1)
+    return m, problems, n
 
 
 def _skeleton(m):
@@ -1617,8 +1626,11 @@ def shape_descriptors(mol, conf_id=-1):
     (0 a sphere, 1 a rod: (l1 - (l2 + l3)/2) / (l1 + l2 + l3) of the gyration
     tensor's eigenvalues, l1 largest), the contacts, and folded, which is
     'has a contact'. Surface genus is added per member once its surface
-    exists; it is a diagnostic, never part of the folded rule."""
+    exists; it is a diagnostic, never part of the folded rule. With no heavy
+    atom (H2) there is no shape: null descriptors, not folded (review 6 S12)."""
     _, X = _heavy_xyz(mol, conf_id)
+    if len(X) == 0:
+        return dict(rg=None, extent=None, asphericity=None, contacts=[], folded=False)
     Y = X - X.mean(axis=0)
     lam = np.sort(np.linalg.eigvalsh(Y.T @ Y / len(Y)))[::-1]
     D = np.linalg.norm(X[:, None] - X[None], axis=-1)
@@ -1809,7 +1821,10 @@ def supplied_members(path, charge=None, basis="def2-tzvp", spin=0):
     from record 1's (S1: RDKit's stereo model sees none of them)."""
     from rdkit import Chem
     q = charge or 0
-    first, probs, n_found = read_structure(path, charge=q, record=1)
+    records, probs, n_found = read_structure(path, charge=q, record="all")
+    if not records:
+        raise EnsembleRefused(probs)
+    first, probs = records[0]
     if first is None:
         raise EnsembleRefused(probs or [_ensemble_block(
             "MEMBER_UNREADABLE", "record 1 could not be read", "fix record 1")])
@@ -1818,8 +1833,7 @@ def supplied_members(path, charge=None, basis="def2-tzvp", spin=0):
             "ENSEMBLE_ONE_RECORD", f"{path} holds one record",
             "supply a multi-record SDF, or use --ensemble K to generate conformers")])
     members, out = [first], []
-    for r in range(2, n_found + 1):
-        m, p, _ = read_structure(path, charge=q, record=r)
+    for r, (m, p) in enumerate(records[1:], start=2):
         if m is None:
             out += [(s, c, msg if msg.startswith(f"record {r} ") else f"record {r}: {msg}", fix)
                     for s, c, msg, fix in p] or [
@@ -2521,10 +2535,17 @@ def esp_at_points(mol, dm, pts, mem_budget_gb=0.5):
     return V
 
 
+class ALIEUnbound(ValueError):
+    """An occupied orbital at or above zero energy: the system is unbound in
+    this model (a gas-phase anion), and no ionisation energy exists to
+    average. Code ALIE_UNBOUND."""
+    code = "ALIE_UNBOUND"
+
+
 def alie_at_points(mol, mf, pts, mem_budget_gb=0.5):
     """Average local ionisation energy (Hartree) at arbitrary points (bohr).
 
-        I(r) = sum_i n_i |psi_i(r)|^2 |e_i|  /  sum_i n_i |psi_i(r)|^2
+        I(r) = sum_i n_i |psi_i(r)|^2 (-e_i)  /  sum_i n_i |psi_i(r)|^2
 
     over occupied orbitals (Sjoberg et al. 1990; docs/p4-spec.md section 1),
     evaluated at the surface vertices like esp_at_points, never on a grid.
@@ -2533,7 +2554,12 @@ def alie_at_points(mol, mf, pts, mem_budget_gb=0.5):
     as total_dm gives (invariant 5). Orbital energies are Kohn-Sham, so I
     depends on the functional far more than V does.
 
-    The one-orbital identity -- a single occupied orbital gives I = |e_1|
+    -e_i, not |e_i| as Sjoberg 1990 writes it: the two agree for a bound
+    system, and |e| turned a gas-phase anion's positive HOMO into a
+    plausible ALIE (enolate, def2-SVP: 2.19 eV, review 6 S9). Any occupied
+    orbital at or above zero raises ALIEUnbound instead.
+
+    The one-orbital identity -- a single occupied orbital gives I = -e_1
     everywhere, whatever the basis -- is asserted in --selftest.
     """
     from pyscf.dft import numint
@@ -2541,6 +2567,10 @@ def alie_at_points(mol, mf, pts, mem_budget_gb=0.5):
     C, e, n = (np.asarray(x, dtype=float) for x in (mf.mo_coeff, mf.mo_energy, mf.mo_occ))
     if C.ndim == 2:                     # RKS: one spin channel
         C, e, n = C[None], e[None], n[None]
+    top = max(float(es[ns > 0].max()) for es, ns in zip(e, n) if (ns > 0).any())
+    if top >= 0:
+        raise ALIEUnbound(f"highest occupied orbital at {top * HA2EV:+.2f} eV: unbound "
+                          f"in this model; compute it in solvent, or report no ALIE")
     chunk = max(16, min(int(mem_budget_gb * 1e9 / (8 * 2 * mol.nao)), 20000))
     out = np.empty(len(pts))
     for s in range(0, len(pts), chunk):
@@ -2550,7 +2580,7 @@ def alie_at_points(mol, mf, pts, mem_budget_gb=0.5):
         for Cs, es, ns in zip(C, e, n):
             occ = ns > 0
             w = (ao @ Cs[:, occ]) ** 2 * ns[occ]    # n_i |psi_i|^2 at each point
-            num += w @ np.abs(es[occ])
+            num += w @ -es[occ]
             den += w.sum(axis=1)
         # NaN where no occupied orbital reaches the point (den underflows to 0,
         # e.g. 25 A out); never on a rho = 0.002 vertex
@@ -3972,8 +4002,8 @@ def selftest(basis="def2-svp"):
     ok &= good
     print(f"  {'PASS' if good else 'FAIL'}  lone pair negative AND donor H positive")
 
-    # ALIE (P4): exact identities, so a wrong occupation weight, a missing
-    # |e| or a dropped spin channel fails by far more than rounding
+    # ALIE (P4): exact identities, so a wrong sign on e or a dropped spin
+    # channel fails by far more than rounding
     near = pts[:2]                      # the 25 A probe is outside every orbital
     I = alie_at_points(mol, mf, near) * HA2EV
     good = bool(np.all(np.isfinite(I)) and np.all(I > 0))
@@ -3986,11 +4016,11 @@ def selftest(basis="def2-svp"):
         m1, f1 = run_scf(atom, basis=basis, spin=spin)
         e = np.atleast_2d(np.asarray(f1.mo_energy))
         occ = np.atleast_2d(np.asarray(f1.mo_occ)) > 0
-        want = float(np.abs(e[occ]).max())
+        want = float(-e[occ].max())
         got = alie_at_points(m1, f1, near)
         good = bool(np.allclose(got, want, rtol=0, atol=1e-10))
         ok &= good
-        print(f"  {'PASS' if good else 'FAIL'}  ALIE = |e_1| everywhere: {label} "
+        print(f"  {'PASS' if good else 'FAIL'}  ALIE = -e_1 everywhere: {label} "
               f"(max dev {np.abs(got - want).max():.1e} Ha)")
 
     # colormap orientation. Caught two inverted sequential maps when added;
