@@ -42,7 +42,10 @@ class Stub:
         sha1 = em.spec_sha1(em._mol_to_spec(m))
         # --optimize: the record's geometry is the optimised one, and it names
         # the input it was optimised from
-        geom = (dict(sha1=em._sha1(sha1 + "optimised"), optimised_from_sha1=sha1) if self.optimize
+        rows = [r.split() for r in em._mol_to_spec(m).split(";")]
+        geom = (dict(sha1=em._sha1(sha1 + "optimised"), optimised_from_sha1=sha1,
+                     symbols=[r[0] for r in rows],
+                     xyz_angstrom=[[float(x) for x in r[1:]] for r in rows]) if self.optimize
                 else dict(sha1=sha1))
         rec = dict(schema="espmap.record/1", analysis_key=self.key_for.get(label, "a" * 40),
                    key_fields=dict(analysis=dict(xc="b3lyp", basis="def2svp")),
@@ -373,3 +376,164 @@ def test_an_unjudgeable_site_does_not_hide_a_verdict(plan, tmp_path):
     bad = em.run_ensemble(p, tmp_path / "bad", runner=BuriedOne(site=lambda n: 9.0 if n == 3 else 0.0),
                           log=lambda s: None)
     assert bad["convergence"]["converged"] is False and bad["validity"]["convergence"] is False
+
+
+# --- review 7 (the user's, 2026-10-24): counterexamples before any fix -----------------
+class ProtocolStub(Stub):
+    """A member run whose analysis_key follows the protocol flags it is given,
+    as a real member record's does."""
+
+    def __call__(self, argv, cwd, env, timeout):
+        rc = super().__call__(argv, cwd, env, timeout)
+        js = Path(_arg(argv, "--json"))
+        if js.exists():
+            rec = json.loads(js.read_text())
+            proto = [a for a in argv if a not in ("--file", "--json", "--npz", "--out")
+                     and not a.endswith((".sdf", ".json", ".npz", ".png"))]
+            rec["analysis_key"] = em._sha1(" ".join(proto))
+            js.write_text(json.dumps(rec))
+        return rc
+
+
+def _rerun_is_safe(plan, tmp_path, first, second):
+    """A rerun under another protocol in the same directory must refuse, or
+    recompute every member; never silently reuse what the first computed."""
+    em.run_ensemble(plan, tmp_path, first, runner=ProtocolStub(), log=lambda s: None)
+    again = ProtocolStub()
+    try:
+        rec = em.run_ensemble(plan, tmp_path, second, runner=again, log=lambda s: None)
+    except em.EnsembleRefused:
+        return
+    assert len(again.calls) == len(plan["members"]), "members reused under another protocol"
+    assert rec["analysis_key"] == em._sha1(" ".join(second))
+
+
+def test_r7_e1_a_rerun_under_another_basis_does_not_reuse_members(plan, tmp_path):
+    _rerun_is_safe(plan, tmp_path, ["--basis", "def2-svp"], ["--basis", "def2-tzvp"])
+
+
+def test_r7_e2_a_rerun_in_solvent_does_not_reuse_gas_members(plan, tmp_path):
+    _rerun_is_safe(plan, tmp_path, ["--basis", "def2-svp"], ["--basis", "def2-svp", "--solvent", "water"])
+
+
+def test_r7_e3_a_failure_under_one_protocol_does_not_suppress_another(plan, tmp_path):
+    em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(fail={"conf_01"}),
+                    log=lambda s: None)
+    again = ProtocolStub()
+    try:
+        rec = em.run_ensemble(plan, tmp_path, ["--basis", "def2-tzvp"], runner=again,
+                              log=lambda s: None)
+    except em.EnsembleRefused:
+        return
+    assert "conf_01" in [c for c, _ in again.calls]
+    assert all(e["conformer"] != "conf_01" for e in rec["excluded"])
+
+
+def test_r7_e4_two_molecules_have_different_ensemble_keys(tmp_path):
+    keys = []
+    for smi in ("CO", "CN"):                           # one selection outcome each: 1 member
+        p = em.plan_ensemble(smiles=smi, ensemble=4)
+        keys.append(em.run_ensemble(p, tmp_path / smi, runner=Stub(), log=lambda s: None)["ensemble_key"])
+    assert keys[0] != keys[1]
+
+
+def test_r7_e5_two_supplied_sets_of_one_molecule_have_different_keys(tmp_path):
+    path = Path(__file__).parent / "data" / "ensemble" / "E7_poses_one_ligand.sdf"
+    p = em.plan_ensemble(path=path, ensemble="supplied")
+    keys = [em.run_ensemble(dict(p, members=p["members"][s]), tmp_path / str(i), runner=Stub(),
+                            log=lambda s: None)["ensemble_key"]
+            for i, s in enumerate((slice(0, 3), slice(3, 6)))]
+    assert keys[0] != keys[1]
+
+
+class OptimiseTo(Stub):
+    """--optimize whose final geometry is the plan member `target[label]`'s:
+    the record carries those coordinates, as a real optimised record does."""
+
+    def __init__(self, plan, target, **kw):
+        super().__init__(optimize=True, **kw)
+        self.plan, self.target = plan, target
+
+    def __call__(self, argv, cwd, env, timeout):
+        rc = super().__call__(argv, cwd, env, timeout)
+        label = Path(_arg(argv, "--file")).stem
+        js = Path(_arg(argv, "--json"))
+        if js.exists():
+            rec = json.loads(js.read_text())
+            src = self.plan["members"][self.target.get(label, int(label.split("_")[1]))]
+            rows = [r.split() for r in src["spec"].split(";")]
+            rec["geometry"].update(symbols=[r[0] for r in rows],
+                                   xyz_angstrom=[[float(x) for x in r[1:]] for r in rows],
+                                   sha1=em.spec_sha1(src["spec"]))
+            js.write_text(json.dumps(rec))
+            np.savez_compressed(_arg(argv, "--npz").replace(".part.npz", ".part.npz"),
+                                geometry_sha1=rec["geometry"]["sha1"])
+        return rc
+
+
+def test_r7_e6_the_record_describes_the_optimised_geometry(tmp_path):
+    p = em.plan_ensemble(smiles="CC(=O)OCC/C=C\CCCCCCCC/C=C\CCCC", ensemble=10, weight="dft", optimize=True)
+    folded = [i for i, m in enumerate(p["members"]) if m["folded"]]
+    extended = [i for i, m in enumerate(p["members"]) if not m["folded"]]
+    if not folded or not extended:
+        pytest.skip("this plan has no folded/extended pair")
+    src, dst = extended[0], folded[0]
+    rec = em.run_ensemble(p, tmp_path, runner=OptimiseTo(p, {em.member_label(src): dst}),
+                          log=lambda s: None)
+    m = next(x for x in rec["members"] + rec["excluded"] if x["conformer"] == em.member_label(src))
+    assert m["folded"] is True                         # the final geometry is the folded one
+    assert m["rg_angstrom"] == pytest.approx(p["members"][dst]["rg"])
+
+
+def test_r7_e7_two_starts_at_one_minimum_are_not_double_counted(tmp_path):
+    p = em.plan_ensemble(smiles="CCCCCCO", ensemble=4, weight="dft", optimize=True)
+    rec = em.run_ensemble(p, tmp_path, runner=OptimiseTo(p, {"conf_01": 0}), log=lambda s: None)
+    finals = [m["geometry_sha1"] for m in rec["members"]]
+    assert len(finals) == len(set(finals)), "one minimum counted twice"
+    dup = [e for e in rec["excluded"] if e["conformer"] == "conf_01"]
+    assert dup and "minimum" in dup[0]["reason"]
+    assert sum(m["weight"] for m in rec["members"]) == pytest.approx(1.0)
+
+
+def test_r7_1_a_directory_without_a_manifest_is_not_resumed(plan, tmp_path):
+    """Member runs from before the manifest existed: what computed them is
+    unknown, so nothing is resumed."""
+    em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(), log=lambda s: None)
+    (tmp_path / em.RUN_MANIFEST).unlink()
+    with pytest.raises(em.EnsembleRefused) as e:
+        em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(), log=lambda s: None)
+    assert e.value.findings[0][1] == "ENSEMBLE_RESUME_PROTOCOL_MISMATCH"
+
+
+def test_r7_1_the_same_protocol_resumes(plan, tmp_path):
+    em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(), log=lambda s: None)
+    again = Stub()
+    em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=again, log=lambda s: None)
+    assert again.calls == []
+
+
+def test_r7_3_a_duplicate_minimum_is_named_and_is_not_a_failure(tmp_path):
+    p = em.plan_ensemble(smiles="CCCCCCO", ensemble=4, weight="dft", optimize=True)
+    rec = em.run_ensemble(p, tmp_path, runner=OptimiseTo(p, {"conf_01": 0}), log=lambda s: None)
+    (dup,) = rec["excluded"]
+    assert dup["code"] == "MEMBER_DUPLICATE_MINIMUM" and dup["duplicate_minimum_of"] == "conf_00"
+    assert rec["validity"]["members"] is True and rec["validity"]["unbiased"] is True
+    assert all(m["shape_from"] == "optimised" for m in rec["members"])
+    assert "not a thermodynamic population" in rec["protocol"]["weights_are"]
+
+
+@pytest.mark.parametrize("case", ["plain", "dft_optimised_duplicate", "failed_member"])
+def test_r7_10_ensemble_records_validate_against_the_schema(case, tmp_path):
+    """Review 7 R7-10: a real JSON Schema validator, not only the key sets."""
+    jsonschema = pytest.importorskip("jsonschema")
+    jsonschema.Draft202012Validator.check_schema(_SCHEMA)
+    if case == "plain":
+        p, runner = em.plan_ensemble(smiles="CCCCCCO", ensemble=4), Stub()
+    elif case == "failed_member":
+        p, runner = em.plan_ensemble(smiles="CCCCCCO", ensemble=4), Stub(fail={"conf_02"})
+    else:
+        p = em.plan_ensemble(smiles="CCCCCCO", ensemble=4, weight="dft", optimize=True)
+        runner = OptimiseTo(p, {"conf_01": 0})
+    rec = json.loads(json.dumps(em.run_ensemble(p, tmp_path, runner=runner, log=lambda s: None)))
+    errors = sorted(jsonschema.Draft202012Validator(_SCHEMA).iter_errors(rec), key=lambda e: list(e.path))
+    assert not errors, [f"{list(e.path)}: {e.message}" for e in errors]

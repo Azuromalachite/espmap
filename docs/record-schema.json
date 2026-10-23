@@ -36,7 +36,8 @@
     "key_fields": {
       "analysis": {
         "xc": "str", "basis": "str", "solvent": "str?", "solvent_esp": "str?",
-        "spacing_bohr": "num", "density_fit": "bool", "geometry_method": "str",
+        "spacing_bohr": "num", "margin_bohr": "num", "density_fit": "bool",
+        "geometry_method": "str",
         "surface_definition": "#surface_definition"
       },
       "render": {
