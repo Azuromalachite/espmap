@@ -429,6 +429,29 @@ _write("real_trisilylamine_noH", _built("[SiH3]N([SiH3])[SiH3]", [
        "geometry", "built: Si-N 1.73 A, planar N (heavy atoms only)",
        "N(SiH3)3 is planar at N in reality: a flat N between heavy atoms is not a drawing")
 
+# Held-out probe of the S7/S8/S15-S17 fix (s16_3d_one_atom_up_0.35): a drawing
+# with one atom lifted out of its plane is no longer flat, so it skipped every
+# drawing test and was computed as given. Its x,y are still a drawing's: every
+# bond at one drawing length when projected. Real non-flat skeletons with
+# bonds near 1.5 A (heavy atoms only) guard the other side.
+for smi, nm, idx, dz in (("CCOC(C)=O", "methylpropanoate", 3, 0.35),
+                         ("CCOC(C)=O", "methylpropanoate", 3, 0.8),
+                         ("Clc1ccccc1", "chlorobenzene", 0, 0.5),
+                         ("CC(O)CN", "aminopropanol", 1, 1.0)):
+    m = _depiction(smi, 1.5)
+    X = _xyz(m)
+    X[idx, 2] = dz
+    _write(f"draw_{nm}_atom{idx}_up_{dz}_1.5", _set_xyz(m, X), True, DRAW, "drawing", "drawing",
+           f"RDKit depiction at 1.5 A, atom {idx} lifted {dz} A out of the plane",
+           "an edited drawing: not flat any more, but every bond projects to one drawing length")
+for smi, nm in (("C1CCNCC1", "piperidine"), ("CCNCC", "diethylamine"), ("CC(C)(C)N", "tbutylamine")):
+    m = Chem.AddHs(Chem.MolFromSmiles(smi))
+    AllChem.EmbedMolecule(m, randomSeed=7)
+    AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=5000)
+    _write(f"real_{nm}_noH_3d", Chem.RemoveHs(m), True, REAL, "geometry", "geometry",
+           "RDKit ETKDG + MMFF94s, H removed, not flattened",
+           "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A")
+
 # S8: a 2D header is the file's own statement, also when z is not 0.
 m = _depiction("C[C@@H](O)[C@H](N)C(=O)O", 1.5)
 X = _xyz(m)

@@ -36,6 +36,10 @@ UNSAFE_NOW = {
     # S8: a 2D header is overruled as soon as any z != 0
     "draw2d_threonine_wedge_z_1.5.mol", "draw2d_chlorobenzene_one_z_1.5.mol",
     "real_2butanol_2Dheader.mol",
+    # held-out probe of the fix: a drawing with one atom lifted out of its
+    # plane is not flat, so no drawing test runs and it is kept as a geometry
+    "draw_methylpropanoate_atom3_up_0.35_1.5.mol", "draw_methylpropanoate_atom3_up_0.8_1.5.mol",
+    "draw_chlorobenzene_atom0_up_0.5_1.5.mol", "draw_aminopropanol_atom1_up_1.0_1.5.mol",
 }
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
     # S17: delocalised N-C 1.31 A is 11 % short of its reference: refused
