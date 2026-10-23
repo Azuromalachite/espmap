@@ -27,7 +27,10 @@ _BY_ID = {c["id"]: c for c in _CASES}
 # with review 6's fixes E18, E20-E22, E24 and E25 (E23 refused already).
 NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "E16",
                                        "E17", "E18", "E20", "E21", "E22", "E23",
-                                       "E24", "E25", "E26", "E27", "E28"}
+                                       "E24", "E25", "E26", "E27", "E28",
+                                       # the v0.3.0 acceptance run, on #76's final head
+                                       "E1", "E2", "E3", "E4", "E5", "E6", "E7",
+                                       "E10", "E11", "E19"}
 
 
 def _records(name):
@@ -186,7 +189,44 @@ def _plan_kwargs(recipe):
     return kw
 
 
-def _run(case):
+# the protocol the slow cases compute under: the C18 measurements' (gas,
+# def2-SVP + RI), cheap enough for the shared machine one member at a time
+PROTOCOL = ["--basis", "def2-svp", "--density-fit"]
+
+
+def _get(rec, dotted):
+    for k in dotted.split("."):
+        rec = rec[k]
+    return rec
+
+
+def _check(rec, checks):
+    """Each manifest check, by the name the manifest uses."""
+    ms = rec["members"]
+    for name, want in checks.items():
+        if name == "max_members" or name == "k_obtained_max":
+            assert rec["k_obtained"] <= want, name
+        elif name == "no_duplicates":
+            assert len({m["geometry_sha1"] for m in ms}) == len(ms) == rec["k_obtained"]
+        elif name == "folded_count_min":
+            assert sum(m["folded"] for m in ms) >= want
+        elif name == "stats_over":
+            assert set(want) <= set(rec["results"]["V_min_kcal_mol"])
+        elif name == "excluded_min":
+            assert len(rec["excluded"]) >= want
+        elif name == "member_atom_order":                  # "verified_mapping"
+            assert all(m["validity"]["input"] for m in ms)
+        elif name == "configurations":
+            assert len({json.dumps(m["configuration"], sort_keys=True) for m in ms}) == want
+        elif name == "kish_n_reported":
+            assert (rec["kish_n"] is not None) == want
+        elif name == "folded_by_genus_alone":
+            assert sum(m["folded"] and not m["contacts"] for m in ms) == want
+        else:                                              # a record field, dotted
+            assert _get(rec, name) == want, name
+
+
+def _run(case, tmp_path=None):
     """Execute a case against the implementation (docs/ensemble-spec.md section 9
     steps 3-5). Written against the spec's names; adapt the call, never the
     expectation."""
@@ -207,23 +247,63 @@ def _run(case):
                 assert (len(labels) == 1) == want
         return
     if "ensemble" in r and _refused_before_compute(e):
-        # step 3: plan_ensemble is everything before the first SCF. A case
-        # whose expectation allows "accept" (E9's "or") passes here only by
-        # refusing; accepting would need the runner (step 4).
-        with pytest.raises(em.EnsembleRefused):
+        # plan_ensemble is everything before the first SCF. A case whose
+        # expectation also allows "accept" (E9's and E19's "or") passes by
+        # refusing, or goes on to the runner.
+        if e["outcome"] == "refuse":
+            with pytest.raises(em.EnsembleRefused):
+                em.plan_ensemble(**_plan_kwargs(r))
+            return
+        try:
             em.plan_ensemble(**_plan_kwargs(r))
+        except em.EnsembleRefused:
+            return
+    if "A" in r:
+        if not hasattr(em, "compare_records"):
+            pytest.fail("comparison records are not implemented yet")
+        raise NotImplementedError("wire the comparison recipe to compare_records (step 5)")
+    if r.get("inject") == "surface_failure_on_folded":
+        # E5: a folded member's surface fails integrity (a 0.5 bohr box clips
+        # it, and espmap refuses a clipped surface), as the chi = 2 check once
+        # did to exactly the folded C18 members (F9)
+        plan = em.plan_ensemble(**_plan_kwargs(r))
+        folded = {em.member_label(i) for i, m in enumerate(plan["members"]) if m["folded"]}
+        assert folded, "E5 needs a folded member in the plan"
+
+        def runner(argv, cwd, env, timeout):
+            label = Path(argv[argv.index("--file") + 1]).stem
+            extra = ["--margin", "0.5"] if label in folded else []
+            return em._run_member_process(argv + extra, cwd, env, timeout)
+        rec = em.run_ensemble(plan, tmp_path, PROTOCOL, runner=runner)
+        _check(rec, e["checks"])
         return
-    if not hasattr(em, "run_ensemble") or not hasattr(em, "compare_records"):
-        pytest.fail("ensemble runner and comparison records are not implemented yet")
-    raise NotImplementedError("wire the case recipe to run_ensemble / compare_records")
+    if r.get("inject"):
+        raise NotImplementedError(f"injection {r['inject']!r} is not wired yet")
+    if "members_from" in r:
+        # E10: one member per entry, each under its own basis; must be refused
+        plan = em.plan_ensemble(smiles=r["members_from"][0]["smiles"],
+                                ensemble=len(r["members_from"]))
+        bases = [m["basis"] for m in r["members_from"]]
+
+        def runner(argv, cwd, env, timeout):
+            i = int(Path(argv[argv.index("--file") + 1]).stem.split("_")[1])
+            return em._run_member_process(argv + ["--basis", bases[i], "--density-fit"],
+                                          cwd, env, timeout)
+        with pytest.raises(em.EnsembleRefused):
+            em.run_ensemble(plan, tmp_path, runner=runner)
+        return
+    plan = em.plan_ensemble(**_plan_kwargs(r))
+    rec = em.run_ensemble(plan, tmp_path, PROTOCOL + (["--optimize"] if r.get("optimize") else []))
+    assert e["outcome"] == "accept"
+    _check(rec, e.get("checks", {}))
 
 
 @pytest.mark.parametrize("case", _params("fast"))
-def test_fast_case(case):
-    _run(case)
+def test_fast_case(case, tmp_path):
+    _run(case, tmp_path)
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("case", _params("slow"))
-def test_slow_case(case):
-    _run(case)
+def test_slow_case(case, tmp_path):
+    _run(case, tmp_path)

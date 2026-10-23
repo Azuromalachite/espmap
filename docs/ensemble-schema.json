@@ -1,0 +1,633 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/Azuromalachite/espmap/docs/ensemble-schema.json",
+ "title": "espmap.ensemble/1",
+ "description": "Frozen with espmap v0.3.0: any change to this schema is a new version (espmap.ensemble/2), never an edit in place. One conformer ensemble of one molecule, every member an ordinary espmap.record/1 written beside this file and listed with its sha256, so an archive can check each member without trusting this record. Field names follow the Atlas's spa.espmap_ensemble/0 index where the two describe the same thing (marked 'Atlas:'). Additions from review 6's 'before espmap.ensemble/1 is frozen' list are marked 'R6:'. NOT the Atlas's 'protocol': there it is a string, the consumer's own directory label (e.g. b3lyp_def2-svp_gas_espmap-v0.2.1), derived from analysis and espmap.version and never stored here. Here 'protocol' is how the members were chosen. Do not map one onto the other.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "schema",
+  "subject",
+  "ensemble_key",
+  "analysis_key",
+  "analysis",
+  "espmap",
+  "identity",
+  "protocol",
+  "k_requested",
+  "k_obtained",
+  "members",
+  "excluded",
+  "convergence",
+  "results",
+  "sites",
+  "validity"
+ ],
+ "properties": {
+  "schema": {
+   "const": "espmap.ensemble/1"
+  },
+  "subject": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "description": "opaque caller label (--subject), copied verbatim, never parsed, not in ensemble_key. The Atlas would pass its atlas_id here."
+  },
+  "ensemble_key": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{40}$",
+   "description": "sha1 of (analysis_key, protocol minus timings): two callers computing the same ensemble get the same key"
+  },
+  "analysis_key": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{40}$",
+   "description": "Atlas: analysis_key. Every member record carries it; a member that does not is refused, never averaged (E10)"
+  },
+  "analysis": {
+   "type": "object",
+   "minProperties": 1,
+   "description": "Atlas: analysis. The members' key_fields.analysis, identical across members"
+  },
+  "espmap": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "version"
+   ],
+   "properties": {
+    "version": {
+     "type": "string"
+    },
+    "commit": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "rdkit": {
+     "type": "string"
+    },
+    "pyscf": {
+     "type": "string"
+    }
+   },
+   "description": "Atlas: espmap.version (+ commit). RDKit and PySCF versions, because member_id is stable only within them (ETKDG output changes between RDKit releases)"
+  },
+  "identity": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "smiles",
+    "inchikey",
+    "charge",
+    "n_radical",
+    "atom_maps",
+    "configuration",
+    "isotopes",
+    "isotope_labels"
+   ],
+   "properties": {
+    "smiles": {
+     "type": "string",
+     "description": "Atlas: smiles. Canonical isomeric SMILES of the approved structure: THE identity check, every member's computed structure must match it"
+    },
+    "inchikey": {
+     "type": "string",
+     "pattern": "^[A-Z]{14}-[A-Z]{10}-[A-Z]$",
+     "description": "Atlas: inchikey. A label only: standard InChI merges mobile-H tautomers (E8)"
+    },
+    "charge": {
+     "type": "integer",
+     "description": "R6 S2: the one formal charge every member shares"
+    },
+    "n_radical": {
+     "type": "integer",
+     "minimum": 0,
+     "description": "R6 S2: unpaired electrons, shared"
+    },
+    "atom_maps": {
+     "type": "array",
+     "items": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "description": "R6 S2: heavy-atom maps in atom order (0 = unmapped), shared; sites keyed by map rely on it"
+    },
+    "configuration": {
+     "type": "object",
+     "additionalProperties": {
+      "type": [
+       "integer",
+       "string"
+      ]
+     },
+     "description": "R6 S1: configuration_signs, the stereo elements RDKit does not perceive (small-ring trans helicity, cumulene axes, biaryl axes), shared by every member. {} when there are none"
+    },
+    "isotopes": {
+     "const": "must_match",
+     "description": "review 6 S11, the user's decision: one isotopologue per ensemble; every member's isotope labels equal member 1's, never normalised"
+    },
+    "isotope_labels": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "prefixItems": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "items": false
+     },
+     "description": "[atom index, mass number] for every labelled atom of the approved structure; [] when none"
+    }
+   }
+  },
+  "protocol": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "source",
+    "selection",
+    "weighting"
+   ],
+   "properties": {
+    "source": {
+     "enum": [
+      "generated",
+      "supplied"
+     ]
+    },
+    "input_file": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "description": "supplied: the file as given"
+    },
+    "n_embed": {
+     "type": "integer"
+    },
+    "n_embedded": {
+     "type": "integer"
+    },
+    "n_converged": {
+     "type": "integer"
+    },
+    "seed": {
+     "type": "integer"
+    },
+    "forcefield": {
+     "type": "string"
+    },
+    "n_other_configuration": {
+     "type": "integer",
+     "description": "R6 S1: embedded conformers dropped because they were not the 3D input's configuration"
+    },
+    "selection": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "method",
+      "rule",
+      "rg_definition",
+      "dedup_rmsd_A",
+      "dedup_atoms",
+      "mirror_images_merged",
+      "n_unique",
+      "n_symmetry_matches",
+      "symmetry_match_cap",
+      "dedup_status",
+      "dedup_source"
+     ],
+     "properties": {
+      "method": {
+       "type": "string",
+       "description": "Atlas: selection.method, as one readable sentence, e.g. 'lowest MMFF + 9 across Rg of 100 ETKDG, heavy-atom RMSD 0.5 A'"
+      },
+      "rule": {
+       "enum": [
+        "rg_spread",
+        "supplied_all"
+       ]
+      },
+      "rg_definition": {
+       "const": "rdkit_Descriptors3D_mass_weighted_all_atoms",
+       "description": "R6 S4: the selection key, which is not the per-member rg_angstrom"
+      },
+      "dedup_rmsd_A": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "dedup_atoms": {
+       "enum": [
+        "heavy",
+        null
+       ],
+       "description": "R6 S4: the dedup population; null exactly when dedup_rmsd_A is null (no deduplication)"
+      },
+      "mirror_images_merged": {
+       "type": "boolean"
+      },
+      "n_unique": {
+       "type": "integer"
+      },
+      "n_symmetry_matches": {
+       "type": "integer"
+      },
+      "symmetry_match_cap": {
+       "type": "integer",
+       "description": "R6 S5: reaching it refuses, so the list here is never truncated"
+      },
+      "dedup_status": {
+       "enum": [
+        "provisional",
+        "measured",
+        null
+       ],
+       "description": "the dedup threshold's status; null when there is no dedup"
+      },
+      "dedup_source": {
+       "type": [
+        "string",
+        "null"
+       ]
+      }
+     }
+    },
+    "weighting": {
+     "enum": [
+      "none",
+      "dft"
+     ],
+     "description": "MMFF never weights. dft only with optimized members"
+    },
+    "temperature_K": {
+     "type": [
+      "number",
+      "null"
+     ]
+    }
+   }
+  },
+  "k_requested": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "k_obtained": {
+   "type": "integer",
+   "minimum": 0,
+   "description": "never padded"
+  },
+  "folded_rule": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "min_bonds",
+    "slack_A",
+    "radii",
+    "status",
+    "source"
+   ],
+   "properties": {
+    "min_bonds": {
+     "type": "integer"
+    },
+    "slack_A": {
+     "type": "number"
+    },
+    "radii": {
+     "const": "Bondi; Mantina 2009 for B"
+    },
+    "status": {
+     "enum": [
+      "provisional",
+      "measured"
+     ],
+     "description": "provisional until measured; measured since docs/ensemble-spec.md 8.2"
+    },
+    "source": {
+     "type": "string",
+     "description": "where the rule's parameters were measured"
+    }
+   },
+   "description": "R6 S3: folded names its rule and parameters. A consumer with a free-text field (the Atlas's selection.notes) renders it there, e.g. 'folded: heavy-atom contact >= 6 bonds apart, Bondi + 0.5 A; measured, espmap ensemble-spec 8.2'"
+  },
+  "members": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "conformer",
+     "member_id",
+     "record",
+     "record_sha256",
+     "geometry_sha1",
+     "rg_angstrom",
+     "extent_angstrom",
+     "asphericity",
+     "contacts",
+     "folded",
+     "genus",
+     "genus_excess",
+     "optimized",
+     "scf_energy_Ha",
+     "validity",
+     "relabelled"
+    ],
+    "properties": {
+     "conformer": {
+      "type": "string",
+      "pattern": "^conf_[0-9]{2,}$",
+      "description": "Atlas: conformer. Zero-based, in selection order: conf_00 is the lowest MMFF for a generated ensemble, record 1 for a supplied one. Zero-based so that files already written under the Atlas's spa.espmap_ensemble/0 (espmap-sesiidae-001: conf_00..conf_19, conf_00 lowest MMFF) stay valid under this schema"
+     },
+     "member_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "sha1 of the geometry in verified-mapping atom order"
+     },
+     "embed_conf_id": {
+      "type": [
+       "integer",
+       "null"
+      ],
+      "description": "generated: the embedder's conformer id (with the seed, the identity across RDKit versions)"
+     },
+     "source_record": {
+      "type": [
+       "integer",
+       "null"
+      ],
+      "description": "supplied: the file's record number (R6 S6: file numbering)"
+     },
+     "record": {
+      "type": "string",
+      "pattern": "^conformers/conf_[0-9]{2,}\\.json$",
+      "description": "Atlas: record"
+     },
+     "record_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Atlas: record_sha256"
+     },
+     "npz": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "pattern": "^conf_[0-9]{2,}\\.npz$",
+      "description": "Atlas: npz"
+     },
+     "npz_sha256": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Atlas: npz_sha256"
+     },
+     "geometry_sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "Atlas: geometry_sha1, the member record's geometry.sha1"
+     },
+     "mmff_dE_kcal": {
+      "type": [
+       "number",
+       "null"
+      ],
+      "description": "ordering only, never a weight"
+     },
+     "rg_angstrom": {
+      "type": [
+       "number",
+       "null"
+      ],
+      "description": "Atlas: rg_angstrom. Heavy atoms, unweighted (spec section 3); null with no heavy atom"
+     },
+     "extent_angstrom": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "asphericity": {
+      "type": [
+       "number",
+       "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+     },
+     "contacts": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "prefixItems": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "integer"
+        },
+        {
+         "type": "number"
+        }
+       ],
+       "items": false
+      }
+     },
+     "folded": {
+      "type": "boolean",
+      "description": "Atlas: folded. Has a contact under folded_rule"
+     },
+     "genus": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "genus_excess": {
+      "type": [
+       "integer",
+       "null"
+      ],
+      "description": "genus minus that of the most extended member; a diagnostic, not the rule"
+     },
+     "folded_genus_disagree": {
+      "type": "boolean"
+     },
+     "configuration": {
+      "type": "object",
+      "description": "R6 S1: this member's configuration_signs; must equal identity.configuration"
+     },
+     "optimized": {
+      "type": "boolean"
+     },
+     "scf_energy_Ha": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "weight": {
+      "type": [
+       "number",
+       "null"
+      ],
+      "description": "dft weighting only"
+     },
+     "validity": {
+      "type": "object",
+      "description": "the member record's validity block, copied"
+     },
+     "attempts": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "member runs logged for this conformer (run_log.jsonl); 0 when it was done by an earlier invocation that left no log"
+     },
+     "earlier_failures": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "every failed attempt, '<kind>, rc <n>: <last stderr line>'. Only an infrastructure failure (killed, no record) is retried; a deterministic one stays excluded across reruns, since rerunning until it passes would be selection on outcome"
+     },
+     "relabelled": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "prefixItems": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "items": false
+      },
+      "description": "review 6 S10: [i, j] pairs: index i now holds what the member's input had at j, so its diastereotopic groups carry member 1's labels; [] when unchanged"
+     }
+    }
+   }
+  },
+  "excluded": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "conformer",
+     "reason",
+     "folded",
+     "rg_angstrom"
+    ],
+    "properties": {
+     "conformer": {
+      "type": "string"
+     },
+     "embed_conf_id": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "source_record": {
+      "type": [
+       "integer",
+       "null"
+      ],
+      "description": "R6 S6: an unreadable supplied record by its file number"
+     },
+     "reason": {
+      "type": "string"
+     },
+     "code": {
+      "type": "string"
+     },
+     "folded": {
+      "type": [
+       "boolean",
+       "null"
+      ]
+     },
+     "rg_angstrom": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "attempts": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "member runs logged for this conformer (run_log.jsonl); 0 when it was done by an earlier invocation that left no log"
+     },
+     "earlier_failures": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "every failed attempt, '<kind>, rc <n>: <last stderr line>'. Only an infrastructure failure (killed, no record) is retried; a deterministic one stays excluded across reruns, since rerunning until it passes would be selection on outcome"
+     }
+    }
+   },
+   "description": "never silently dropped; validity.bias is false whenever any excluded member is folded"
+  },
+  "convergence": {
+   "type": "object",
+   "description": "spec section 5. Per site and rule: converged true, false, or null when not judgeable (fewer than 3 usable values, e.g. an atom with no surface under one rule). Overall converged: false if any judgeable site fails, true if any is judgeable and none fails, null if none is; not_judgeable lists the rest. conv_tol_kcal is PROVISIONAL (1 kcal/mol, not yet measured) and status says so"
+  },
+  "kish_n": {
+   "type": [
+    "number",
+    "null"
+   ],
+   "description": "(sum w)^2 / sum w^2, dft weighting only"
+  },
+  "results": {
+   "type": "object",
+   "description": "per member and over members: V_min, V_max, surface stats; populations 'all' and 'extended'"
+  },
+  "sites": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "description": "keyed by site definition (maps included), per partition rule, per population: per-member means, then mean, sd (ddof 1), min, max, range, n"
+  },
+  "validity": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "members",
+    "convergence",
+    "unbiased"
+   ],
+   "properties": {
+    "members": {
+     "type": "boolean",
+     "description": "every member's own validity holds"
+    },
+    "convergence": {
+     "type": [
+      "boolean",
+      "null"
+     ],
+     "description": "true: judgeable and converged; false: judgeable and not converged; null: not judgeable (fewer than 3 usable members, or no site table). Always equal to convergence.converged"
+    },
+    "unbiased": {
+     "type": "boolean",
+     "description": "false whenever any excluded member is folded (F9: the chi = 2 check once excluded exactly the folded C18 members). Was 'bias' in the spec draft; renamed so that true reads as fine, like every other validity flag"
+    }
+   }
+  }
+ }
+}
