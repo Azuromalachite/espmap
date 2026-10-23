@@ -487,3 +487,19 @@ def test_gas_phase_unbound_anion_record_says_so(tmp_path, monkeypatch, solvent, 
     assert (rec["sites"] is not None) is valid
     if not valid:
         assert el["problems"][0].startswith("UNBOUND_ANION_GAS")
+
+
+def test_alie_rks_and_uks_agree_on_a_closed_shell():
+    """docs/p4-spec.md acceptance test 2 with real SCFs: water as UKS with
+    spin 0 must give RKS's ALIE (same orbitals, alpha + beta)."""
+    from pyscf import dft
+    water = "O 0.0 0.0 0.1173; H 0.0 0.7572 -0.4692; H 0.0 -0.7572 -0.4692"
+    mol, rks = em.run_scf(water, basis="def2-svp")
+    uks = dft.UKS(mol)
+    uks.xc, uks.conv_tol = "b3lyp", rks.conv_tol
+    uks.grids.level = rks.grids.level
+    uks.kernel(dm0=np.array([rks.make_rdm1() / 2] * 2))
+    pts = np.array([[0.0, 0.0, 3.06], [0.0, 2.9, -2.0], [1.5, 1.0, 1.0]])
+    a = em.alie_at_points(mol, rks, pts)
+    b = em.alie_at_points(mol, uks, pts)
+    assert np.all(a > 0) and np.allclose(a, b, atol=1e-6)
