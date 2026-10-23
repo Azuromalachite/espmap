@@ -1,0 +1,19 @@
+#### master dc9d9ef
+esp_map from /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-review6/esp_map.py
+
+== committed set: 105 cases  {'ok': 97, 'safe, not preferred': 8}
+  notpref draw_cyclobutane_1.45.mol                     got ambiguous  prefer drawing
+  notpref draw_hexane_squash_1.25_1.5.mol               got ambiguous  prefer drawing
+  notpref draw_thf_znoise_0.05_1.45.mol                 got ambiguous  prefer drawing
+  notpref real_13chd_noH.mol                            got ambiguous  prefer geometry
+  notpref real_cyclopropane_noH.mol                     got ambiguous  prefer geometry
+  notpref real_isoxazole.mol                            got ambiguous  prefer geometry
+  notpref real_isoxazole_noH.mol                        got ambiguous  prefer geometry
+  notpref real_ozone.mol                                got ambiguous  prefer geometry
+
+== held-out: 58 cases  {'ok': 57, 'safe, not preferred': 1}
+  notpref draw_indole_1.25.mol                          got ambiguous  prefer drawing
+#### v0.2.0 6f8b8eb esp_map.py, master set
+esp_map from /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/r6_v020/esp_map.py
+== committed set: 105 cases  {'ok': 63, 'safe, not preferred': 27, 'UNSAFE': 15}
+== held-out: 58 cases  {'ok': 41, 'safe, not preferred': 5, 'UNSAFE': 12}

@@ -1,0 +1,7 @@
+C=C[O-]      gas   HOMO +1.38 eV | min I |e| 2.192 at v709 ; min I -e -0.037 at v2384 ; max |diff| 2.248 eV ; HOMO weight at the |e| min 0.80
+C=C[O-]      water HOMO -4.06 eV | min I |e| 5.403 at v2365 ; min I -e 5.403 at v2365 ; max |diff| 0.000 eV ; HOMO weight at the |e| min 0.81
+N(=O)[O-]    gas   HOMO +0.40 eV | min I |e| 2.522 at v1329 ; min I -e 1.948 at v1329 ; max |diff| 0.574 eV ; HOMO weight at the |e| min 0.27
+N(=O)[O-]    water HOMO -5.60 eV | min I |e| 7.995 at v1329 ; min I -e 7.995 at v1329 ; max |diff| 0.000 eV ; HOMO weight at the |e| min 0.44
+CC(=O)[O-]   gas   HOMO +0.17 eV | min I |e| 1.973 at v4878 ; min I -e 1.884 at v4878 ; max |diff| 0.158 eV ; HOMO weight at the |e| min 0.26
+CC(=O)[O-]   water HOMO -5.37 eV | min I |e| 7.502 at v4841 ; min I -e 7.502 at v4841 ; max |diff| 0.000 eV ; HOMO weight at the |e| min 0.19
+14.71 s 540516 KB

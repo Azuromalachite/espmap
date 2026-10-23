@@ -1,0 +1,17 @@
+===== tempo
+TEMPO+ / TEMPO. / TEMPO-: ACCEPTED, 3 members, identity CC1(C)CCCC(C)(C)[N+]1=O
+===== kink
+  all anti   folded=False  contacts []  Rg 6.45
+  g+g-       folded=True   contacts [(5, 3.88), (5, 3.88)]  Rg 4.64
+  g+g+       folded=False  contacts []  Rg 5.20
+  g+g+g+     folded=False  contacts []  Rg 5.37
+  g+ t g+    folded=False  contacts []  Rg 5.55
+  g+ t g-    folded=False  contacts []  Rg 6.00
+  g+g+g+g+   folded=False  contacts []  Rg 5.56
+===== k2
+octanol: 66 unique; Rg 2.51-3.26
+  K=2: Rg of members [3.26, 2.51]
+  K=3: Rg of members [3.26, 2.51, 2.53]
+===== det
+octanol K=8 members sha1 3cf96a45b5e9  ids [88, 95, 80, 14, 98, 36, 5, 89]
+1.75 s 107692 KB

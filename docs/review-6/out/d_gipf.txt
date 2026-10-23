@@ -1,0 +1,3 @@
+positive area 0.049: sigma2_pos None, sigma2_neg 8.638, sigma2_tot 8.638, nu None, reason "positive area below 5% of the surface: that sign's statistics and nu are undefined"
+positive area 0.050: sigma2_pos 8.314702277097462, sigma2_neg 9.332, sigma2_tot 17.647, nu 0.24916906642215242, reason None
+positive area 0.051: sigma2_pos 9.88808130172245, sigma2_neg 8.949, sigma2_tot 18.837, nu 0.24937826248667805, reason None

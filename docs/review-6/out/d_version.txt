@@ -1,0 +1,13 @@
+### master worktree
+module file: /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-review6/esp_map.py
+module __version__: 0.2.1
+installed espmap dist: 0.2.0 direct_url: {"url":"file:///home/austintw/espmap","dir_info":{"editable":true}}
+code_identity(): {"espmap_version": "0.2.1", "code": "unknown", "installed_distribution_version": "0.2.0"}
+### copy without .git (git archive of dc9d9ef)
+module file: /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/review6-work/revert/tree/esp_map.py
+module __version__: 0.2.1
+installed espmap dist: 0.2.0 direct_url: {"url":"file:///home/austintw/espmap","dir_info":{"editable":true}}
+code_identity(): {"espmap_version": "0.2.1", "code": "unknown", "installed_distribution_version": "0.2.0"}
+### copy, pyproject version vs module
+7:dynamic = ["version"]
+50:version = { attr = "esp_map.__version__" }

@@ -1,0 +1,7 @@
+[17:16:56] Explicit valence for atom # 1 O, 4, is greater than permitted
+[17:16:56] DEPRECATION WARNING: please use GetValence(Chem.ValenceType.EXPLICIT) instead
+[17:16:56] DEPRECATION WARNING: please use GetValence(Chem.ValenceType.EXPLICIT) instead
+'[CH][OH2]C' DOES NOT PARSE (RDKit, sanitised)
+   unsanitised: formal charge 0 radicals 0 O explicit valence [4]
+'CCO' parses
+   unsanitised: formal charge 0 radicals 0 O explicit valence [1]

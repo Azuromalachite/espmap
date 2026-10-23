@@ -1,0 +1,61 @@
+== none (control)
+   selftest: selftest: PASS | fast -k alie: 5 passed, 353 deselected in 0.67s | slow -k alie: 1 passed, 34 deselected in 0.75s
+     PASS  ALIE positive at the probes (10.84, 14.35 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+== W1 no occupation weight
+   selftest: selftest: PASS | fast -k alie: 5 passed, 353 deselected in 0.62s | slow -k alie: 1 passed, 34 deselected in 0.88s
+     PASS  ALIE positive at the probes (10.84, 14.35 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+== W2 weight n^2
+   selftest: selftest: PASS | fast -k alie: 5 passed, 353 deselected in 0.60s | slow -k alie: 1 passed, 34 deselected in 0.75s
+     PASS  ALIE positive at the probes (10.84, 14.35 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+== W3 UKS weighted 2 like RKS
+   selftest: selftest: PASS | fast -k alie: 5 passed, 353 deselected in 0.59s | slow -k alie: 1 passed, 34 deselected in 0.68s
+     PASS  ALIE positive at the probes (10.84, 14.35 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+== S1 signed e (no abs)
+   selftest: selftest: FAIL | fast -k alie: 3 failed, 2 passed, 353 deselected in 0.87s | slow -k alie: 1 failed, 34 deselected in 0.88s
+     FAIL  ALIE positive at the probes (-10.84, -14.35 eV)
+     FAIL  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 8.6e-01 Ha)
+     FAIL  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 6.4e-01 Ha)
+== S2 -e (Koopmans) instead of |e|
+   selftest: selftest: PASS | fast -k alie: 5 passed, 353 deselected in 0.70s | slow -k alie: 1 passed, 34 deselected in 0.75s
+     PASS  ALIE positive at the probes (10.84, 14.35 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+== B1 beta channel dropped
+   selftest: selftest: PASS | fast -k alie: 1 failed, 4 passed, 353 deselected in 0.69s | slow -k alie: 1 passed, 34 deselected in 0.75s
+     PASS  ALIE positive at the probes (10.84, 14.35 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+== B2 beta uses alpha energies
+   selftest: selftest: PASS | fast -k alie: 1 failed, 4 passed, 353 deselected in 0.67s | slow -k alie: 1 passed, 34 deselected in 0.74s
+     PASS  ALIE positive at the probes (10.84, 14.35 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+== B3 denominator alpha only
+   selftest: selftest: FAIL | fast -k alie: 4 failed, 1 passed, 353 deselected in 0.82s | slow -k alie: 1 failed, 34 deselected in 0.79s
+     FAIL  ALIE positive at the probes (nan, nan eV)
+     FAIL  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev nan Ha)
+     FAIL  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev nan Ha)
+== K1 last chunk skipped
+   selftest: selftest: PASS | fast -k alie: 1 failed, 4 passed, 353 deselected in 0.83s | slow -k alie: 1 passed, 34 deselected in 0.91s
+     PASS  ALIE positive at the probes (10.84, 14.35 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+== K2 chunk overlap (s+chunk-1 slice)
+   selftest: selftest: PASS | fast -k alie: 4 failed, 1 passed, 353 deselected in 0.97s | slow -k alie: 1 failed, 34 deselected in 0.89s
+     PASS  ALIE positive at the probes (10.84, 10.84 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+== V1 virtuals included
+   selftest: selftest: PASS | fast -k alie: 5 passed, 353 deselected in 0.65s | slow -k alie: 1 passed, 34 deselected in 0.78s
+     PASS  ALIE positive at the probes (10.84, 14.35 eV)
+     PASS  ALIE = |e_1| everywhere: H2, RKS, one doubly occupied orbital (max dev 0.0e+00 Ha)
+     PASS  ALIE = |e_1| everywhere: H atom, UKS, one alpha orbital (max dev 0.0e+00 Ha)
+59.67 s 183096 KB

@@ -1,0 +1,213 @@
+module imported from the copy: /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/review6-work/revert/tree/esp_map.py
+BASELINE slow=False: 1077 passed, 62 skipped, 17 xfailed, 69 warnings in 21.46s (22 s); failing: []
+BASELINE slow=True: 1090 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 33.22s (34 s); failing: []
+R1a-anion-row-on-charge [fast] GUARDED (19 s): 2 failed, 1075 passed, 62 skipped, 17 xfailed, 67 warnings in 18.48s
+    tests/test_fast.py::test_the_anion_geometry_row_follows_the_geometry_method[dft:b3lyp/def2tzvp/water+mmff94s_h-False]
+    tests/test_fast.py::test_the_anion_geometry_row_follows_the_geometry_method[dft:b3lyp/def2tzvp/water-False]
+R1b-basis-row-always [fast] GUARDED (19 s): 3 failed, 1074 passed, 62 skipped, 17 xfailed, 67 warnings in 17.65s
+    tests/test_fast.py::test_budget_rows_follow_the_run_settings
+    tests/test_fast.py::test_the_basis_row_is_for_double_zeta_runs[def2-tzvp-False]
+    tests/test_fast.py::test_the_basis_row_is_for_double_zeta_runs[def2-tzvpp-False]
+R1c-declared-origin-ignored [fast] GUARDED (16 s): 4 failed, 1073 passed, 62 skipped, 17 xfailed, 67 warnings in 15.33s
+    tests/test_fast.py::test_a_declared_dft_file_and_an_undeclared_file_get_different_keys
+    tests/test_fast.py::test_a_declared_etkdg_file_shares_the_smiles_label
+    tests/test_fast.py::test_a_dft_file_and_optimize_at_that_level_share_a_label
+    tests/test_fast.py::test_the_explicit_property_is_read
+R2a-no-charge-override [fast+slow-subset] GUARDED (42 s): 4 failed, 1086 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 41.15s
+    tests/test_fast.py::test_a_charge_that_is_not_the_drawn_one_is_blocked[CC(=O)[O-]-0-True]
+    tests/test_fast.py::test_a_charge_that_is_not_the_drawn_one_is_blocked[c1ccccc1-2-True]
+    tests/test_fast.py::test_cli_refuses_a_charge_override_before_compute
+    tests/test_slow.py::test_forced_charge_override_is_recorded_as_invalid_input
+R2b-no-spin-override [fast+slow-subset] GUARDED (37 s): 5 failed, 1085 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 35.95s
+    tests/test_fast.py::test_a_spin_that_is_not_the_drawn_one_is_recorded[O=O-2-SPIN_OVERRIDE-WARN]
+    tests/test_fast.py::test_a_spin_that_is_not_the_drawn_one_is_recorded[[CH3]-3-SPIN_OVERRIDE-WARN]
+    tests/test_fast.py::test_a_spin_that_is_not_the_drawn_one_is_recorded[c1ccccc1-2-SPIN_OVERRIDE-WARN]
+    tests/test_fast.py::test_mismatched_spin_is_flagged
+    tests/test_slow.py::test_deliberate_triplet_runs_with_the_spin_finding_recorded
+R2c-main-drops-charge [fast+slow-subset] GUARDED (33 s): 2 failed, 1088 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 31.90s
+    tests/test_fast.py::test_cli_refuses_a_charge_override_before_compute
+    tests/test_slow.py::test_forced_charge_override_is_recorded_as_invalid_input
+R3a-electronic-always-valid [fast+slow-subset] GUARDED (33 s): 3 failed, 1087 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 32.68s
+    tests/test_fast.py::test_unbound_anion_is_an_electronic_problem[e0-occ0--1-None-True]
+    tests/test_fast.py::test_unbound_anion_is_an_electronic_problem[e3-occ3--1-None-True]
+    tests/test_slow.py::test_gas_phase_unbound_anion_record_says_so[None-False]
+R3b-sites-ignore-electronic [fast+slow-subset] GUARDED (32 s): 2 failed, 1088 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 31.42s
+    tests/test_fast.py::test_sites_are_withheld_when_the_electronic_structure_is_not_valid
+    tests/test_slow.py::test_gas_phase_unbound_anion_record_says_so[None-False]
+R4-genus-int [fast+slow-subset] GUARDED (31 s): 2 failed, 1088 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 30.14s
+    tests/test_fast.py::test_open_surface_genus_is_allowed_to_be_null
+    tests/test_slow.py::test_other_record_branches_match_the_schema[open_surface]
+R5-labels-by-index [fast] GUARDED (14 s): 1 failed, 1076 passed, 62 skipped, 17 xfailed, 67 warnings in 13.27s
+    tests/test_fast.py::test_default_site_labels_use_the_atom_map_on_a_mapped_input
+R6a-xc-key-is-label [fast] GUARDED (14 s): 4 failed, 1073 passed, 62 skipped, 17 xfailed, 67 warnings in 13.15s
+    tests/test_fast.py::test_an_unnamed_functional_is_keyed_by_its_terms
+    tests/test_fast.py::test_b3lyp_with_vwn5_is_a_different_key
+    tests/test_fast.py::test_one_functional_gets_one_key_however_it_is_spelled[HYB_GGA_XC_B3LYP]
+    tests/test_fast.py::test_one_functional_gets_one_key_however_it_is_spelled[b3lypg]
+R6b-atoms-route-label [fast] GUARDED (13 s): 15 failed, 1062 passed, 62 skipped, 17 xfailed, 67 warnings in 12.10s
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[dft:b3lyp/def2tzvp/water+mmff94s_h]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[dft:b3lyp/def2tzvp/water]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[dft:b3lyp5/sto3g]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[dft:pbe0/631g*]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[etkdg_mmff94s]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[etkdg_uff]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[idealised]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[mmff94]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[mmff94s]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[uff]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[undeclared+added_h]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[undeclared+mmff94s_h]
+    tests/test_fast.py::test_every_geometry_method_label_can_be_declared[undeclared]
+    tests/test_fast.py::test_geometry_method_for_cli_only_sources
+    tests/test_fast.py::test_molecule_and_the_same_atoms_declared_idealised_share_a_label
+R7-noise-bench-ignored [fast] GUARDED (13 s): 1 failed, 1076 passed, 62 skipped, 17 xfailed, 67 warnings in 11.97s
+    tests/test_fixtures.py::test_symmetry_tolerances_come_from_the_noise_bench
+R8a-reason-omits-mapping [fast] GUARDED (13 s): 2 failed, 1075 passed, 62 skipped, 17 xfailed, 67 warnings in 12.07s
+    tests/test_fast.py::test_input_reason_names_the_failing_check[gate3-True-False-atom
+    tests/test_fast.py::test_input_reason_names_the_failing_check[gate4-False-False-gate]
+R8b-no-perceived-smiles [fast] GUARDED (11 s): 1 failed, 1076 passed, 62 skipped, 17 xfailed, 67 warnings in 10.73s
+    tests/test_fast.py::test_a_failed_identity_check_records_what_was_perceived
+R9a-tri-atom-always [fast+slow-subset] GUARDED (33 s): 4 failed, 1086 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 32.58s
+    tests/test_fast.py::test_npz_partition_follows_the_site_table
+    tests/test_slow.py::test_hydrogen_molecule_writes_its_record[src0]
+    tests/test_slow.py::test_hydrogen_molecule_writes_its_record[src1]
+    tests/test_slow.py::test_npz_of_an_invalid_record_carries_its_validity_and_no_partition
+R9b-minus-one-fill [fast+slow-subset] GUARDED (34 s): 1 failed, 1089 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 33.63s
+    tests/test_fast.py::test_npz_omits_a_rule_that_cannot_run
+R10a-verdict-str [fast+slow-subset] GUARDED (33 s): 1 failed, 1089 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 32.01s
+    tests/test_fast.py::test_schema_vocabularies_are_enforced
+R10b-tree-ignores-enum [fast+slow-subset] GUARDED (31 s): 12 failed, 1078 passed, 1 skipped, 48 deselected, 17 xfailed, 79 warnings in 30.19s
+    tests/test_fast.py::test_schema_vocabularies_are_enforced
+    tests/test_fast.py::test_the_site_block_matches_the_committed_schema
+    tests/test_fixtures.py::test_fixture_matches_the_record_schema[Z3Z13-18OAc_extended]
+    tests/test_fixtures.py::test_fixture_matches_the_record_schema[Z3Z13-18OAc_folded]
+    tests/test_fixtures.py::test_fixture_matches_the_record_schema[benzene]
+    tests/test_fixtures.py::test_fixture_matches_the_record_schema[enolate]
+    tests/test_fixtures.py::test_fixture_matches_the_record_schema[nitrite]
+    tests/test_fixtures.py::test_fixture_matches_the_record_schema[thiocyanate]
+    tests/test_slow.py::test_other_record_branches_match_the_schema[forced_block]
+    tests/test_slow.py::test_other_record_branches_match_the_schema[open_surface]
+    tests/test_slow.py::test_other_record_branches_match_the_schema[uks]
+    tests/test_slow.py::test_record_matches_the_committed_schema_in_both_directions
+R11-flat-geometry-discarded [fast] GUARDED (13 s): 94 failed, 983 passed, 62 skipped, 17 xfailed, 67 warnings in 12.46s
+    tests/test_fast.py::test_a_declared_dft_file_and_an_undeclared_file_get_different_keys
+    tests/test_fast.py::test_a_flag_that_contradicts_the_file_is_refused_before_compute
+    tests/test_fast.py::test_geometry_method_names_how_the_coordinates_were_made[<lambda>-undeclared+mmff94s_h]
+    tests/test_fast.py::test_geometry_method_names_how_the_coordinates_were_made[<lambda>-undeclared]
+    tests/test_fast.py::test_optimizing_a_supplied_pose_is_refused_before_compute
+    tests/test_fast.py::test_planar_geometry_is_kept_and_drawings_are_discarded[docs/review-3/fx/chlorobenzene_3d_planar.mol-as-is]
+    tests/test_fast.py::test_planar_geometry_is_kept_and_drawings_are_discarded[examples/real_3d.mol-as-is]
+    tests/test_fast.py::test_planar_geometry_is_kept_and_drawings_are_discarded[examples/real_3d_noH.mol-as-is]
+    tests/test_fast.py::test_real_3d_coordinates_are_used_as_is
+    tests/test_fast.py::test_symmetric_flat_ion_at_real_lengths_is_kept
+    tests/test_fast.py::test_the_explicit_property_is_read
+    tests/test_r11_set.py::test_a_real_flat_nucleobase_is_kept[adenine-Nc1ncnc2[nH]cnc12]
+    tests/test_r11_set.py::test_a_real_flat_nucleobase_is_kept[cytosine-Nc1cc[nH]c(=O)n1]
+    tests/test_r11_set.py::test_a_real_flat_nucleobase_is_kept[guanine-Nc1nc2[nH]cnc2c(=O)[nH]1]
+    tests/test_r11_set.py::test_a_real_flat_nucleobase_is_kept[uracil-O=c1cc[nH]c(=O)[nH]1]
+    tests/test_r11_set.py::test_a_real_flat_ring_with_a_lone_ch2_is_kept[1,4-cyclohexadiene-C1=CCC=CC1]
+    tests/test_r11_set.py::test_a_real_flat_ring_with_a_lone_ch2_is_kept[cyclopentadiene-C1=CCC=C1]
+    tests/test_r11_set.py::test_a_real_flat_ring_with_a_lone_ch2_is_kept[fluorene-c1ccc2c(c1)Cc1ccccc1-2]
+    tests/test_r11_set.py::test_a_real_flat_ring_with_a_lone_ch2_is_kept[thiophene-c1ccsc1]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[dft_benzene.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[dft_enolate.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[dft_nitrite.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[dft_thiocyanate.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_BF3.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_C2F4.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_C6Cl6.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_C6F6.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_CO.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_CO2.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_HCN.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_HCN_heavy.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_N2.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_SO3.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_aniline_pyramidal_N.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_anisole_noH.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_anti_butane_skeleton.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_azide.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_benzene.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_benzene_skeleton.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_carbonate.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_chlorobenzene.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_chlorobenzene_znoise.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_cytosine.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_dimethylether_noH.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_ethylene.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_formaldehyde.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_formamide.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_furan.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_guanine.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_naphthalene.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_nitrate.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_nitronium.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_pyridine.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_pyrrole.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_uracil.mol]
+    tests/test_r11_set.py::test_flat_input_gets_the_preferred_verdict[real_water.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[dft_benzene.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[dft_enolate.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[dft_nitrite.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[dft_thiocyanate.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_BF3.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_C2F4.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_C6Cl6.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_C6F6.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_CO.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_CO2.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_HCN.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_HCN_heavy.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_N2.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_SO3.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_aniline_pyramidal_N.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_anisole_noH.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_anti_butane_skeleton.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_azide.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_benzene.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_benzene_skeleton.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_carbonate.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_chlorobenzene.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_chlorobenzene_znoise.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_cytosine.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_dimethylether_noH.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_ethylene.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_formaldehyde.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_formamide.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_furan.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_guanine.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_naphthalene.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_nitrate.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_nitronium.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_pyridine.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_pyrrole.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_uracil.mol]
+    tests/test_r11_set.py::test_flat_input_is_classified_safely[real_water.mol]
+    tests/test_r11_set.py::test_the_header_is_read_from_the_file_per_record
+R12a-claude-2.69 [fast] GUARDED (14 s): 2 failed, 1075 passed, 62 skipped, 17 xfailed, 67 warnings in 12.95s
+    tests/test_claims.py::test_a_changed_per_site_number_in_claude_md_fails[2.69-2.96]
+    tests/test_claims.py::test_claude_md_quotes_the_per_site_budget
+R12b-claude-5.1 [fast] GUARDED (14 s): 2 failed, 1075 passed, 62 skipped, 17 xfailed, 67 warnings in 13.43s
+    tests/test_claims.py::test_a_changed_per_site_number_in_claude_md_fails[5.1
+    tests/test_claims.py::test_claude_md_quotes_the_per_site_budget
+R13a-no-pople-fold [fast] GUARDED (14 s): 6 failed, 1071 passed, 62 skipped, 17 xfailed, 67 warnings in 13.50s
+    tests/test_fast.py::test_pople_polarisation_spellings_share_a_key[6-31+G(d,p)-6-31+g**]
+    tests/test_fast.py::test_pople_polarisation_spellings_share_a_key[6-31G(d)-6-31g*]
+    tests/test_fast.py::test_pople_polarisation_spellings_share_a_key[6-31G(d,p)-6-31G**]
+    tests/test_fast.py::test_review5_double_zeta_names_warn[6-31G(d)]
+    tests/test_fast.py::test_review5_double_zeta_names_warn[6-31G(d,p)]
+    tests/test_fast.py::test_spellings_in_a_declared_dft_label_are_normalised
+R13b-ccpvdz-dropped [fast] GUARDED (14 s): 1 failed, 1076 passed, 62 skipped, 17 xfailed, 67 warnings in 12.95s
+    tests/test_fast.py::test_review5_double_zeta_names_warn[cc-pVDZ]
+R14-gipf-no-floor [fast] GUARDED (14 s): 2 failed, 1075 passed, 62 skipped, 17 xfailed, 69 warnings in 13.61s
+    tests/test_fast.py::test_gipf_needs_both_signs_above_a_minimum_area
+    tests/test_fast.py::test_gipf_on_a_one_signed_surface_leaves_the_missing_sign_null
+R17-fixture-value [fast] GUARDED (13 s): 1 failed, 1076 passed, 62 skipped, 17 xfailed, 67 warnings in 11.97s
+    tests/test_fixtures.py::test_fixture_values_are_pinned[nitrite]
+R18a-version-skew [fast] GUARDED (13 s): 1 failed, 1076 passed, 62 skipped, 17 xfailed, 67 warnings in 12.12s
+    tests/test_claims.py::test_citation_cff_version_matches_the_package
+R18b-version-from-metadata [fast] GUARDED (13 s): 1 failed, 1076 passed, 62 skipped, 17 xfailed, 67 warnings in 12.65s
+    tests/test_fast.py::test_espmap_version_is_the_module_that_ran
+overlap-flag [fast] GUARDED (14 s): 2 failed, 1075 passed, 62 skipped, 17 xfailed, 67 warnings in 13.07s
+    tests/test_fast.py::test_caller_sites_that_miss_atoms_do_not_tile_the_surface
+    tests/test_fast.py::test_overlapping_sites_say_so

@@ -1,0 +1,130 @@
+/home/austintw/.venvs/espmap/lib/python3.12/site-packages/pyscf/gto/basis/__init__.py:689: UserWarning: Basis may be available in basis-set-exchange. It is recommended to install basis-set-exchange: pip install basis-set-exchange
+  warnings.warn(
+module: /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-review6/esp_map.py B3LYP_WITH_VWN5 set: False
+xc 'b3lyp'                      key 'b3lyp'                  label 'dft:b3lyp/def2svp'
+xc 'B3LYP'                      key 'b3lyp'                  label 'dft:b3lyp/def2svp'
+xc 'b3lypg'                     key 'b3lyp'                  label 'dft:b3lyp/def2svp'
+xc 'HYB_GGA_XC_B3LYP'           key 'b3lyp'                  label 'dft:b3lyp/def2svp'
+xc 'b3lyp5'                     key 'b3lyp5'                 label 'dft:b3lyp5/def2svp'
+xc 'B3LYP5'                     key 'b3lyp5'                 label 'dft:b3lyp5/def2svp'
+xc 'M06-2X'                     key 'm062x'                  label 'dft:m062x/def2svp'
+xc 'm062x'                      key 'm062x'                  label 'dft:m062x/def2svp'
+xc 'pbe0'                       key 'pbe0'                   label 'dft:pbe0/def2svp'
+xc 'PBE0'                       key 'pbe0'                   label 'dft:pbe0/def2svp'
+xc 'hf'                         key 'hf'                     label 'dft:hf/def2svp'
+xc 'HF'                         key 'hf'                     label 'dft:hf/def2svp'
+xc 'cam-b3lyp'                  key 'camb3lyp'               label 'dft:camb3lyp/def2svp'
+xc 'CAMB3LYP'                   key 'camb3lyp'               label 'dft:camb3lyp/def2svp'
+xc 'wb97x'                      key 'wb97x'                  label 'dft:wb97x/def2svp'
+xc '0.5*HF + 0.5*B88, LYP'      key 'libxc:hyb(0.5,0.5,0)+106*0.5+131*1' label 'dft:0.5*hf + 0.5*b88, lyp/def2svp'
+xc '0.5*HF+0.5*B88,LYP'         key 'libxc:hyb(0.5,0.5,0)+106*0.5+131*1' label 'dft:0.5*hf+0.5*b88,lyp/def2svp'
+xc 'b3p86'                      key 'libxc:hyb(0,0,0)+403*1' label 'dft:b3p86/def2svp'
+xc 'pbe,pbe'                    key 'pbe'                    label 'dft:pbe/def2svp'
+xc 'PBE'                        key 'pbe'                    label 'dft:pbe/def2svp'
+E(b3lyp) - E(b3lypg) = 2.842e-14 Ha;  E(b3lyp) - E(b3lyp5) = -3.728e-02 Ha
+geometry_method(optimize=('b3lyp','def2-svp','vacuum')) = dft:b3lyp/def2svp
+declared 'dft:b3lyp/def2-svp' -> dft:b3lyp/def2svp
+declared 'B3LYP/def2-TZVP, PCM water' -> dft:b3lyp/def2tzvp/water
+basis 'def2-svp'       key 'def2svp'      small True  nao(CH4) 34
+basis 'def2svp'        key 'def2svp'      small True  nao(CH4) 34
+basis 'DEF2_SVP'       key 'def2svp'      small True  nao(CH4) 34
+basis 'def2-SVP'       key 'def2svp'      small True  nao(CH4) 34
+basis 'def2-tzvp'      key 'def2tzvp'     small False nao(CH4) 55
+basis 'def2-TZVP'      key 'def2tzvp'     small False nao(CH4) 55
+basis '6-31G(d)'       key '631g*'        small True  nao(CH4) 22
+basis '6-31g*'         key '631g*'        small True  nao(CH4) 22
+basis '6-31G(d,p)'     key '631g**'       small True  nao(CH4) 34
+basis '6-31g**'        key '631g**'       small True  nao(CH4) 34
+basis '6-31+G(d)'      key '631+g*'       small True  nao(CH4) 26
+basis '6-31+g*'        key '631+g*'       small True  nao(CH4) 26
+basis '6-31+G(d,p)'    key '631+g**'      small True  nao(CH4) 38
+basis '6-31++G(d,p)'   key '631++g**'     small True  nao(CH4) 42
+basis '6-31G(2df,p)'   key '631g(2df,p)'  small False nao(CH4) 46
+basis '6-31G(2d)'      key '631g(2d)'     small False nao(CH4) 27
+basis '6-311G(d)'      key '6311g*'       small False nao(CH4) 30
+basis '6-311g*'        key '6311g*'       small False nao(CH4) 30
+basis 'cc-pVDZ'        key 'ccpvdz'       small True  nao(CH4) 34
+basis 'ccpvdz'         key 'ccpvdz'       small True  nao(CH4) 34
+basis 'aug-cc-pVDZ'    key 'augccpvdz'    small True  nao(CH4) 59
+basis 'jun-cc-pvdz'    key 'junccpvdz'    small False nao(CH4) unresolved (BasisNotFoundError)
+basis 'cc-pvdz-f12'    key 'ccpvdzf12'    small False nao(CH4) unresolved (BasisNotFoundError)
+basis 'pcseg-0'        key 'pcseg0'       small False nao(CH4) 17
+basis 'pcseg-1'        key 'pcseg1'       small True  nao(CH4) 34
+basis 'aug-pcseg-1'    key 'augpcseg1'    small True  nao(CH4) 59
+basis 'def2-svpd'      key 'def2svpd'     small True  nao(CH4) 52
+basis 'def2-SV(P)'     key 'def2sv(p)'    small False nao(CH4) unresolved (BasisNotFoundError)
+basis 'sto-3g'         key 'sto3g'        small True  nao(CH4) 9
+basis 'STO-6G'         key 'sto6g'        small False nao(CH4) 9
+basis '3-21g'          key '321g'         small True  nao(CH4) 17
+basis '3-21+g'         key '321+g'        small False nao(CH4) unresolved (KeyError)
+basis '6-31++g'        key '631++g'       small False nao(CH4) 25
+basis '6-31g'          key '631g'         small True  nao(CH4) 17
+basis 'ano-rcc-vdzp'   key 'anorccvdzp'   small False nao(CH4) unresolved (BasisNotFoundError)
+basis 'dzp'            key 'dzp'          small False nao(CH4) 35
+basis 'def2-tzvpp'     key 'def2tzvpp'    small False nao(CH4) 87
+
+########## with B3LYP_WITH_VWN5
+/home/austintw/.venvs/espmap/lib/python3.12/site-packages/pyscf/gto/basis/__init__.py:689: UserWarning: Basis may be available in basis-set-exchange. It is recommended to install basis-set-exchange: pip install basis-set-exchange
+  warnings.warn(
+module: /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-review6/esp_map.py B3LYP_WITH_VWN5 set: True
+xc 'b3lyp'                      key 'b3lyp5'                 label 'dft:b3lyp/def2svp'
+xc 'B3LYP'                      key 'b3lyp5'                 label 'dft:b3lyp/def2svp'
+xc 'b3lypg'                     key 'b3lyp'                  label 'dft:b3lyp/def2svp'
+xc 'HYB_GGA_XC_B3LYP'           key 'b3lyp'                  label 'dft:b3lyp/def2svp'
+xc 'b3lyp5'                     key 'b3lyp5'                 label 'dft:b3lyp5/def2svp'
+xc 'B3LYP5'                     key 'b3lyp5'                 label 'dft:b3lyp5/def2svp'
+xc 'M06-2X'                     key 'm062x'                  label 'dft:m062x/def2svp'
+xc 'm062x'                      key 'm062x'                  label 'dft:m062x/def2svp'
+xc 'pbe0'                       key 'pbe0'                   label 'dft:pbe0/def2svp'
+xc 'PBE0'                       key 'pbe0'                   label 'dft:pbe0/def2svp'
+xc 'hf'                         key 'hf'                     label 'dft:hf/def2svp'
+xc 'HF'                         key 'hf'                     label 'dft:hf/def2svp'
+xc 'cam-b3lyp'                  key 'camb3lyp'               label 'dft:camb3lyp/def2svp'
+xc 'CAMB3LYP'                   key 'camb3lyp'               label 'dft:camb3lyp/def2svp'
+xc 'wb97x'                      key 'wb97x'                  label 'dft:wb97x/def2svp'
+xc '0.5*HF + 0.5*B88, LYP'      key 'libxc:hyb(0.5,0.5,0)+106*0.5+131*1' label 'dft:0.5*hf + 0.5*b88, lyp/def2svp'
+xc '0.5*HF+0.5*B88,LYP'         key 'libxc:hyb(0.5,0.5,0)+106*0.5+131*1' label 'dft:0.5*hf+0.5*b88,lyp/def2svp'
+xc 'b3p86'                      key 'libxc:hyb(0.2,0.2,0)+1*0.08+7*0.19+106*0.72+132*0.81' label 'dft:b3p86/def2svp'
+xc 'pbe,pbe'                    key 'pbe'                    label 'dft:pbe/def2svp'
+xc 'PBE'                        key 'pbe'                    label 'dft:pbe/def2svp'
+E(b3lyp) - E(b3lypg) = 3.728e-02 Ha;  E(b3lyp) - E(b3lyp5) = 2.842e-14 Ha
+geometry_method(optimize=('b3lyp','def2-svp','vacuum')) = dft:b3lyp/def2svp
+declared 'dft:b3lyp/def2-svp' -> dft:b3lyp/def2svp
+declared 'B3LYP/def2-TZVP, PCM water' -> dft:b3lyp/def2tzvp/water
+basis 'def2-svp'       key 'def2svp'      small True  nao(CH4) 34
+basis 'def2svp'        key 'def2svp'      small True  nao(CH4) 34
+basis 'DEF2_SVP'       key 'def2svp'      small True  nao(CH4) 34
+basis 'def2-SVP'       key 'def2svp'      small True  nao(CH4) 34
+basis 'def2-tzvp'      key 'def2tzvp'     small False nao(CH4) 55
+basis 'def2-TZVP'      key 'def2tzvp'     small False nao(CH4) 55
+basis '6-31G(d)'       key '631g*'        small True  nao(CH4) 22
+basis '6-31g*'         key '631g*'        small True  nao(CH4) 22
+basis '6-31G(d,p)'     key '631g**'       small True  nao(CH4) 34
+basis '6-31g**'        key '631g**'       small True  nao(CH4) 34
+basis '6-31+G(d)'      key '631+g*'       small True  nao(CH4) 26
+basis '6-31+g*'        key '631+g*'       small True  nao(CH4) 26
+basis '6-31+G(d,p)'    key '631+g**'      small True  nao(CH4) 38
+basis '6-31++G(d,p)'   key '631++g**'     small True  nao(CH4) 42
+basis '6-31G(2df,p)'   key '631g(2df,p)'  small False nao(CH4) 46
+basis '6-31G(2d)'      key '631g(2d)'     small False nao(CH4) 27
+basis '6-311G(d)'      key '6311g*'       small False nao(CH4) 30
+basis '6-311g*'        key '6311g*'       small False nao(CH4) 30
+basis 'cc-pVDZ'        key 'ccpvdz'       small True  nao(CH4) 34
+basis 'ccpvdz'         key 'ccpvdz'       small True  nao(CH4) 34
+basis 'aug-cc-pVDZ'    key 'augccpvdz'    small True  nao(CH4) 59
+basis 'jun-cc-pvdz'    key 'junccpvdz'    small False nao(CH4) unresolved (BasisNotFoundError)
+basis 'cc-pvdz-f12'    key 'ccpvdzf12'    small False nao(CH4) unresolved (BasisNotFoundError)
+basis 'pcseg-0'        key 'pcseg0'       small False nao(CH4) 17
+basis 'pcseg-1'        key 'pcseg1'       small True  nao(CH4) 34
+basis 'aug-pcseg-1'    key 'augpcseg1'    small True  nao(CH4) 59
+basis 'def2-svpd'      key 'def2svpd'     small True  nao(CH4) 52
+basis 'def2-SV(P)'     key 'def2sv(p)'    small False nao(CH4) unresolved (BasisNotFoundError)
+basis 'sto-3g'         key 'sto3g'        small True  nao(CH4) 9
+basis 'STO-6G'         key 'sto6g'        small False nao(CH4) 9
+basis '3-21g'          key '321g'         small True  nao(CH4) 17
+basis '3-21+g'         key '321+g'        small False nao(CH4) unresolved (KeyError)
+basis '6-31++g'        key '631++g'       small False nao(CH4) 25
+basis '6-31g'          key '631g'         small True  nao(CH4) 17
+basis 'ano-rcc-vdzp'   key 'anorccvdzp'   small False nao(CH4) unresolved (BasisNotFoundError)
+basis 'dzp'            key 'dzp'          small False nao(CH4) 35
+basis 'def2-tzvpp'     key 'def2tzvpp'    small False nao(CH4) 87

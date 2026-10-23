@@ -1,0 +1,3 @@
+all 10                     n=10  median site spread 5.10  max 8.30
+genus 0 (bench, quoted)    n= 8  median site spread 2.69  max 5.16
+PR contact rule            n= 7  median site spread 2.51  max 4.44

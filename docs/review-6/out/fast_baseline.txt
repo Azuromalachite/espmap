@@ -1,0 +1,10 @@
+== /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-review6
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1077 passed, 62 skipped, 17 xfailed, 69 warnings in 13.33s
+13.91 s 286540 KB
+== /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-pr73
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1113 passed, 62 skipped, 10 xfailed, 69 warnings in 18.93s
+19.59 s 290356 KB

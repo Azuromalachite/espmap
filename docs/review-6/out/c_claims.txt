@@ -1,0 +1,55 @@
+duplicate keys in results.jsonl: {'Z3Z13-18OH|def2-tzvp|df|16t': [-1, 813], 'Z3Z13-18OAc|def2-tzvp|df|16t': [-1, 1613]}
+t_scf chlorobenzene|def2-tzvp|exact|16t                    data                     [39] | quoted                 39 s | README/roadmap
+t_scf chlorobenzene|def2-tzvp|exact|1t                     data                    [150] | quoted      150 s on 1 core | roadmap
+t_scf chlorobenzene|def2-tzvp|df|16t                       data                     [21] | quoted                 21 s | roadmap
+t_scf decanoic_acid|def2-svp|exact|16t                     data                     [66] | quoted                 66 s | README/roadmap
+t_scf decanoic_acid|def2-svp|df|16t                        data                     [48] | quoted                 48 s | roadmap
+t_scf decanoic_acid|def2-tzvp|exact|16t                    data                    [211] | quoted                211 s | README/roadmap
+t_scf decanoic_acid|def2-tzvp|df|16t                       data                     [97] | quoted                 97 s | roadmap
+t_scf BDSF|def2-svp|exact|16t                              data                     [76] | quoted                 76 s | roadmap
+t_scf BDSF|def2-svp|df|16t                                 data                     [59] | quoted                 59 s | roadmap
+t_scf BDSF|def2-tzvp|exact|16t                             data                    [286] | quoted                286 s | roadmap
+t_scf BDSF|def2-tzvp|df|16t                                data                    [129] | quoted                129 s | roadmap
+t_scf Z3Z13-18OH|def2-svp|df|16t                           data                    [103] | quoted                103 s | roadmap
+t_scf Z3Z13-18OH|def2-tzvp|df|16t                          data                    [813] | quoted                813 s | roadmap
+t_scf Z3Z13-18OAc|def2-svp|exact|16t                       data                    [182] | quoted                182 s | README/roadmap
+t_scf Z3Z13-18OAc|def2-svp|df|16t                          data                    [146] | quoted                146 s | roadmap
+t_scf Z3Z13-18OAc|def2-tzvp|exact|16t                      data                    [875] | quoted                875 s | README/roadmap/CLAUDE
+t_scf C18 OAc tzvp df (clean rerun)                        data                     1175 | quoted              1,175 s | README/roadmap/CLAUDE
+nao (TZVP) per molecule                                    data {'chlorobenzene': 253, 'decanoic_acid': 492, 'BDSF': 566, 'Z3Z13-18OAc': 898, 'Z3Z13-18OH': 793} | quoted  253/492/566/793/898 | README/roadmap
+DF/exact time ratio at TZVP (uses dict-last row)           data {'chlorobenzene': 0.53, 'decanoic_acid': 0.46, 'BDSF': 0.45, 'Z3Z13-18OAc': 1.84} | quoted   0.45-0.53 (<=~600) | README
+DF/exact time ratio at SVP                                 data {'decanoic_acid': 0.72, 'BDSF': 0.78, 'Z3Z13-18OAc': 0.8} | quoted        saves 20-28 % | README
+DF-exact dV_max (always upward?)                           data {'chlorobenzene|def2-tzvp': '+0.0085', 'decanoic_acid|def2-svp': '+0.0019', 'decanoic_acid|def2-tzvp': '+0.0169', 'BDSF|def2-svp': '+0.0016', 'BDSF|def2-tzvp': '+0.0176', 'Z3Z13-18OAc|def2-svp': '+0.0000', 'Z3Z13-18OAc|def2-tzvp': '+0.0056'} | quoted        always upward | README/CLAUDE
+DF-exact |dE| range (Ha)                                   data         6.2e-05..4.6e-04 | quoted         6e-5 to 3e-4 | roadmap F8
+DF-exact max |dV|                                          data                    0.018 | quoted   <= 0.018 / <= 0.02 | roadmap/README
+C18 OAc TZVP DF-exact dV_max                               data                   +0.006 | quoted               +0.006 | roadmap F8
+GPU speedup vs results.jsonl CPU row                       data          4.34 (cpu 97.4) | quoted      4.3x (cpu 97.4) | README/roadmap
+basis endpoints svp -> tzvpp                               data           +6.35 -> +9.90 | quoted       +6.35 -> +9.90 | README
+functional range                                           data          +9.51 to +10.20 | quoted      +9.51 to +10.20 | README
+geometry range                                             data           +9.54 to +9.94 | quoted       +9.54 to +9.94 | README
+cones                                                      data                   [9.83] | quoted   9 cones, all +9.83 | README
+def2-svp water: solute shift; +RF shift                    data -3.10 (+3.25); +0.57 (+6.93) | quoted         -3.10; +0.57 | README
+def2-svp chloroform: solute shift; +RF shift               data -2.34 (+4.02); +0.12 (+6.48) | quoted                    - | README
+def2-tzvp water: solute shift; +RF shift                   data -3.60 (+6.22); +0.05 (+9.88) | quoted -3.60 (+6.22); +0.05 (+9.88) | README
+def2-tzvp chloroform: solute shift; +RF shift              data -2.69 (+7.14); -0.34 (+9.49) | quoted -2.69 (+7.14); -0.34 (+9.49) | README
+gas TZVP sigma-hole: error_budget vs solvent_convention    data         9.8273 vs 9.8273 | quoted                +9.83 | consistency
+files in bench/ mentioning bromobenzene: []
+nitrite MMFF N-O                                           data {'N0-O1': 1.4239, 'N0-O2': 1.4239} | quoted      1.42 (DFT 1.25) | README
+   anion geometry nitrite      water MMFF-DFT dV_min -4.66 dV_max +5.64  homo mmff -6.51 dft -5.45
+   anion geometry nitrite      gas   MMFF-DFT dV_min -3.70 dV_max +4.44  homo mmff -0.61 dft +0.53
+   anion geometry thiocyanate  water MMFF-DFT dV_min +6.46 dV_max +1.51  homo mmff -6.01 dft -5.94
+   anion geometry thiocyanate  gas   MMFF-DFT dV_min +4.67 dV_max +2.61  homo mmff -0.87 dft -0.78
+   anion geometry enolate      water MMFF-DFT dV_min +0.53 dV_max -0.76  homo mmff -4.65 dft -4.65
+   anion geometry enolate      gas   MMFF-DFT dV_min +0.25 dV_max -0.47  homo mmff +0.71 dft +0.70
+ext/all V_min range                                        data              1.10 / 5.20 | quoted          1.10 / 5.20 | roadmap F3
+ext/all V_max range                                        data              1.18 / 2.48 | quoted 1.18 / 2.48; CLAUDE 2.5 | roadmap/CLAUDE
+dipole range ext (% mean) / all                            data       0.77 (43 %) / 0.77 | quoted   0.77 (43 %) / 0.77 | README/roadmap
+neg area ext / all                                         data 68.8-78.5 (13 %) / 68.8-117.5 (60 %) | quoted 68.8-78.5 (13 %) / -117.5 (60 %) | README/roadmap/CLAUDE
+total area ext / all                                       data        413-424 / 401-424 | quoted    413-424 / 401-424 | roadmap
+folded MMFF dE (conf 40, 72)                               data               [6.4, 4.8] | quoted          4.8 and 6.4 | roadmap
+V_min genus-3 folded vs the rest                           data   -35.70 vs -40.9..-39.8 | quoted -35.70 vs -39.8 to -40.9 | roadmap
+ensemble MMFF spread; lowest-E rank                        data 10.5; 87 of 100 are more compact | quoted      10.5; 87 of 100 | spec/roadmap
+benzoate: -158.7 to -40.7 spans 118.0 kcal/mol; README says 117
+R11 committed cases / not preferred                        data                  105 / 8 | quoted README 100/seven; roadmap 105/8 | README:182-184
+stereo committed cases                                     data                      106 | quoted                  106 | README:215
+ensemble hostile cases                                     data                       29 | quoted                   29 | spec 7

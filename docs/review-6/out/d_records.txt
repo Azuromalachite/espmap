@@ -1,0 +1,77 @@
+== valid_methanol: exit 0
+   validity {'input': True, 'surface': True, 'electronic': True, 'sites': True}
+   gate.forced False | structure_verified True | computed_smiles CO | approved_smiles CO
+   sites_reason: None
+   electronic problems: []
+   partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+   schema problems: []
+   npz tri_atom arrays: ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled'] negative entries: {'tri_atom_nearest_nucleus': 0, 'tri_atom_radius_scaled': 0} | npz validity: {'input': True, 'surface': True, 'electronic': True, 'sites': True}
+   npz files == schema npz? True extra: [] missing: []
+   presence rule (tri_atom present iff validity.sites): True
+== h2: exit 0
+   validity {'input': True, 'surface': True, 'electronic': True, 'sites': False}
+   gate.forced False | structure_verified True | computed_smiles [H][H] | approved_smiles [H][H]
+   sites_reason: no heavy atom: sites are heavy atoms with their hydrogens, and this molecule has none
+   electronic problems: []
+   schema problems: []
+   npz tri_atom arrays: [] negative entries: {} | npz validity: {'input': True, 'surface': True, 'electronic': True, 'sites': False}
+   npz files == schema npz? False extra: [] missing: ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+   presence rule (tri_atom present iff validity.sites): True
+== alh4_water: exit 0
+   validity {'input': True, 'surface': True, 'electronic': True, 'sites': True}
+   gate.forced False | structure_verified True | computed_smiles [AlH4-] | approved_smiles [AlH4-]
+   sites_reason: None
+   electronic problems: []
+   partition {'primary': 'nearest_nucleus', 'compared': None, 'unit': 'triangle', 'radii': None}
+   schema problems: []
+   npz tri_atom arrays: ['tri_atom_nearest_nucleus'] negative entries: {'tri_atom_nearest_nucleus': 0} | npz validity: {'input': True, 'surface': True, 'electronic': True, 'sites': True}
+   npz files == schema npz? False extra: [] missing: ['tri_atom_radius_scaled']
+   presence rule (tri_atom present iff validity.sites): True
+== forced_two_waters: exit 0
+   validity {'input': False, 'surface': True, 'electronic': True, 'sites': False}
+   gate.forced True | structure_verified True | computed_smiles O.O | approved_smiles None
+   sites_reason: input not valid: the gate's BLOCK was forced
+   electronic problems: []
+   schema problems: []
+   npz tri_atom arrays: [] negative entries: {} | npz validity: {'input': False, 'surface': True, 'electronic': True, 'sites': False}
+   npz files == schema npz? False extra: [] missing: ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+   presence rule (tri_atom present iff validity.sites): True
+== forced_charge_override: exit 0
+   validity {'input': False, 'surface': True, 'electronic': True, 'sites': False}
+   gate.forced True | structure_verified True | computed_smiles O | approved_smiles None
+   sites_reason: input not valid: the gate's BLOCK was forced
+   electronic problems: []
+   schema problems: []
+   npz tri_atom arrays: [] negative entries: {} | npz validity: {'input': False, 'surface': True, 'electronic': True, 'sites': False}
+   npz files == schema npz? False extra: [] missing: ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+   presence rule (tri_atom present iff validity.sites): True
+== fluoride_gas: exit 0
+   validity {'input': True, 'surface': True, 'electronic': False, 'sites': False}
+   gate.forced False | structure_verified True | computed_smiles [F-] | approved_smiles [F-]
+   sites_reason: electronic structure not valid (see results.electronic.problems)
+   electronic problems: ['UNBOUND_ANION_GAS: gas-phase anion with ']
+   schema problems: []
+   npz tri_atom arrays: [] negative entries: {} | npz validity: {'input': True, 'surface': True, 'electronic': False, 'sites': False}
+   npz files == schema npz? False extra: [] missing: ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+   presence rule (tri_atom present iff validity.sites): True
+== verify_fail_refused: exit 1
+   no record; refusing to continue (--force computes it anyway)
+== verify_fail_forced: exit 0
+   validity {'input': False, 'surface': True, 'electronic': True, 'sites': False}
+   gate.forced False | structure_verified False | computed_smiles [CH][OH2]C | approved_smiles CCO
+   sites_reason: input not valid: structure not verified (input.computed_smiles is what was computed); atom order not verified (verify_mapping)
+   electronic problems: []
+   schema problems: []
+   npz tri_atom arrays: [] negative entries: {} | npz validity: {'input': False, 'surface': True, 'electronic': True, 'sites': False}
+   npz files == schema npz? False extra: [] missing: ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled']
+   presence rule (tri_atom present iff validity.sites): True
+== ethanol_file_ok: exit 0
+   validity {'input': True, 'surface': True, 'electronic': True, 'sites': True}
+   gate.forced False | structure_verified True | computed_smiles CCO | approved_smiles CCO
+   sites_reason: None
+   electronic problems: []
+   partition {'primary': 'nearest_nucleus', 'compared': 'radius_scaled', 'unit': 'triangle', 'radii': 'Bondi; Mantina 2009 for B'}
+   schema problems: []
+   npz tri_atom arrays: ['tri_atom_nearest_nucleus', 'tri_atom_radius_scaled'] negative entries: {'tri_atom_nearest_nucleus': 0, 'tri_atom_radius_scaled': 0} | npz validity: {'input': True, 'surface': True, 'electronic': True, 'sites': True}
+   npz files == schema npz? True extra: [] missing: []
+   presence rule (tri_atom present iff validity.sites): True
