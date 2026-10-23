@@ -23,6 +23,14 @@ UNSAFE_NOW = {
     "draw_cyclohexanol_stretched_1.5.mol",   # non-uniform drawing -> computed flat
     "draw_chlorobenzene_zjitter_1.5.mol",    # z noise in a drawing -> computed flat
     "real_C6F6.mol", "real_C2F4.mol",        # real, uniform within 3 % -> discarded
+    # added after the first candidate rule (section K of make_set.py):
+    # coplanar drawings off z = 0, and z noise -> computed flat
+    "draw_chlorobenzene_tilted_1.5.mol", "draw_cyclohexanol_tilted_1.5.mol",
+    "draw_thf_tilted_1.5.mol", "draw_chlorobenzene_at_z5_1.5.mol",
+    "draw_cyclohexanol_at_z5_1.5.mol", "draw_thf_at_z5_1.5.mol",
+    "draw_thf_znoise_0.002_1.45.mol", "draw_thf_znoise_0.02_1.45.mol",
+    "draw_thf_znoise_0.05_1.45.mol",
+    "real_isoxazole_noH.mol", "real_anisole_noH.mol",   # real skeletons discarded
 }
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
     "draw_hexane_1.0.mol", "draw_hexane_1.4.mol", "draw_hexane_1.45.mol",
@@ -31,6 +39,8 @@ NOT_PREFERRED_NOW = UNSAFE_NOW | {
     "real_CO2.mol", "real_azide.mol", "real_nitrate.mol", "real_carbonate.mol",
     "real_BF3.mol", "real_SO3.mol", "real_ozone.mol", "real_nitronium.mol",
     "real_water.mol", "real_HCN_heavy.mol", "real_N2.mol", "real_CO.mol",
+    "draw_hexane_squash_0.8_1.5.mol", "draw_hexane_squash_1.25_1.5.mol",
+    "draw_cyclobutane_1.45.mol", "real_dimethylether_noH.mol", "real_cyclopropane_noH.mol",
 }
 
 

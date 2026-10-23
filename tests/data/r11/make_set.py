@@ -239,6 +239,72 @@ _write("real_chlorobenzene_2Dheader", _mmff("Clc1ccccc1"), False, DRAW, "drawing
        "geometry", "MMFF94s chlorobenzene saved with a 2D header",
        "the header is the file's own statement; the reader cannot overrule it")
 
+
+# --- K. attacks on the first candidate rule (PR #60 at cbc4c20) ---------------
+# Added after that rule, from an independent probe: each class beat it or
+# master. They join the set as cases like any other.
+def _xyz(mol):
+    c = mol.GetConformer()
+    return np.array([list(c.GetAtomPosition(i)) for i in range(mol.GetNumAtoms())])
+
+
+def _set_xyz(mol, X):
+    return _set_xy(mol, X[:, :2], X[:, 2])
+
+
+def _tilted(mol, ax=35.0, ay=20.0):
+    a, b = math.radians(ax), math.radians(ay)
+    rx = np.array([[1, 0, 0], [0, math.cos(a), -math.sin(a)], [0, math.sin(a), math.cos(a)]])
+    ry = np.array([[math.cos(b), 0, math.sin(b)], [0, 1, 0], [-math.sin(b), 0, math.cos(b)]])
+    return _set_xyz(mol, _xyz(mol) @ (ry @ rx).T)
+
+
+def _mmff_heavy(smiles):
+    """A real geometry whose heavy atoms are planar (H removed, then
+    rotated into xy): what a heavy-atom-only file of it looks like."""
+    m = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    AllChem.EmbedMolecule(m, randomSeed=7)
+    AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=5000)
+    return _plane(Chem.RemoveHs(m))
+
+
+_noise = np.random.default_rng(20261023)
+for smi, nm in (("Clc1ccccc1", "chlorobenzene"), ("OC1CCCCC1", "cyclohexanol"), ("C1CCOC1", "thf")):
+    _write(f"draw_{nm}_tilted_1.5", _tilted(_depiction(smi, 1.5)), True, DRAW, "drawing",
+           "drawing", "RDKit depiction, rotated 35 deg about x and 20 deg about y",
+           "a coplanar drawing out of the xy plane: z != 0 but still flat")
+    m = _depiction(smi, 1.5)
+    X = _xyz(m)
+    X[:, 2] = 5.0
+    _write(f"draw_{nm}_at_z5_1.5", _set_xyz(m, X), True, DRAW, "drawing", "drawing",
+           "RDKit depiction translated to z = 5", "every z equal but not zero: still flat")
+for zn in (0.002, 0.02, 0.05):
+    m = _depiction("C1CCOC1", 1.45)
+    X = _xyz(m)
+    X[:, 2] = _noise.uniform(-zn, zn, len(X))
+    _write(f"draw_thf_znoise_{zn}_1.45", _set_xyz(m, X), True, DRAW, "drawing", "drawing",
+           f"RDKit depiction at 1.45 A, z uniform in +-{zn} A",
+           "a flat sp3 ring with z noise; real puckering is ~0.2 A or more")
+for smi, nm, L in (("CCCCCC", "hexane", 1.5), ("CCOCC", "diethylether", 1.45)):
+    for sy in (0.8, 1.25):
+        m = _depiction(smi, L)
+        X = _xyz(m)
+        X[:, 1] *= sy
+        _write(f"draw_{nm}_squash_{sy}_{L}", _set_xyz(m, X), True, DRAW, "drawing", "drawing",
+               f"RDKit depiction at {L} A, y scaled by {sy}",
+               "a hand-squashed flat chain: sp3 angles neither 120 nor real")
+for smi, nm in (("C1CCC1", "cyclobutane"), ("OC1CCC1", "cyclobutanol")):
+    _write(f"draw_{nm}_1.45", _depiction(smi, 1.45), True, DRAW, "drawing", "drawing",
+           "RDKit depiction at 1.45 A", "a flat sp3 4-ring; a real one is puckered")
+for smi, nm in (("o1nccc1", "isoxazole"), ("COc1ccccc1", "anisole"), ("COC", "dimethylether"),
+                ("C1CC1", "cyclopropane")):
+    _write(f"real_{nm}_noH", _mmff_heavy(smi), True, REAL, "geometry", "geometry",
+           "RDKit ETKDG + MMFF94s, H removed, heavy atoms rotated into xy",
+           "a real heavy-atom skeleton that is planar")
+_write("real_isoxazole", _mmff("o1nccc1"), True, REAL, "geometry", "geometry",
+       "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+       "a real heteroaromatic whose N-O sits near a length tolerance")
+
 (OUT / "manifest.json").write_text(json.dumps(
     {"about": __doc__.split("\n\n")[0], "severity": SEVERITY, "cases": CASES}, indent=1) + "\n", encoding="utf-8")
 print(len(CASES), "cases")
