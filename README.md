@@ -106,7 +106,8 @@ python esp_map.py --smiles "CCO" --out esp.png \
   of Python, NumPy, SciPy, scikit-image, PySCF, RDKit and Matplotlib, and the
   thread count. Read
   `validity` before anything else. Compare **numbers** only between records
-  whose `analysis_key` matches (method, solvent convention, surface, and how
+  whose `analysis_key` matches (method, solvent convention, surface, grid
+  spacing and box margin, and how
   the geometry was made: `etkdg_mmff94s`, `dft:b3lyp/def2tzvp/water`,
   `mmff94s`, `idealised` for `--molecule`, or `undeclared` for a file or
   `--atoms` string that does not say; a file declares its origin with an
@@ -145,6 +146,45 @@ Two details of the inputs:
   v0.2.0's gate refused an exactly planar nitrite with two equal N–O bonds
   as `DIMENSION_AMBIGUOUS`. The current gate keeps it, and the fixture input
   stays rotated so the frozen records do not change.
+
+## Ensembles
+
+A flexible molecule is not one geometry. On the C18 acetate the median site
+mean moves 5.1 kcal/mol across conformers, more than the basis-set row of the
+error budget. `--ensemble` computes a conformer ensemble as one record,
+`espmap.ensemble/1` (`docs/ensemble-spec.md`, `docs/ensemble-schema.json`):
+
+```bash
+python esp_map.py --smiles "CC(=O)OCC/C=C\CCCCCCCC/C=C\CCCC" --ensemble 10 \
+    --basis def2-svp --density-fit --ensemble-dir c18 --subject Z3Z13-18OAc
+python esp_map.py --file poses.sdf --ensemble supplied --ensemble-dir poses
+```
+
+- **Generated** (`--ensemble K`): ETKDG + MMFF94s, deduplicated at a
+  symmetric heavy-atom RMSD of 0.35 Å, then K members spread across the
+  radius of gyration, the lowest-energy one first. Fewer than K is reported,
+  never padded. **Supplied** (`--ensemble supplied`): every record of a
+  multi-record file, which must all be one molecule, one stereoisomer and one
+  atom order (isotope labels included).
+- Each member is an ordinary `espmap.record/1`, computed in its own process
+  into `ENSEMBLE_DIR/conformers/`. The directory holds a run manifest: a
+  rerun with the same protocol resumes, and a rerun under another basis,
+  solvent, molecule or member set is refused
+  (`ENSEMBLE_RESUME_PROTOCOL_MISMATCH`). Use a new directory for that.
+- The record states each member's shape (Rg, extent, asphericity, contacts),
+  whether it is **folded** (a heavy-atom contact six or more bonds apart),
+  every excluded member with its reason, and per-site statistics over all
+  members and over the extended ones.
+- `validity.convergence` is `true`, `false`, or `null` when it can't be
+  judged (fewer than 3 usable members). The tolerance is provisional.
+- Statistics are **unweighted**. `--weight dft --optimize` weights by
+  Boltzmann factors of the SCF energies of the optimised members. Members
+  are described by their final geometries, and starts that reach one minimum
+  count once (`MEMBER_DUPLICATE_MINIMUM`). These are electronic-energy
+  weights, not a thermodynamic population (no zero-point, thermal or
+  entropic terms). MMFF energies never weight.
+- `ensemble_key` names the molecule, the protocol and the ordered members:
+  two different ensembles never share it.
 
 ## Input
 
