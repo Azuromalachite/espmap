@@ -520,3 +520,20 @@ def test_r7_3_a_duplicate_minimum_is_named_and_is_not_a_failure(tmp_path):
     assert rec["validity"]["members"] is True and rec["validity"]["unbiased"] is True
     assert all(m["shape_from"] == "optimised" for m in rec["members"])
     assert "not a thermodynamic population" in rec["protocol"]["weights_are"]
+
+
+@pytest.mark.parametrize("case", ["plain", "dft_optimised_duplicate", "failed_member"])
+def test_r7_10_ensemble_records_validate_against_the_schema(case, tmp_path):
+    """Review 7 R7-10: a real JSON Schema validator, not only the key sets."""
+    jsonschema = pytest.importorskip("jsonschema")
+    jsonschema.Draft202012Validator.check_schema(_SCHEMA)
+    if case == "plain":
+        p, runner = em.plan_ensemble(smiles="CCCCCCO", ensemble=4), Stub()
+    elif case == "failed_member":
+        p, runner = em.plan_ensemble(smiles="CCCCCCO", ensemble=4), Stub(fail={"conf_02"})
+    else:
+        p = em.plan_ensemble(smiles="CCCCCCO", ensemble=4, weight="dft", optimize=True)
+        runner = OptimiseTo(p, {"conf_01": 0})
+    rec = json.loads(json.dumps(em.run_ensemble(p, tmp_path, runner=runner, log=lambda s: None)))
+    errors = sorted(jsonschema.Draft202012Validator(_SCHEMA).iter_errors(rec), key=lambda e: list(e.path))
+    assert not errors, [f"{list(e.path)}: {e.message}" for e in errors]
