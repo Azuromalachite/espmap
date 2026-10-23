@@ -2961,11 +2961,20 @@ def _pair_entry(rows_a, rows_b, key, rule_cfg, partition, single):
     agree = sum(1 for x, y in pairs if np.sign(y - x) == np.sign(delta) and y != x)
     sc = agree / len(pairs) if pairs else None
     U = rule_cfg["k"] * float(np.hypot(sa["sd"], sb["sd"])) + (partition or 0.0)
-    resolved = bool(abs(delta) > U and sc is not None and sc >= rule_cfg["s_min"])
-    conf = dict(A=dict(sa, measured="not_measured" if single["A"] else "members"),
-                B=dict(sb, measured="not_measured" if single["B"] else "members"))
+    # The user's decision (2026-10-24), an invariant, not wording: with fewer
+    # than 2 usable values on a side, conformational uncertainty is not
+    # measured, and the comparison reports delta and partition but is never
+    # resolved. A single record, or a one-member ensemble (benzene), counts.
+    unmeasured = {s: n < 2 for s, n in (("A", sa["n"]), ("B", sb["n"]))}
+    resolved = bool(not any(unmeasured.values()) and abs(delta) > U
+                    and sc is not None and sc >= rule_cfg["s_min"])
+    conf = dict(A=dict(sa, measured="not_measured" if unmeasured["A"] else "members"),
+                B=dict(sb, measured="not_measured" if unmeasured["B"] else "members"))
     return dict(mean_A=sa["mean"], mean_B=sb["mean"], delta_mean=delta, conformational=conf,
-                sign_consistency=sc, U=U, resolved=resolved, resolved_under=rule_cfg["id"])
+                sign_consistency=sc, U=U, resolved=resolved, resolved_under=rule_cfg["id"],
+                **({"not_resolvable": "conformers not sampled on side "
+                                      + " and ".join(s for s in "AB" if unmeasured[s])}
+                   if any(unmeasured.values()) else {}))
 
 
 def compare_records(path_a, path_b, correspondence, rule=None):
@@ -2998,7 +3007,8 @@ def compare_records(path_a, path_b, correspondence, rule=None):
     mols = {s: record_mol(sides[s]["members"][0][2]) for s in "AB"}
     pairs = check_correspondence(mols["A"], mols["B"], correspondence)
 
-    single = {s: sides[s]["kind"] == "single" for s in "AB"}
+    # a single record, or an ensemble that kept one member (benzene)
+    single = {s: len(sides[s]["members"]) < 2 for s in "AB"}
     flags = []
     if any(single.values()):
         flags.append("CONFORMERS_NOT_SAMPLED")

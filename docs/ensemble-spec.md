@@ -298,10 +298,13 @@ prospective analysis plan, before the code):
   consumer's own verdict; a single-geometry side says
   `measured: not_measured`.
 
-A comparison of two single-geometry records of flexible molecules is
-allowed. Its conformational component is "not measured", and it can't be
-`resolved` beyond the partition uncertainty alone. The record says so in a
-stable code (`CONFORMERS_NOT_SAMPLED`).
+A comparison with a single-geometry side (a single record, or an ensemble
+that kept one member) is **allowed but never resolved** (the user's
+decision, 2026-10-24, an invariant of the code): delta, partition and the
+descriptive numbers are reported, that side's conformational uncertainty is
+`not_measured`, `resolved` is false with a `not_resolvable` reason, and the
+comparison carries `CONFORMERS_NOT_SAMPLED`. Refusing such a comparison
+belongs to a teaching layer, not to the measurement.
 
 ## 7. Hostile cases, written first
 

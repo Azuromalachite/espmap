@@ -252,7 +252,6 @@ def test_the_command_line(tmp_path):
 
 
 # --- the user's decision (2026-10-24): a single-geometry side is never resolved -------
-@pytest.mark.xfail(strict=True, reason="sd 0 on a single side lets resolved be true")
 @pytest.mark.parametrize("sides", ["single_single", "single_ensemble", "ensemble_single"])
 def test_a_single_geometry_side_is_never_resolved(tmp_path, sides):
     """Conformational uncertainty is not measured on a single geometry, so the
@@ -274,3 +273,13 @@ def test_a_single_geometry_side_is_never_resolved(tmp_path, sides):
     single = [s for s in "AB" if c["inputs"][s]["kind"] == "single"]
     for s in single:
         assert c["sites"][0]["by_rule"][NN]["conformational"][s]["measured"] == "not_measured"
+
+
+
+def test_a_one_member_ensemble_is_a_single_geometry(tmp_path):
+    a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: 1.0, RS: 1.0})])
+    b = _ensemble(tmp_path, "b", [_record("CCCCCCCO", {NN: v, RS: v}) for v in (30.0, 30.1, 30.2)])
+    c = em.compare_records(a, b, CORR)
+    s = c["sites"][0]["by_rule"][NN]
+    assert s["resolved"] is False and s["conformational"]["A"]["measured"] == "not_measured"
+    assert "CONFORMERS_NOT_SAMPLED" in c["flags"] and "side A" in s["not_resolvable"]
