@@ -1,0 +1,133 @@
+{
+ "by": "map",
+ "groups": [
+  {
+   "label": "C1-H",
+   "atoms": [
+    "1+H"
+   ]
+  },
+  {
+   "label": "C2-H",
+   "atoms": [
+    "2+H"
+   ]
+  },
+  {
+   "label": "C3-H",
+   "atoms": [
+    "3+H"
+   ]
+  },
+  {
+   "label": "C4-H",
+   "atoms": [
+    "4+H"
+   ]
+  },
+  {
+   "label": "C5-H",
+   "atoms": [
+    "5+H"
+   ]
+  },
+  {
+   "label": "C6-H",
+   "atoms": [
+    "6+H"
+   ]
+  },
+  {
+   "label": "C7-H",
+   "atoms": [
+    "7+H"
+   ]
+  },
+  {
+   "label": "C8-H",
+   "atoms": [
+    "8+H"
+   ]
+  },
+  {
+   "label": "C9-H",
+   "atoms": [
+    "9+H"
+   ]
+  },
+  {
+   "label": "C10-H",
+   "atoms": [
+    "10+H"
+   ]
+  },
+  {
+   "label": "C11-H",
+   "atoms": [
+    "11+H"
+   ]
+  },
+  {
+   "label": "C12-H",
+   "atoms": [
+    "12+H"
+   ]
+  },
+  {
+   "label": "C13-H",
+   "atoms": [
+    "13+H"
+   ]
+  },
+  {
+   "label": "C14-H",
+   "atoms": [
+    "14+H"
+   ]
+  },
+  {
+   "label": "C15-H",
+   "atoms": [
+    "15+H"
+   ]
+  },
+  {
+   "label": "C16-H",
+   "atoms": [
+    "16+H"
+   ]
+  },
+  {
+   "label": "C17-H",
+   "atoms": [
+    "17+H"
+   ]
+  },
+  {
+   "label": "C18-H",
+   "atoms": [
+    "18+H"
+   ]
+  },
+  {
+   "label": "head O",
+   "atoms": [
+    31
+   ]
+  },
+  {
+   "label": "carbonyl O",
+   "atoms": [
+    32
+   ]
+  },
+  {
+   "label": "acetyl",
+   "atoms": [
+    "21+H",
+    22,
+    32
+   ]
+  }
+ ]
+}

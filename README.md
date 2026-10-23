@@ -115,6 +115,36 @@ python esp_map.py --smiles "CCO" --out esp.png \
   **pictures** only when `render_key` matches as well (colormap, limits,
   camera). `key_fields` lists what each key hashes.
 
+The record is versioned: `"schema": "espmap.record/1"`.
+`docs/record-schema.json` is its complete key tree, and a test checks a real
+record against it in both directions.
+
+**Fixture records** (`fixtures/records/`) are six real records under that
+contract, for anything built on top of espmap (Arrowfield's teaching layer
+reads these first):
+
+| fixture | method | sites |
+| --- | --- | --- |
+| benzene, nitrite, thiocyanate, enolate | B3LYP/def2-TZVP, PCM water, on DFT geometries optimised in the same | default (each heavy atom with its hydrogens) |
+| Z3Z13-18:OAc, extended and folded (genus 3) | B3LYP/def2-SVP + RI, gas, MMFF94s conformers | by atom map: `C1-H` … `C18-H`, `head O`, `carbonyl O`, `acetyl` |
+
+Every one is computed from a committed file with every atom supplied, so
+nothing moves (`relaxation: "none"`). `fixtures/make_records.py` regenerates
+them, and `tests/test_fixtures.py` checks each against:
+- the schema;
+- its input coordinates;
+- site conservation;
+- the NPZ's partition;
+- its budget rows;
+- benzene and nitrite symmetry.
+
+Two details of the inputs:
+- **C18 atom maps follow the chain** (map *n* = C*n*; acetyl 21/22, ester O
+  31, carbonyl O 32), not SMILES order.
+- **The nitrite input is its DFT geometry rotated rigidly out of z = 0.** An
+  exactly planar nitrite with two equal N–O bonds is refused as
+  `DIMENSION_AMBIGUOUS`, because a 2D drawing looks the same.
+
 ## Input
 
 ```bash

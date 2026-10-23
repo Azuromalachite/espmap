@@ -1,0 +1,669 @@
+{
+  "schema": "espmap.record/1",
+  "validity": {
+    "input": true,
+    "surface": true,
+    "electronic": true,
+    "sites": true
+  },
+  "analysis_key": "87562ec10987f91b06bfb20fe1ce960001a4ad46",
+  "render_key": "c6cdfdf89fabd6f11e65bc3f3864fd8b1703e695",
+  "key_fields": {
+    "analysis": {
+      "xc": "b3lyp",
+      "basis": "def2tzvp",
+      "solvent": "water",
+      "solvent_esp": "polarised solute only (reaction field excluded)",
+      "spacing_bohr": 0.26,
+      "density_fit": false,
+      "geometry_method": "dft:b3lyp/def2tzvp/water",
+      "surface_definition": {
+        "property": "electron_density",
+        "isovalue_e_bohr3": 0.002
+      }
+    },
+    "render": {
+      "cmap": "lajolla",
+      "kind": "sequential",
+      "vmin": -141.262738,
+      "vmax": -94.827821,
+      "elev": 20.0,
+      "azim": 172.0,
+      "size": 500,
+      "ambient": 0.62
+    }
+  },
+  "geometry": {
+    "symbols": [
+      "S",
+      "C",
+      "N"
+    ],
+    "xyz_angstrom": [
+      [
+        1.4922,
+        -0.1354,
+        0.0
+      ],
+      [
+        -0.1599,
+        -0.1304,
+        0.0
+      ],
+      [
+        -1.3323999999999998,
+        -0.1268,
+        0.0
+      ]
+    ],
+    "sha1": "423a0ed0aeeded4c7538d1accf0bf3e04cf9dfe3",
+    "sha1_covers": "symbols and xyz_angstrom at %.8f, one 'Sym x y z' line per atom, newline-joined; not charge or spin",
+    "charge": -1,
+    "spin": 0,
+    "optimised_from_sha1": null,
+    "bonds": [
+      [
+        0,
+        1,
+        1
+      ],
+      [
+        1,
+        2,
+        3
+      ]
+    ]
+  },
+  "input": {
+    "smiles": null,
+    "file": "/home/austintw/p3_clone2/bench/fixtures/thiocyanate.sdf",
+    "record": {
+      "index": 1,
+      "of": 1
+    },
+    "gate_smiles": "[S-:1][C:2]#[N:3]",
+    "approved_smiles": "[S-:1][C:2]#[N:3]",
+    "gate": {
+      "verdict": "INFO",
+      "forced": false,
+      "findings": [
+        [
+          "INFO",
+          "CHARGED"
+        ]
+      ]
+    },
+    "computed_smiles": "N#C[S-]",
+    "structure_verified": true,
+    "formula": "CNS-",
+    "charge": -1,
+    "spin": 0
+  },
+  "settings": {
+    "xc": "b3lyp",
+    "basis": "def2-tzvp",
+    "solvent": "water",
+    "solvent_esp": "polarised solute only (reaction field excluded)",
+    "include_reaction_field": false,
+    "density_fit": false,
+    "gpu": false,
+    "gpu_validated": null,
+    "iso": 0.002,
+    "spacing_bohr": 0.26,
+    "margin_bohr": 5.0,
+    "grids_level": 3,
+    "conv_tol": 1e-09,
+    "seed": 12648430,
+    "nconfs": 20,
+    "optimize": false,
+    "geometry": "file 3D coordinates used as-is"
+  },
+  "results": {
+    "e_tot_Ha": -491.2727271559103,
+    "nao": 99,
+    "dipole": {
+      "vector_D": [
+        2.4223325074429973,
+        -0.007371315808932965,
+        1.2802799139670689e-14
+      ],
+      "magnitude_D": 2.422343723114421,
+      "origin": {
+        "kind": "centre_of_nuclear_charge",
+        "xyz_angstrom": [
+          0.46858620689655167,
+          -0.13228965517241378,
+          0.0
+        ]
+      }
+    },
+    "V_min_kcal_mol": -141.2627384019241,
+    "V_max_kcal_mol": -94.82782124018796,
+    "sigma_hole": null,
+    "sigma_hole_reason": "no Cl/Br/I",
+    "electronic": {
+      "homo_eV": -5.943151170984106,
+      "lumo_eV": 1.564145942643015,
+      "problems": []
+    },
+    "n_verts": 6172,
+    "surface": {
+      "definition": {
+        "property": "electron_density",
+        "isovalue_e_bohr3": 0.002
+      },
+      "closed": true,
+      "open_edges": 0,
+      "nonmanifold_edges": 0,
+      "components": 1,
+      "genus": 0,
+      "chi": 2,
+      "face_max_rho": 0.00041943733170695296,
+      "margin_bohr": 5.0,
+      "strict": true,
+      "problems": [],
+      "valid": true
+    },
+    "surface_stats": {
+      "area_A2": 80.55343875635288,
+      "area_pos_A2": 0.0,
+      "area_neg_A2": 80.55343875635288,
+      "V_area_mean_kcal_mol": -125.9799612449744,
+      "V_area_sd_kcal_mol": 9.92991709181034,
+      "V_p05_kcal_mol": -139.5688190628422,
+      "V_p50_kcal_mol": -126.26500660286302,
+      "V_p95_kcal_mol": -105.35801434537812,
+      "V_min_kcal_mol": -141.2627384019241,
+      "V_min_at_A": [
+        -3.1276558528325378,
+        -0.16715085470679472,
+        -0.03175085470679455
+      ],
+      "V_max_kcal_mol": -94.82782124018796,
+      "V_max_at_A": [
+        3.375142756701679,
+        -0.16715085470679472,
+        -0.03175085470679455
+      ]
+    },
+    "gipf": {
+      "V_pos_mean_kcal_mol": null,
+      "V_neg_mean_kcal_mol": -125.9799612449744,
+      "sigma2_pos_kcal2_mol2": null,
+      "sigma2_neg_kcal2_mol2": 98.60325345022711,
+      "sigma2_tot_kcal2_mol2": 98.60325345022711,
+      "nu": null,
+      "reason": "positive area below 5% of the surface: that sign's statistics and nu are undefined",
+      "min_area_fraction": 0.05,
+      "weighting": "triangle area, V averaged per triangle"
+    }
+  },
+  "sites": {
+    "schema": "espmap.sites/1",
+    "partition": {
+      "primary": "nearest_nucleus",
+      "compared": "radius_scaled",
+      "unit": "triangle",
+      "radii": "Bondi; Mantina 2009 for B"
+    },
+    "atoms": [
+      {
+        "index": 0,
+        "atom_map": 1,
+        "element": "S",
+        "parent": null,
+        "h_source": null,
+        "nearest_nucleus": {
+          "area_A2": 37.15308719075862,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 37.15308719075862,
+          "V_area_mean_kcal_mol": -118.32279758134665,
+          "V_area_sd_kcal_mol": 8.432518022979599,
+          "V_p05_kcal_mol": -126.83492526157158,
+          "V_p50_kcal_mol": -121.00640331649959,
+          "V_p95_kcal_mol": -100.34655834530055,
+          "V_min_kcal_mol": -126.98179189489824,
+          "V_min_at_A": [
+            0.8372262619743713,
+            -0.547483349162243,
+            -1.957955705637136
+          ],
+          "V_max_kcal_mol": -94.82782124018796,
+          "V_max_at_A": [
+            3.375142756701679,
+            -0.16715085470679472,
+            -0.03175085470679455
+          ]
+        },
+        "radius_scaled": {
+          "area_A2": 39.255391229587616,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 39.255391229587616,
+          "V_area_mean_kcal_mol": -118.7721650950446,
+          "V_area_sd_kcal_mol": 8.418344310234247,
+          "V_p05_kcal_mol": -126.83317836795418,
+          "V_p50_kcal_mol": -121.78110583398596,
+          "V_p95_kcal_mol": -100.6386075650786,
+          "V_min_kcal_mol": -126.98179189489824,
+          "V_min_at_A": [
+            0.8372262619743713,
+            -0.547483349162243,
+            -1.957955705637136
+          ],
+          "V_max_kcal_mol": -94.82782124018796,
+          "V_max_at_A": [
+            3.375142756701679,
+            -0.16715085470679472,
+            -0.03175085470679455
+          ]
+        },
+        "delta": {
+          "area_A2": 2.102304038828997,
+          "V_area_mean_kcal_mol": -0.44936751369795047,
+          "V_p05_kcal_mol": 0.0017468936174083183,
+          "V_p95_kcal_mol": -0.29204921977805043,
+          "V_min_kcal_mol": 0.0,
+          "V_max_kcal_mol": 0.0
+        }
+      },
+      {
+        "index": 1,
+        "atom_map": 2,
+        "element": "C",
+        "parent": null,
+        "h_source": null,
+        "nearest_nucleus": {
+          "area_A2": 16.7495306415468,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 16.7495306415468,
+          "V_area_mean_kcal_mol": -126.40011642013404,
+          "V_area_sd_kcal_mol": 1.5211477703723055,
+          "V_p05_kcal_mol": -129.42999802379458,
+          "V_p50_kcal_mol": -126.1130164205648,
+          "V_p95_kcal_mol": -124.745948964785,
+          "V_min_kcal_mol": -131.40302740076453,
+          "V_min_at_A": [
+            -0.813806575536503,
+            1.621468178762331,
+            -0.4275192152909779
+          ],
+          "V_max_kcal_mol": -124.62612237609144,
+          "V_max_at_A": [
+            0.011710095550291596,
+            -0.442322741960583,
+            -1.7606618545557773
+          ]
+        },
+        "radius_scaled": {
+          "area_A2": 17.833855247817652,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 17.833855247817652,
+          "V_area_mean_kcal_mol": -127.32633275047425,
+          "V_area_sd_kcal_mol": 2.5666122957091027,
+          "V_p05_kcal_mol": -132.11626756868674,
+          "V_p50_kcal_mol": -126.2908412277239,
+          "V_p95_kcal_mol": -124.74667318943305,
+          "V_min_kcal_mol": -133.552206839203,
+          "V_min_at_A": [
+            -1.0889784627902912,
+            1.621468178762331,
+            -0.4537379573172371
+          ],
+          "V_max_kcal_mol": -124.62612237609144,
+          "V_max_at_A": [
+            0.011710095550291596,
+            -0.442322741960583,
+            -1.7606618545557773
+          ]
+        },
+        "delta": {
+          "area_A2": 1.084324606270851,
+          "V_area_mean_kcal_mol": -0.9262163303402104,
+          "V_p05_kcal_mol": -2.6862695448921556,
+          "V_p95_kcal_mol": -0.0007242246480529957,
+          "V_min_kcal_mol": -2.149179438438466,
+          "V_max_kcal_mol": 0.0
+        }
+      },
+      {
+        "index": 2,
+        "atom_map": 3,
+        "element": "N",
+        "parent": null,
+        "h_source": null,
+        "nearest_nucleus": {
+          "area_A2": 26.650820924047455,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 26.650820924047455,
+          "V_area_mean_kcal_mol": -136.39051737901767,
+          "V_area_sd_kcal_mol": 2.6874796613326404,
+          "V_p05_kcal_mol": -140.8069185447255,
+          "V_p50_kcal_mol": -136.4058567976755,
+          "V_p95_kcal_mol": -131.65496225665584,
+          "V_min_kcal_mol": -141.2627384019241,
+          "V_min_at_A": [
+            -3.1276558528325378,
+            -0.16715085470679472,
+            -0.03175085470679455
+          ],
+          "V_max_kcal_mol": -129.6744346557466,
+          "V_max_at_A": [
+            -0.6762203795782514,
+            -1.8907787929250364,
+            0.38100748083660274
+          ]
+        },
+        "radius_scaled": {
+          "area_A2": 23.464192278947603,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 23.464192278947603,
+          "V_area_mean_kcal_mol": -137.01523832383043,
+          "V_area_sd_kcal_mol": 2.2064697361547334,
+          "V_p05_kcal_mol": -140.86944726412014,
+          "V_p50_kcal_mol": -136.8419683023279,
+          "V_p95_kcal_mol": -133.6310320731345,
+          "V_min_kcal_mol": -141.2627384019241,
+          "V_min_at_A": [
+            -3.1276558528325378,
+            -0.16715085470679472,
+            -0.03175085470679455
+          ],
+          "V_max_kcal_mol": -132.25117992865188,
+          "V_max_at_A": [
+            -0.9513925191633972,
+            -0.5799089379188346,
+            -1.7569371913885914
+          ]
+        },
+        "delta": {
+          "area_A2": -3.1866286450998516,
+          "V_area_mean_kcal_mol": -0.6247209448127649,
+          "V_p05_kcal_mol": -0.06252871939463489,
+          "V_p95_kcal_mol": -1.976069816478656,
+          "V_min_kcal_mol": 0.0,
+          "V_max_kcal_mol": -2.5767452729052707
+        }
+      }
+    ],
+    "reaction_sites": [
+      {
+        "label": "S1",
+        "source": "default:map",
+        "atoms": [
+          0
+        ],
+        "h_generated_polar": false,
+        "nearest_nucleus": {
+          "area_A2": 37.15308719075862,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 37.15308719075862,
+          "V_area_mean_kcal_mol": -118.32279758134665,
+          "V_area_sd_kcal_mol": 8.432518022979599,
+          "V_p05_kcal_mol": -126.83492526157158,
+          "V_p50_kcal_mol": -121.00640331649959,
+          "V_p95_kcal_mol": -100.34655834530055,
+          "V_min_kcal_mol": -126.98179189489824,
+          "V_min_at_A": [
+            0.8372262619743713,
+            -0.547483349162243,
+            -1.957955705637136
+          ],
+          "V_max_kcal_mol": -94.82782124018796,
+          "V_max_at_A": [
+            3.375142756701679,
+            -0.16715085470679472,
+            -0.03175085470679455
+          ]
+        },
+        "radius_scaled": {
+          "area_A2": 39.255391229587616,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 39.255391229587616,
+          "V_area_mean_kcal_mol": -118.7721650950446,
+          "V_area_sd_kcal_mol": 8.418344310234247,
+          "V_p05_kcal_mol": -126.83317836795418,
+          "V_p50_kcal_mol": -121.78110583398596,
+          "V_p95_kcal_mol": -100.6386075650786,
+          "V_min_kcal_mol": -126.98179189489824,
+          "V_min_at_A": [
+            0.8372262619743713,
+            -0.547483349162243,
+            -1.957955705637136
+          ],
+          "V_max_kcal_mol": -94.82782124018796,
+          "V_max_at_A": [
+            3.375142756701679,
+            -0.16715085470679472,
+            -0.03175085470679455
+          ]
+        },
+        "delta": {
+          "area_A2": 2.102304038828997,
+          "V_area_mean_kcal_mol": -0.44936751369795047,
+          "V_p05_kcal_mol": 0.0017468936174083183,
+          "V_p95_kcal_mol": -0.29204921977805043,
+          "V_min_kcal_mol": 0.0,
+          "V_max_kcal_mol": 0.0
+        },
+        "overlaps": []
+      },
+      {
+        "label": "C2",
+        "source": "default:map",
+        "atoms": [
+          1
+        ],
+        "h_generated_polar": false,
+        "nearest_nucleus": {
+          "area_A2": 16.7495306415468,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 16.7495306415468,
+          "V_area_mean_kcal_mol": -126.40011642013404,
+          "V_area_sd_kcal_mol": 1.5211477703723055,
+          "V_p05_kcal_mol": -129.42999802379458,
+          "V_p50_kcal_mol": -126.1130164205648,
+          "V_p95_kcal_mol": -124.745948964785,
+          "V_min_kcal_mol": -131.40302740076453,
+          "V_min_at_A": [
+            -0.813806575536503,
+            1.621468178762331,
+            -0.4275192152909779
+          ],
+          "V_max_kcal_mol": -124.62612237609144,
+          "V_max_at_A": [
+            0.011710095550291596,
+            -0.442322741960583,
+            -1.7606618545557773
+          ]
+        },
+        "radius_scaled": {
+          "area_A2": 17.833855247817652,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 17.833855247817652,
+          "V_area_mean_kcal_mol": -127.32633275047425,
+          "V_area_sd_kcal_mol": 2.5666122957091027,
+          "V_p05_kcal_mol": -132.11626756868674,
+          "V_p50_kcal_mol": -126.2908412277239,
+          "V_p95_kcal_mol": -124.74667318943305,
+          "V_min_kcal_mol": -133.552206839203,
+          "V_min_at_A": [
+            -1.0889784627902912,
+            1.621468178762331,
+            -0.4537379573172371
+          ],
+          "V_max_kcal_mol": -124.62612237609144,
+          "V_max_at_A": [
+            0.011710095550291596,
+            -0.442322741960583,
+            -1.7606618545557773
+          ]
+        },
+        "delta": {
+          "area_A2": 1.084324606270851,
+          "V_area_mean_kcal_mol": -0.9262163303402104,
+          "V_p05_kcal_mol": -2.6862695448921556,
+          "V_p95_kcal_mol": -0.0007242246480529957,
+          "V_min_kcal_mol": -2.149179438438466,
+          "V_max_kcal_mol": 0.0
+        },
+        "overlaps": []
+      },
+      {
+        "label": "N3",
+        "source": "default:map",
+        "atoms": [
+          2
+        ],
+        "h_generated_polar": false,
+        "nearest_nucleus": {
+          "area_A2": 26.650820924047455,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 26.650820924047455,
+          "V_area_mean_kcal_mol": -136.39051737901767,
+          "V_area_sd_kcal_mol": 2.6874796613326404,
+          "V_p05_kcal_mol": -140.8069185447255,
+          "V_p50_kcal_mol": -136.4058567976755,
+          "V_p95_kcal_mol": -131.65496225665584,
+          "V_min_kcal_mol": -141.2627384019241,
+          "V_min_at_A": [
+            -3.1276558528325378,
+            -0.16715085470679472,
+            -0.03175085470679455
+          ],
+          "V_max_kcal_mol": -129.6744346557466,
+          "V_max_at_A": [
+            -0.6762203795782514,
+            -1.8907787929250364,
+            0.38100748083660274
+          ]
+        },
+        "radius_scaled": {
+          "area_A2": 23.464192278947603,
+          "area_pos_A2": 0.0,
+          "area_neg_A2": 23.464192278947603,
+          "V_area_mean_kcal_mol": -137.01523832383043,
+          "V_area_sd_kcal_mol": 2.2064697361547334,
+          "V_p05_kcal_mol": -140.86944726412014,
+          "V_p50_kcal_mol": -136.8419683023279,
+          "V_p95_kcal_mol": -133.6310320731345,
+          "V_min_kcal_mol": -141.2627384019241,
+          "V_min_at_A": [
+            -3.1276558528325378,
+            -0.16715085470679472,
+            -0.03175085470679455
+          ],
+          "V_max_kcal_mol": -132.25117992865188,
+          "V_max_at_A": [
+            -0.9513925191633972,
+            -0.5799089379188346,
+            -1.7569371913885914
+          ]
+        },
+        "delta": {
+          "area_A2": -3.1866286450998516,
+          "V_area_mean_kcal_mol": -0.6247209448127649,
+          "V_p05_kcal_mol": -0.06252871939463489,
+          "V_p95_kcal_mol": -1.976069816478656,
+          "V_min_kcal_mol": 0.0,
+          "V_max_kcal_mol": -2.5767452729052707
+        },
+        "overlaps": []
+      }
+    ],
+    "sites_tile_surface": true,
+    "solvent_esp": "polarised solute only (reaction field excluded)",
+    "geometry_provenance": {
+      "heavy_atoms": "supplied_frozen",
+      "hydrogens": {
+        "supplied": 0,
+        "generated": 0,
+        "generated_relaxed": 0,
+        "optimised": 0
+      },
+      "relaxation": "none",
+      "caveat": "hydrogens not supplied were placed for the isolated molecule, without any protein or other environment"
+    },
+    "conformer_scope": "single conformer; 0 rotatable bond(s)",
+    "topology": {
+      "genus": 0,
+      "components": 1
+    },
+    "identity": {
+      "chemical_smiles": "N#C[S-]",
+      "mapped_smiles": "[S-:1][C:2]#[N:3]",
+      "chemical_match": true,
+      "mapped_match": true
+    },
+    "budget": [
+      {
+        "id": "functional",
+        "axis": "functional B3LYP / PBE0 / M06-2X / HF",
+        "statistic": "spread, sigma-hole V_max",
+        "kcal_mol": 0.69,
+        "measured_on": "chlorobenzene",
+        "source": "bench/error_budget.jsonl"
+      },
+      {
+        "id": "grid",
+        "axis": "grid spacing 0.26 -> 0.16 bohr",
+        "statistic": "shift, sigma-hole V_max",
+        "kcal_mol": 0.04,
+        "measured_on": "chlorobenzene",
+        "source": "bench/error_budget.jsonl"
+      },
+      {
+        "id": "partition small anions",
+        "axis": "partition rule, radius_scaled - nearest_nucleus",
+        "statistic": "max |delta|, site area-weighted mean",
+        "kcal_mol": 3.0,
+        "measured_on": "nitrite, thiocyanate, enolate",
+        "source": "bench/site_partition.jsonl"
+      },
+      {
+        "id": "partition C18",
+        "axis": "partition rule, radius_scaled - nearest_nucleus",
+        "statistic": "max |delta|, site area-weighted mean",
+        "kcal_mol": 3.95,
+        "measured_on": "Z3Z13-18:OAc, 10 conformers",
+        "source": "bench/site_partition.jsonl"
+      },
+      {
+        "id": "grid mean",
+        "axis": "grid spacing 0.26 -> 0.16 bohr",
+        "statistic": "max |shift|, site area-weighted mean",
+        "kcal_mol": 0.15,
+        "measured_on": "nitrite, thiocyanate, enolate, chlorobenzene",
+        "source": "bench/site_partition.jsonl"
+      }
+    ]
+  },
+  "sites_reason": null,
+  "scale": {
+    "kind": "sequential",
+    "vmin": -141.2627384019241,
+    "vmax": -94.82782124018796,
+    "sign_change_ratio": 0.0,
+    "sign_change_threshold": 0.05,
+    "cmap": "lajolla",
+    "cmap_requested": null,
+    "cmap_substituted": false,
+    "cmap_forced": false,
+    "source": "auto",
+    "colour_scale_fixed": false
+  },
+  "provenance": {
+    "espmap_version": "0.2.0",
+    "code": "v0.1.2-113-g4fcaed9ff363",
+    "installed_distribution_version": "0.2.0",
+    "python": "3.12.15",
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "scikit_image": "0.26.0",
+    "pyscf": "2.14.0",
+    "rdkit": "2026.9.1",
+    "matplotlib": "3.11.2",
+    "threads": 4,
+    "blas": null
+  },
+  "caveat": "Measured error budget (README): basis def2-SVP -> def2-TZVPP moves the chlorobenzene sigma-hole by +3.54 kcal/mol; solvent gas -> water by -3.60. Quote numbers only against those margins."
+}

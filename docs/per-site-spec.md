@@ -3,7 +3,7 @@
 Status: **revision 4. P0, P2 (#24), P1 (#27) and caller-defined sites (#28)
 are merged; §6 now describes the record as written, and
 `docs/record-schema.json` is its key tree, checked against a real record in
-both directions (review 4 N5).** This is the
+both directions (review 4 N5). P3's fixture records are in review (§8).** This is the
 contract that espmap's `--json` will grow into and that Arrowfield's v0.0
 fixtures are written against. It extends item 1 of `docs/roadmap-review.md`
 ("extend `--json` with shape descriptors") from whole-molecule numbers to
@@ -661,6 +661,25 @@ measurement committed under `bench/`.
 **P3, the contract.** Freeze `espmap.sites/1` and produce real fixture records
 for benzene, nitrite, thiocyanate, an enolate model and a C18 pheromone.
 **Arrowfield v0.0 starts here.**
+
+As built, there are six records in `fixtures/records/`, made by
+`fixtures/make_records.py` and checked by `tests/test_fixtures.py`. The
+README's Outputs section lists them; three choices are recorded here:
+- **Each record is computed in the condition its geometry was made in.** The
+  four small molecules use B3LYP/def2-TZVP in PCM water on their DFT
+  geometries. The C18 acetate uses def2-SVP + RI in the gas phase on two
+  MMFF94s conformers, the lowest-energy extended one and the most compact
+  folded one (genus 3). Neither record is the C18 molecule's "true" surface;
+  the pair shows how far one shape is from another.
+- **C18 atom maps follow the chain**, so `C3-H` means C3 to a chemist and to
+  a caller-sites file alike. `bench/fixtures` numbered them in SMILES order,
+  where map 1 was the acetyl CH₃.
+- **The nitrite input is rotated out of z = 0.** The DFT nitrite is exactly
+  planar with equal N–O bonds, which the gate (H5) cannot tell from a 2D
+  drawing. A rigid rotation is the remedy the gate names, and a test checks
+  that every interatomic distance is unchanged.
+
+Review 5 reads the contract before these records freeze it.
 
 **P4, more descriptors.** ALIE, then frontier-orbital amplitudes, then Fukui
 functions, each reusing the same geometry, surface, atom maps, partition and
