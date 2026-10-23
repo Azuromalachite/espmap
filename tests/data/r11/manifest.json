@@ -1,0 +1,1374 @@
+{
+ "about": "Build the R11 hostile input set: flat (every z = 0) structure files that a\ndrawing-vs-geometry rule must classify, each with what the gate should do.",
+ "severity": {
+  "silent wrong geometry": 3,
+  "recorded discard": 2,
+  "overrules the file's 2D header": 2,
+  "BLOCK": 1,
+  "correct": 0
+ },
+ "cases": [
+  {
+   "file": "draw_chlorobenzene_0.825.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_chlorobenzene_1.0.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_chlorobenzene_1.2.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_chlorobenzene_1.35.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_chlorobenzene_1.4.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_chlorobenzene_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_chlorobenzene_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_chlorobenzene_1.54.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_chlorobenzene_1.7.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_chlorobenzene_2.0.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "a drawing at a uniform editor scale"
+  },
+  {
+   "file": "draw_cyclohexanol_1.0.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_cyclohexanol_1.4.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_cyclohexanol_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_cyclohexanol_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_cyclohexanol_1.54.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_thf_1.0.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_thf_1.4.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_thf_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_thf_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_thf_1.54.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_aminopropanol_1.0.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_aminopropanol_1.4.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_aminopropanol_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_aminopropanol_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_aminopropanol_1.54.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_tbutanol_1.0.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_tbutanol_1.4.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_tbutanol_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_tbutanol_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_tbutanol_1.54.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_hexane_1.0.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_hexane_1.4.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_hexane_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_hexane_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_hexane_1.54.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction rescaled",
+   "why": "sp3 atoms drawn flat: no real coordinates put these in a plane"
+  },
+  {
+   "file": "draw_benzene_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction",
+   "why": "one element pair at a drawing length"
+  },
+  {
+   "file": "draw_chlorobenzene_withH_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction with explicit H",
+   "why": "some editors draw H; C-H at 1.5 A is no geometry"
+  },
+  {
+   "file": "draw_cyclohexanol_stretched_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction, x stretched 12 %",
+   "why": "a hand-tweaked drawing: bonds no longer uniform, still flat sp3"
+  },
+  {
+   "file": "draw_chlorobenzene_zjitter_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction, z = +-1e-4",
+   "why": "a converter wrote noise into z; the x,y are still a drawing"
+  },
+  {
+   "file": "draw2d_cyclohexanol_0.825.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "overrules the file's 2D header"
+   },
+   "header": "2D",
+   "source": "RDKit depiction, 2D header",
+   "why": "the header says 2D"
+  },
+  {
+   "file": "draw2d_cyclohexanol_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "overrules the file's 2D header"
+   },
+   "header": "2D",
+   "source": "RDKit depiction, 2D header",
+   "why": "the header says 2D"
+  },
+  {
+   "file": "draw_benzene_1.39.mol",
+   "kind": "either",
+   "allowed": [
+    "geometry",
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": null,
+   "outcomes": {
+    "geometry": "correct",
+    "drawing": "correct",
+    "ambiguous": "BLOCK"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.39 A",
+   "why": "a regular hexagon at the aromatic C-C length IS benzene's heavy skeleton"
+  },
+  {
+   "file": "draw_pyridine_1.4.mol",
+   "kind": "either",
+   "allowed": [
+    "geometry",
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": null,
+   "outcomes": {
+    "geometry": "correct",
+    "drawing": "correct",
+    "ambiguous": "BLOCK"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.40 A",
+   "why": "a planar aromatic at near-real lengths; computing it as-is is harmless"
+  },
+  {
+   "file": "real_benzene.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real planar molecule"
+  },
+  {
+   "file": "real_pyridine.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real planar molecule"
+  },
+  {
+   "file": "real_chlorobenzene.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real planar molecule"
+  },
+  {
+   "file": "real_formaldehyde.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real planar molecule"
+  },
+  {
+   "file": "real_ethylene.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real planar molecule"
+  },
+  {
+   "file": "real_pyrrole.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real planar molecule"
+  },
+  {
+   "file": "real_furan.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real planar molecule"
+  },
+  {
+   "file": "real_naphthalene.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real planar molecule"
+  },
+  {
+   "file": "real_formamide.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real planar molecule"
+  },
+  {
+   "file": "real_C6F6.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "real, no H to break uniformity"
+  },
+  {
+   "file": "real_C2F4.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "real, no H to break uniformity"
+  },
+  {
+   "file": "real_C6Cl6.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "real, no H to break uniformity"
+  },
+  {
+   "file": "real_benzene_skeleton.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "MMFF94s benzene, H removed",
+   "why": "a real heavy-atom skeleton, one element pair"
+  },
+  {
+   "file": "real_anti_butane_skeleton.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built: C-C 1.53 A, 112 deg, anti",
+   "why": "anti-butane's carbons are coplanar in a real geometry"
+  },
+  {
+   "file": "dft_nitrite.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "bench/fixtures/nitrite.sdf, rotated into the xy plane",
+   "why": "a real DFT geometry"
+  },
+  {
+   "file": "dft_thiocyanate.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "bench/fixtures/thiocyanate.sdf, rotated into the xy plane",
+   "why": "a real DFT geometry"
+  },
+  {
+   "file": "dft_benzene.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "bench/fixtures/benzene.sdf, rotated into the xy plane",
+   "why": "a real DFT geometry"
+  },
+  {
+   "file": "dft_enolate.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "bench/fixtures/enolate.sdf, rotated into the xy plane",
+   "why": "a real DFT geometry"
+  },
+  {
+   "file": "real_CO2.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_azide.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_nitrate.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_carbonate.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_BF3.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_SO3.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_ozone.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_nitronium.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_water_heavy_only.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_water.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_HCN_heavy.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_HCN.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_N2.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "real_CO.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built at a typical literature bond length (rounded)",
+   "why": "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar"
+  },
+  {
+   "file": "draw_CO2_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "ambiguous",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "built at 1.5 A",
+   "why": "one pair at a drawing length: undecidable"
+  },
+  {
+   "file": "draw_nitrate_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "ambiguous",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "built at 1.5 A",
+   "why": "one pair at a drawing length: undecidable"
+  },
+  {
+   "file": "real_aniline_pyramidal_N.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, not flattened",
+   "why": "NH2 is pyramidal, so some z != 0"
+  },
+  {
+   "file": "real_chlorobenzene_znoise.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "MMFF94s chlorobenzene with one z = 1e-5",
+   "why": "a real planar geometry printed with noise"
+  },
+  {
+   "file": "real_chlorobenzene_2Dheader.mol",
+   "kind": "geometry",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "overrules the file's 2D header"
+   },
+   "header": "2D",
+   "source": "MMFF94s chlorobenzene saved with a 2D header",
+   "why": "the header is the file's own statement; the reader cannot overrule it"
+  }
+ ]
+}
