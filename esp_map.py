@@ -46,6 +46,10 @@ NEW IN v3 — the structure check (--check)
       NOTED     one unspecified stereocentre (the two enantiomers have
                 mirror-image ESP -- identical values, reflected picture),
                 reachable tautomers, net charge, isotopes.
+      --require-stereo makes every stereo element the input leaves open a
+                REJECTION: centres, E/Z, 'either' marks, stereogenic
+                cumulenes, hindered biaryl axes and helicenes. 3D
+                coordinates fix every element.
 
     The stereochemistry wording is measured, not assumed: threonine's two
     diastereomers differ in mean ESP extrema by 1.6 (V_min) and 1.9 (V_max)
@@ -632,8 +636,207 @@ def atom_map_findings(mol, smiles=None):
     return out
 
 
+# --require-stereo. A biaryl axis is treated as a stable atropisomer when its
+# ortho positions, across both rings, score at least this: 1 per substituent,
+# 2 per peri ring fusion (a naphthalene C8a: its peri C-H crowds the axis
+# like a substituent, on a rigid ring). Tri- and tetra-ortho biaryls, BINOL
+# and 1,1'-binaphthyl qualify; 2,2'-dimethylbiphenyl rotates at room
+# temperature and does not. This approximates, from the graph alone, the
+# barrier classes of LaPlante et al. 2011 (docs/prior-art.md): axes below
+# about 20 kcal/mol interconvert within a minute. Borderline axes racemise
+# over hours, and a refusal is the safe side.
+ATROPISOMER_MIN_ORTHO = 3
+# A helicene is treated as configurationally stable from five ortho-fused
+# rings; [5]helicene, like 1,1'-binaphthyl, racemises over hours at room
+# temperature, [6] does not.
+HELICENE_MIN_RINGS = 5
+
+
+def coordinates_fix_stereo(mol):
+    """True when mol carries a real 3D geometry, whose coordinates fix every
+    stereo element: a 3D MOL/SDF that coordinate_kind did not call a drawing,
+    an XYZ or PDB file, an --atoms string. A SMILES has no conformer; a 2D
+    drawing, or one under a 3D header with z = 0, fixes only what its wedges
+    and drawn double bonds say."""
+    if mol.GetNumConformers() == 0 or not mol.GetConformer().Is3D():
+        return False
+    return not (mol.HasProp("_coords") and mol.GetProp("_coords") == "drawing")
+
+
+def atropisomer_axes(mol):
+    """Biaryl single bonds that are stable stereogenic axes: not in a ring,
+    between two aromatic atoms, with ATROPISOMER_MIN_ORTHO or more substituted
+    ortho positions in all, and each end unsymmetric (its two ortho atoms not
+    equivalent; four ortho methyls on two symmetric rings are not chiral).
+    RDKit's stereo perception does not see these, and no SMILES can fix one."""
+    from rdkit import Chem
+    ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=False))
+    ri = mol.GetRingInfo()
+    out = []
+    for b in mol.GetBonds():
+        if b.GetBondType() != Chem.BondType.SINGLE or b.IsInRing():
+            continue
+        ends = (b.GetBeginAtom(), b.GetEndAtom())
+        if not all(a.GetIsAromatic() and a.GetDegree() == 3 for a in ends):
+            continue
+        n_sub, chiral = 0, True
+        for a, partner in (ends, ends[::-1]):
+            ortho = [n for n in a.GetNeighbors() if n.GetIdx() != partner.GetIdx()]
+            if ranks[ortho[0].GetIdx()] == ranks[ortho[1].GetIdx()]:
+                chiral = False
+            for o in ortho:
+                ring = next((set(r) for r in ri.AtomRings()
+                             if a.GetIdx() in r and o.GetIdx() in r), set())
+                if any(n.GetAtomicNum() > 1 and n.GetIdx() != a.GetIdx()
+                       and n.GetIdx() not in ring for n in o.GetNeighbors()):
+                    n_sub += 2 if ri.NumAtomRings(o.GetIdx()) > 1 else 1
+        if chiral and n_sub >= ATROPISOMER_MIN_ORTHO:
+            out.append(b.GetIdx())
+    return out
+
+
+def helicene_lengths(mol):
+    """The ring count of each helicene: a chain of aromatic six-rings, each
+    fused to the next, where every middle ring is angularly fused (its two
+    fusion bonds one bond apart) and every turn goes the same way (consecutive
+    rings share the inner atom). A zigzag phenacene alternates its turns and
+    stays flat. Returns the longest such chain from each starting ring."""
+    ri = mol.GetRingInfo()
+    rings = [r for r in ri.AtomRings()
+             if len(r) == 6 and all(mol.GetAtomWithIdx(i).GetIsAromatic() for i in r)]
+    if len(rings) < 4 or len(rings) > 40:
+        return []
+
+    def fusion(i, j):
+        s = set(rings[i]) & set(rings[j])
+        return frozenset(s) if len(s) == 2 else None
+
+    nbr = {i: [j for j in range(len(rings)) if j != i and fusion(i, j)]
+           for i in range(len(rings))}
+
+    def turn(i, f_in, f_out):
+        """(u, v) for ring i entered through fusion bond f_in and left through
+        f_out when the two are angular: u in f_in and v in f_out are joined by
+        a ring edge (the inner side). None when linear or otherwise, or when
+        the inner atoms belong to a third ring: coronene's outer rings wind
+        round a central ring that holds their inner atoms, and stay flat."""
+        r = rings[i]
+        for k in range(6):
+            for u, v in ((r[k], r[(k + 1) % 6]), (r[(k + 1) % 6], r[k])):
+                if u in f_in - f_out and v in f_out - f_in:
+                    if ri.NumAtomRings(u) > 2 or ri.NumAtomRings(v) > 2:
+                        return None
+                    return u, v
+        return None
+
+    best = []
+
+    def walk(path, last_v):
+        best.append(len(path))
+        i = path[-1]
+        for j in nbr[i]:
+            if j in path:
+                continue
+            if len(path) == 1:
+                walk(path + [j], None)
+                continue
+            t = turn(i, fusion(path[-2], i), fusion(i, j))
+            # a helix winds when each turn starts where the previous one ended
+            if t is None or (last_v is not None and t[0] != last_v):
+                continue
+            walk(path + [j], t[1])
+
+    for s in range(len(rings)):
+        walk([s], None)
+    return best
+
+
+def cumulene_chains(mol):
+    """[(bond indices, stereogenic)] for each run of cumulated double bonds
+    (an allene C=C=C, a butatriene C=C=C=C). RDKit reports each of their
+    double bonds as a potential E/Z bond, the achiral ones too. A cumulene is
+    stereogenic (axial for an allene, cis/trans for a butatriene) only when
+    both terminal atoms carry two different substituents: 3-methylbuta-1,2-
+    diene's (CH3)2C= end makes it achiral."""
+    from rdkit import Chem
+    ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=False))
+    dbl = Chem.BondType.DOUBLE
+
+    def central(a):
+        return a.GetDegree() == 2 and all(b.GetBondType() == dbl for b in a.GetBonds())
+
+    seen, out = set(), []
+    for c in mol.GetAtoms():
+        if not central(c) or c.GetIdx() in seen:
+            continue
+        chain_atoms, bonds, ends = {c.GetIdx()}, set(), []
+        for b0 in c.GetBonds():                     # walk out each way
+            prev, b = c, b0
+            while True:
+                bonds.add(b.GetIdx())
+                nxt = b.GetOtherAtom(prev)
+                chain_atoms.add(nxt.GetIdx())
+                if not central(nxt):
+                    ends.append(nxt)
+                    break
+                b = next(x for x in nxt.GetBonds() if x.GetIdx() != b.GetIdx())
+                prev = nxt
+        seen |= chain_atoms
+
+        def unsymmetric(t):
+            subs = [n.GetIdx() for n in t.GetNeighbors() if n.GetIdx() not in chain_atoms]
+            if t.GetTotalNumHs() + len(subs) != 2:
+                return False
+            if len(subs) == 1:
+                return True                         # a group and an H
+            return len(subs) == 2 and ranks[subs[0]] != ranks[subs[1]]
+
+        out.append((sorted(bonds), all(unsymmetric(t) for t in ends)))
+    return out
+
+
+def stereo_left_open(mol):
+    """What the input does not fix, for --require-stereo: a list of
+    (code, message). Empty when every stereo element is fixed, or there is
+    none. A real 3D geometry fixes everything (coordinates_fix_stereo).
+    Otherwise:
+      - every potential stereo element RDKit finds that is Unspecified, or
+        marked Unknown (a crossed double bond, a wavy single bond), except
+        one that exists only because of an isotope label: the ESP cannot see
+        an isotope, and the gate already says isotopes are ignored;
+      - each stereogenic cumulene, judged as a whole (cumulene_chains)
+        instead of bond by bond;
+      - each atropisomeric biaryl axis (atropisomer_axes);
+      - each helicene of HELICENE_MIN_RINGS or more rings."""
+    from rdkit import Chem
+    if coordinates_fix_stereo(mol):
+        return []
+    plain = Chem.Mol(mol)
+    for a in plain.GetAtoms():
+        a.SetIsotope(0)
+    without_isotopes = {(str(e.type), e.centeredOn) for e in Chem.FindPotentialStereo(plain)}
+    chains = cumulene_chains(mol)
+    in_cumulene = {k for bonds, _ in chains for k in bonds}
+    out = [(f"cumulene at bonds {bonds}", "an axis or cis/trans no SMILES can fix")
+           for bonds, stereogenic in chains if stereogenic]
+    for e in Chem.FindPotentialStereo(mol):
+        if str(e.specified) == "Specified" or (str(e.type), e.centeredOn) not in without_isotopes:
+            continue
+        if "Bond" in str(e.type) and e.centeredOn in in_cumulene:
+            continue                                # judged as a whole above
+        what = ("atom" if "Atom" in str(e.type) else "bond")
+        out.append((f"{str(e.type)} {what} {e.centeredOn}",
+                    "marked unknown" if str(e.specified) == "Unknown" else "unspecified"))
+    for k in atropisomer_axes(mol):
+        out.append((f"biaryl axis at bond {k}", "an atropisomer no SMILES can fix"))
+    longest = max(helicene_lengths(mol), default=0)
+    if longest >= HELICENE_MIN_RINGS:
+        out.append((f"[{longest}]helicene", "a helix no SMILES can fix"))
+    return out
+
+
 def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None,
-                    charge=None):
+                    charge=None, require_stereo=False):
     """Can this drawing be translated into SMILES unambiguously, and is the
     result a molecule this pipeline can compute?
 
@@ -647,6 +850,10 @@ def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None,
     charge and spin are what the SCF will be given (--charge, --spin). The
     SCF receives nuclei, charge and spin; review 5 R2 found the gate checking
     only the drawing, so benzene --charge 2 was recorded as verified benzene.
+
+    require_stereo (--require-stereo) makes every stereo element the input
+    leaves open a BLOCK (stereo_left_open); without it stereo only warns or
+    notes, as before. Written against tests/data/stereo, built first.
 
     Returns (verdict, findings) where findings is a list of
     (severity, code, message, remedy).
@@ -744,6 +951,17 @@ def check_structure(mol, basis="def2-tzvp", spin=0, maps_from=None, smiles=None,
                     f"geometry at bond index {unspec_bonds}. E and Z are "
                     f"different compounds with different shapes.",
                     "draw the substituents cis or trans explicitly"))
+    if require_stereo:
+        left = stereo_left_open(mol)
+        if left:
+            out.append((BLOCK, "STEREO_REQUIRED",
+                        f"--require-stereo, but {len(left)} stereo element(s) are not "
+                        f"fixed by the input: "
+                        + "; ".join(f"{w} ({why})" for w, why in left),
+                        "give every centre a wedge or @/@@, every ordinary double bond "
+                        "a drawn or /\\ geometry; a stereogenic allene or cumulene, an "
+                        "atropisomer or a helix can only be fixed by 3D coordinates "
+                        "(MOL/SDF with z, XYZ), as SMILES marks on them are dropped"))
 
     # --- 4. tautomers: the drawn form is a choice, often an unconscious one ---
     try:
@@ -2888,6 +3106,10 @@ def main():
                          "without computing anything")
     ap.add_argument("--force", action="store_true",
                     help="compute even if the structure check rejects")
+    ap.add_argument("--require-stereo", action="store_true",
+                    help="refuse a structure whose input leaves any stereo element "
+                         "open (a centre, E/Z, an allene, an atropisomer or helix); "
+                         "3D coordinates fix every element")
     ap.add_argument("--basis", default="def2-tzvp")
     ap.add_argument("--density-fit", action="store_true",
                     help="RI-J/K: faster SCF up to ~600 nao; moves V by <= 0.02 kcal/mol (measured)")
@@ -2996,7 +3218,8 @@ def main():
         from rdkit import Chem
         verdict, findings = check_structure(Chem.RemoveHs(probe), a.basis,
                                             spin=a.spin, maps_from=probe,
-                                            smiles=a.smiles, charge=a.charge)
+                                            smiles=a.smiles, charge=a.charge,
+                                            require_stereo=a.require_stereo)
         print_check(verdict, findings, Chem.MolToSmiles(Chem.RemoveHs(probe)))
         if verdict == BLOCK and not a.force:
             raise SystemExit("structure rejected; fix the drawing, or pass "
