@@ -298,12 +298,18 @@ def coordinate_kind(mol, fmt, tol=0.03):
       - .xyz and .pdb are never drawings;
       - MOL/SDF/CDXML whose header says 2D are drawings;
       - a 3D header with every z = 0 is a drawing only if every bond has the
-        same length (within tol) across at least two element pairs. Drawing
-        programs draw every bond at one length; a geometry has C-H ~1.09,
-        C-Cl ~1.74 A. Pairs ignore bond ORDER: Kekule nitrite has N=O and
-        N-O(-), both 1.258 A in a DFT geometry, and counting orders called it
-        a drawing. With one element pair (nitrite, nitrate, CO2, a diatomic)
-        lengths cannot tell a drawing from a symmetric molecule -> ambiguous.
+        same length (within tol) AND that length is a drawing program's
+        (DRAWING_BOND_LENGTHS: 1.5 A in RDKit and most editors, 1.54 in
+        Marvin, 0.825 in ChemDraw's units). Drawing programs draw every bond
+        at one standard length; a geometry has C-H ~1.09, C-Cl ~1.74 A.
+        Review 5 R11: uniform length alone discarded C6F6 (C-C 1.394, C-F
+        1.335 A) and C2F4 as drawings, and refused CO2 (1.16 A) and BF3
+        (1.31 A) as ambiguous; their lengths are not a drawing's.
+      - uniform at a drawing length: a drawing if there are two or more
+        element pairs, ambiguous with one (a symmetric molecule could sit at
+        that length; a guess either way would be silent). Pairs ignore bond
+        ORDER: Kekule nitrite has N=O and N-O(-), and counting orders once
+        called a DFT nitrite a drawing.
     """
     if mol.GetNumConformers() == 0:
         return "none"
@@ -325,7 +331,14 @@ def coordinate_kind(mol, fmt, tol=0.03):
     mean = sum(lengths) / len(lengths)
     if max(abs(x - mean) for x in lengths) > tol * mean:
         return "geometry"
+    if not any(abs(mean - d) <= tol * d for d in DRAWING_BOND_LENGTHS):
+        return "geometry"
     return "drawing" if len(pairs) > 1 else "ambiguous"
+
+
+# Standard bond lengths drawing programs write (A): RDKit and most editors
+# 1.5, Marvin 1.54, ChemDraw 0.825 (its 14.4 pt default in MOL units).
+DRAWING_BOND_LENGTHS = (1.5, 1.54, 0.825)
 
 
 def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0, record=None):
@@ -810,8 +823,8 @@ def read_structure(path, charge=0, record=None):
     if kind == "ambiguous":
         return None, [(BLOCK, "DIMENSION_AMBIGUOUS",
                        f"{path} is flagged 3D with every z = 0 and every bond "
-                       f"the same length: a drawing and a symmetric planar "
-                       f"molecule look identical",
+                       f"at a drawing program's standard length: a drawing and "
+                       f"a symmetric planar molecule look identical",
                        "write a 2D header if this is a drawing, or give any "
                        "atom a non-zero z (or save as .xyz) if it is a geometry")], n
     m.SetProp("_coords", kind)
@@ -877,8 +890,10 @@ def verify_computed(spec, approved, max_stereo=1024):
     match = (sk_g.GetSubstructMatch(sk_t)
              if sk_t.GetNumBonds() == sk_g.GetNumBonds() else ())
     if not match:
-        return False, None, ("the connectivity perceived from the coordinates is "
-                             "not the approved structure's")
+        # review 5 R8: say what WAS computed, so a forced record names it
+        return False, _perceived_smiles(g, Chem.GetFormalCharge(approved)), (
+            "the connectivity perceived from the coordinates is not the "
+            "approved structure's")
     conf = Chem.Conformer(tmpl.GetNumAtoms())
     for i, j in enumerate(match):
         conf.SetAtomPosition(i, [float(x) for x in rows[j][1:4]])
@@ -896,6 +911,38 @@ def verify_computed(spec, approved, max_stereo=1024):
     if computed not in allowed:
         return False, computed, "the stereochemistry in the coordinates differs"
     return True, computed, ""
+
+
+def _perceived_smiles(g, charge):
+    """The molecule a set of coordinates is, as far as the coordinates say:
+    bond orders perceived at the approved total charge, or connectivity
+    alone when orders cannot be assigned. For the record of a forced run."""
+    from rdkit import Chem
+    from rdkit.Chem import rdDetermineBonds
+    try:
+        m = Chem.Mol(g)
+        rdDetermineBonds.DetermineBondOrders(m, charge=charge)
+        return Chem.MolToSmiles(Chem.RemoveHs(m))
+    except Exception:
+        return Chem.MolToSmiles(Chem.RemoveHs(_skeleton(g), sanitize=False))
+
+
+def input_invalid_reason(gate, verified, mapped_ok):
+    """Why validity.input is false, naming every failing check (review 5 R8:
+    a forced atom-order failure was reported as 'forced past the gate, or
+    structure not verified', neither of which had happened)."""
+    causes = []
+    if gate is None:
+        causes.append("no structure gate ran")
+    elif gate["forced"]:
+        causes.append("the gate's BLOCK was forced")
+    if verified is False:
+        causes.append("structure not verified (input.computed_smiles is what was computed)")
+    if mapped_ok is False:
+        # the record has no separate field for this until a schema change
+        # (spec section 6, "Deferred"); this reason is where it is recorded
+        causes.append("atom order not verified (verify_mapping)")
+    return "input not valid: " + ("; ".join(causes) or "unknown")
 
 
 def check_identity(spec, probe, approved, kept, force, stage):
@@ -2343,13 +2390,32 @@ def site_checks(rep, P, faces, V):
     return out
 
 
-def sites_block(valid, P, faces, V, coords, symbols, **kw):
+def tri_atom_arrays(has_sites, P, faces, coords, symbols):
+    """The NPZ's per-triangle partition, {"tri_atom_<rule>": owner index}.
+
+    Written exactly when the record has a site table: review 4 N8 withheld it
+    from invalid input or surface, and review 5 R9 found it still written for
+    H2 (no heavy atom) and for a block that failed its own checks. A rule
+    that cannot run (an element without a Bondi radius) is omitted rather
+    than filled with -1: absence has one encoding, a missing array."""
+    if not has_sites:
+        return {}
+    out = {}
+    for r in PARTITION_RULES:
+        t = partition_surface(P, faces, coords, symbols, r)
+        if t is not None:
+            out[f"tri_atom_{r}"] = t
+    return out
+
+
+def sites_block(valid, P, faces, V, coords, symbols, input_reason=None, **kw):
     """(site report, None), or (None, reason) when the record is not valid:
     per-site values near a clipped box face, or for a forced-through
     structure, would be worse than the global ones (spec section 3). A block
-    that fails its own checks is withheld the same way."""
+    that fails its own checks is withheld the same way. input_reason is
+    input_invalid_reason(...), which names the failing check (review 5 R8)."""
     if not valid["input"]:
-        return None, "input not valid (forced past the gate, or structure not verified)"
+        return None, input_reason or "input not valid"
     if not valid["surface"]:
         return None, "surface not valid (see results.surface.problems)"
     if not valid.get("electronic", True):
@@ -2925,6 +2991,8 @@ def main():
         h_source = [("optimised" if a.optimize else "supplied") if s == "H" else None
                     for s in symbols]
     sites, sites_reason = sites_block(valid, P_A, faces, V, coords_A, symbols,
+                                      input_reason=input_invalid_reason(gate, verified,
+                                                                        mapped_ok),
                                       atom_maps=atom_maps, h_source=h_source,
                                       groups=site_groups, source=f"caller:{sites_by}")
     valid["sites"] = sites is not None
@@ -2958,16 +3026,10 @@ def main():
         print(f"wrote {a.html}  (interactive 3D)")
     if a.npz:
         import json
-        # the atom owning each triangle, per partition rule (-1: rule not
-        # available): enough to colour or regroup by site without another SCF.
-        # Written only when a site table would be (sites_block's conditions):
-        # review 4 N8, the NPZ let a consumer redo a partition of a record
-        # whose JSON withheld its sites as invalid.
-        tri_atom = {}
-        if valid["input"] and valid["surface"] and valid["electronic"]:
-            for r in PARTITION_RULES:
-                t = partition_surface(P_A, faces, coords_A, symbols, r)
-                tri_atom[f"tri_atom_{r}"] = np.full(len(faces), -1) if t is None else t
+        # the atom owning each triangle, per partition rule: enough to colour
+        # or regroup by site without another SCF. Only when the record has a
+        # site table (tri_atom_arrays).
+        tri_atom = tri_atom_arrays(valid["sites"], P_A, faces, coords_A, symbols)
         maps = np.array([(atom_maps or {}).get(i, 0) for i in range(len(symbols))])
         np.savez_compressed(a.npz, verts=verts, faces=faces, V=V,
                             symbols=np.array(symbols), coords=mol.atom_coords(),

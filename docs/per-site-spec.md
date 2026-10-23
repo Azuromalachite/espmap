@@ -583,13 +583,24 @@ A row is evidence about the method, measured on the molecule it names. It is
 not an error bar on this run's sites.
 
 **NPZ.** `--npz` carries `tri_atom_nearest_nucleus` and
-`tri_atom_radius_scaled`: the atom index of every triangle under each rule,
-−1 throughout when a rule is unavailable. (Revision 3 called them `tri_atom`
-and `tri_atom_compared`; the code's names say which rule and were kept.)
-Sites are unions of atoms, so this is enough to colour a render by site, to
-regroup with other sites, or for Arrowfield to redo a partition, all without
-another SCF. Units and method go in the NPZ as H6 requires. The full array
-list is `npz` in `docs/record-schema.json`.
+`tri_atom_radius_scaled`: the atom index of every triangle under each rule.
+They are written exactly when the record has a site table (`validity.sites`),
+and a rule that cannot run, an element without a Bondi radius, has no array
+at all. Absence has one encoding, a missing array (review 5 R9; the first
+v0.2.0 code wrote −1 throughout, and wrote the partition for H₂). (Revision
+3 called them `tri_atom` and `tri_atom_compared`; the code's names say which
+rule and were kept.) Sites are unions of atoms, so this is enough to colour
+a render by site, to regroup with other sites, or for Arrowfield to redo a
+partition, all without another SCF. Units and method go in the NPZ as H6
+requires. The full array list is `npz` in `docs/record-schema.json`.
+
+**Deferred to the next schema version.** These are changes to the key tree
+that are wanted but would break `espmap.record/1` as frozen at v0.2.0, so
+they wait for a deliberate version bump with regenerated fixtures:
+- `input.mapping_verified: bool?` (review 5 R8): the `verify_mapping` result
+  as its own field. Today it is visible as `sites.identity.mapped_match`
+  when a site table exists. When the input is invalid it is named in
+  `sites_reason` ("atom order not verified"), and `validity.input` is false.
 
 ## 7. Acceptance tests
 

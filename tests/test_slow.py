@@ -394,6 +394,8 @@ def test_hydrogen_molecule_writes_its_record(tmp_path, monkeypatch, src):
     rec = json.loads(js.read_text())
     assert rec["sites"] is None and "no heavy atom" in rec["sites_reason"]
     assert rec["validity"]["sites"] is False and rec["validity"]["input"] is True
+    # review 5 R9: no site table, so no partition in the NPZ either
+    assert not any(k.startswith("tri_atom_") for k in np.load(tmp_path / "h2.npz").files)
 
 
 def _npz_run(tmp_path, monkeypatch, *args):

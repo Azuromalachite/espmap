@@ -325,17 +325,18 @@ def test_real_3d_coordinates_are_used_as_is(tmp_path):
 _ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
 
 
-def _flat_nitrite_mol(tmp_path, header="3D"):
-    """A DFT-like nitrite in the xy plane (N-O 1.258 A, 115 deg), Kekule:
-    N=O and N-O(-). One element pair, so lengths cannot decide."""
+def _flat_nitrite_mol(tmp_path, header="3D", r=1.258):
+    """A nitrite in the xy plane (115 deg), Kekule: N=O and N-O(-). One
+    element pair. At r = 1.258 A it is a DFT geometry; at r = 1.5 A, the
+    length drawing programs use, it could be a drawing."""
     import math
     from rdkit import Chem
     m = Chem.RWMol(Chem.MolFromSmiles("N(=O)[O-]"))
     c = Chem.Conformer(3)
     h = math.radians(115 / 2)
     c.SetAtomPosition(0, (0.0, 0.0, 0.0))
-    c.SetAtomPosition(1, (1.258 * math.sin(h), 1.258 * math.cos(h), 0.0))
-    c.SetAtomPosition(2, (-1.258 * math.sin(h), 1.258 * math.cos(h), 0.0))
+    c.SetAtomPosition(1, (r * math.sin(h), r * math.cos(h), 0.0))
+    c.SetAtomPosition(2, (-r * math.sin(h), r * math.cos(h), 0.0))
     c.Set3D(header == "3D")
     m.AddConformer(c)
     p = tmp_path / "nitrite.mol"
@@ -357,17 +358,38 @@ def _flat_nitrite_mol(tmp_path, header="3D"):
     ("examples/real_3d.mol", "as-is"),
     ("examples/real_3d_noH.mol", "as-is"),
     ("examples/water.xyz", "as-is"),
+    # review 5 R11: real planar molecules whose bonds are near-equal but not
+    # at a drawing program's length were discarded as drawings
+    ("docs/review-5/fx/C6F6.mol", "as-is"),
+    ("docs/review-5/fx/C2F4.mol", "as-is"),
 ])
 def test_planar_geometry_is_kept_and_drawings_are_discarded(path, expect):
     _, info = em.from_file(str(_ROOT / path))
     assert expect in info["source"], (path, info["source"])
 
 
-def test_symmetric_flat_ion_with_a_3d_header_is_refused_not_guessed(tmp_path):
-    """Kekule nitrite has two bond ORDERS but one element pair, and a DFT
-    geometry gives both bonds 1.258 A. Counting orders called it a drawing and
-    MMFF replaced it with N-O 1.42 A; lengths cannot tell the two apart."""
-    p = _flat_nitrite_mol(tmp_path)
+@pytest.mark.parametrize("name", ["CO2", "BF3", "azide", "nitrate", "ozone"])
+def test_flat_single_pair_geometries_at_real_lengths_are_kept(name):
+    """Review 5 R11: every bond equal is what a drawing looks like, but only
+    at a drawing program's length. CO2 at 1.16 A or BF3 at 1.31 A is a
+    geometry, and was refused as DIMENSION_AMBIGUOUS."""
+    mol = em.read_structure(str(_ROOT / "docs/review-5/fx" / f"{name}.mol"))[0]
+    assert em.coordinate_kind(mol, "mol") == "geometry"
+
+
+def test_flat_dft_nitrite_is_read_as_its_geometry(tmp_path):
+    """Kekule nitrite has two bond ORDERS but one element pair; a DFT geometry
+    gives both bonds 1.258 A, not a drawing's 1.5. Counting orders once called
+    it a drawing (MMFF then made N-O 1.42 A), and the equal lengths then got it
+    refused as ambiguous; the length itself says it is a geometry."""
+    _, info = em.from_file(str(_flat_nitrite_mol(tmp_path)))
+    assert "as-is" in info["source"]
+
+
+def test_a_flat_single_pair_at_drawing_length_is_still_ambiguous(tmp_path):
+    """At 1.5 A with one element pair a 3D-flagged file could be either a
+    drawing or a geometry, so it stays a BLOCK rather than a guess."""
+    p = _flat_nitrite_mol(tmp_path, r=1.5)
     mol, probs = em.parse_for_check(path=str(p), charge=-1)
     assert mol is None and probs[0][1] == "DIMENSION_AMBIGUOUS"
     with pytest.raises(ValueError):
@@ -1286,6 +1308,62 @@ def test_site_block_is_withheld_from_an_invalid_record():
     block, reason = em.sites_block(dict(input=True, surface=True, sites=False),
                                    P, faces, _field(P), X, sym)
     assert block["schema"] == em.SITES_SCHEMA and reason is None
+
+
+# ------------------------------------------------- review 5 R8: say which check
+@pytest.mark.parametrize("gate, verified, mapped, says", [
+    (dict(forced=True), True, True, "gate"),
+    (None, None, None, "no structure gate ran"),
+    (dict(forced=False), False, True, "structure not verified"),
+    (dict(forced=False), True, False, "atom order not verified"),
+    (dict(forced=True), False, False, "gate"),          # every cause is named
+])
+def test_input_reason_names_the_failing_check(gate, verified, mapped, says):
+    """R8: a forced atom-order failure read 'forced past the gate, or
+    structure not verified', neither of which had happened."""
+    reason = em.input_invalid_reason(gate, verified, mapped)
+    assert says in reason
+    if gate and gate["forced"] and verified is False:
+        assert "structure not verified" in reason and "atom order" in reason
+
+
+def test_sites_block_passes_the_input_reason_through():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    block, reason = em.sites_block(dict(input=False, surface=True, sites=False),
+                                   P, faces, _field(P), X, sym,
+                                   input_reason="input not valid: atom order not verified")
+    assert block is None and "atom order not verified" in reason
+
+
+def test_a_failed_identity_check_records_what_was_perceived():
+    """R8: verify_computed returned None for the computed SMILES on a
+    connectivity mismatch, so a forced record could not say what it ran."""
+    from rdkit import Chem
+    spec, _ = em.from_smiles("COC")
+    ok, computed, why = em.verify_computed(spec, Chem.MolFromSmiles("CCO"))
+    assert ok is False and computed == "COC" and "connectivity" in why
+
+
+# ------------------------------------------------ review 5 R9: NPZ partition
+def test_npz_partition_follows_the_site_table():
+    """R9: the NPZ wrote tri_atom_* whenever input and surface were valid, so
+    H2 (no heavy atom, no site table) still shipped a partition."""
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    assert em.tri_atom_arrays(False, P, faces, X, sym) == {}
+    arrays = em.tri_atom_arrays(True, P, faces, X, sym)
+    assert set(arrays) == {"tri_atom_nearest_nucleus", "tri_atom_radius_scaled"}
+    assert all(len(v) == len(faces) and v.min() >= 0 for v in arrays.values())
+
+
+def test_npz_omits_a_rule_that_cannot_run():
+    """R9: absence had three encodings; an unavailable rule was an array of
+    -1. It is now omitted, as the schema's npz list already allows."""
+    sym = ["Fe", "O"]
+    X = [[0.0, 0.0, 0.0], [1.8, 0.0, 0.0]]
+    P, faces = _blob_mesh(X)
+    assert set(em.tri_atom_arrays(True, P, faces, X, sym)) == {"tri_atom_nearest_nucleus"}
 
 
 # ------------------------------------------- review 4 N5: one record contract
