@@ -256,3 +256,11 @@ def test_a_supplied_file_refusal_names_the_record(tmp_path):
                                  "E8_ligand_and_tautomer.sdf"), "--ensemble", "supplied",
                    cwd=tmp_path)
     assert rc != 0 and "MEMBER_IDENTITY" in out and "record 4" in out
+
+
+def test_the_record_states_the_measured_thresholds(plan, tmp_path):
+    rec = em.run_ensemble(plan, tmp_path, runner=Stub(), log=lambda s: None)
+    fr, sel = rec["folded_rule"], rec["protocol"]["selection"]
+    assert (fr["min_bonds"], fr["slack_A"], fr["status"]) == (6, 0.5, "measured")
+    assert fr["source"] == sel["dedup_source"] == "docs/ensemble-spec.md 8.2"
+    assert (sel["dedup_rmsd_A"], sel["dedup_status"]) == (0.35, "measured")

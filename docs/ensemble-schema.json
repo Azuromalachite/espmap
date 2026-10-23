@@ -185,7 +185,9 @@
       "mirror_images_merged",
       "n_unique",
       "n_symmetry_matches",
-      "symmetry_match_cap"
+      "symmetry_match_cap",
+      "dedup_status",
+      "dedup_source"
      ],
      "properties": {
       "method": {
@@ -227,6 +229,20 @@
       "symmetry_match_cap": {
        "type": "integer",
        "description": "R6 S5: reaching it refuses, so the list here is never truncated"
+      },
+      "dedup_status": {
+       "enum": [
+        "provisional",
+        "measured",
+        null
+       ],
+       "description": "the dedup threshold's status; null when there is no dedup"
+      },
+      "dedup_source": {
+       "type": [
+        "string",
+        "null"
+       ]
       }
      }
     },
@@ -260,7 +276,9 @@
    "required": [
     "min_bonds",
     "slack_A",
-    "radii"
+    "radii",
+    "status",
+    "source"
    ],
    "properties": {
     "min_bonds": {
@@ -277,10 +295,14 @@
       "provisional",
       "measured"
      ],
-     "description": "R6 S3: provisional until section 8"
+     "description": "provisional until measured; measured since docs/ensemble-spec.md 8.2"
+    },
+    "source": {
+     "type": "string",
+     "description": "where the rule's parameters were measured"
     }
    },
-   "description": "R6 S3: folded names its rule and parameters. A consumer with a free-text field (the Atlas's selection.notes) renders it there, e.g. 'folded: heavy-atom contact >= 5 bonds apart, Bondi + 0.5 A; provisional'"
+   "description": "R6 S3: folded names its rule and parameters. A consumer with a free-text field (the Atlas's selection.notes) renders it there, e.g. 'folded: heavy-atom contact >= 6 bonds apart, Bondi + 0.5 A; measured, espmap ensemble-spec 8.2'"
   },
   "members": {
    "type": "array",
