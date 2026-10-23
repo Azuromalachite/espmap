@@ -190,6 +190,25 @@ SMALL_BASIS_NAMES = ("sto-3g", "3-21g", "6-31g", "6-31g*", "6-31g**", "6-31+g*",
                      "aug-cc-pvdz", "pcseg-1", "aug-pcseg-1")
 SMALL_BASIS = {basis_key(b) for b in SMALL_BASIS_NAMES}
 
+
+def basis_is_small(name):
+    """Double-zeta or smaller: the bases the +3.5 kcal/mol basis row and the
+    warning describe. Review 6 S23: a list of names missed STO-6G, pcseg-0,
+    6-31++G, 6-31G(2d) and 6-31G(2df,p), which ran with no warning and no
+    budget row. So, beside the list, by family: STO-nG and 3-21G (minimal
+    and split-valence), Pople 6-31G with any polarisation or diffuse marks
+    (6-311G is triple-zeta), the Karlsruhe SV family, Dunning and Jensen
+    double-zeta (cc-pVDZ, pcseg-0/1) and anything spelled DZ/DZP."""
+    import re
+    k = basis_key(name)
+    if k in SMALL_BASIS:
+        return True
+    k = k.replace("aug", "")
+    return bool(re.match(r"sto\d+g", k) or k.startswith("321g")
+                or (k.startswith("631") and not k.startswith("6311"))
+                or "svp" in k or k.startswith("sv") or "vdz" in k
+                or re.fullmatch(r"pcseg[01]", k) or re.search(r"(^|[^t])dzp?$", k))
+
 # dielectric constants for --solvent. Measured effect on the chlorobenzene
 # sigma-hole: gas +9.83 -> chloroform +7.14 -> water +6.22 kcal/mol, i.e. the
 # solvent axis is CO-DOMINANT with the basis-set axis (+3.54). Do not quote a
@@ -1625,8 +1644,12 @@ def check_identity(spec, probe, approved, kept, force, stage):
         print(f"note: {why}", file=sys.stderr)
     # Index by index, so per-site rows and atom maps point at the atoms the
     # input named; against the file's own coordinates when they were kept.
+    if not verified:
+        # review 6 S21: index-by-index mapping of a different molecule fails
+        # as a consequence; it is not checked, so no second cause is named
+        return verified, computed, None
     mapped_ok, why_m = verify_mapping(spec, probe, reference=kept)
-    if not mapped_ok and verified:
+    if not mapped_ok:
         msg = f"{stage}: atom order of the computed geometry is not the input's: {why_m}"
         if not force:
             raise SystemExit(msg + "\nrefusing to continue (--force computes it anyway)")
@@ -1688,9 +1711,19 @@ def verify_mapping(spec, probe, reference=False, tol=1e-3):
 # docs/ensemble-spec.md sections 1-3, written against tests/data/ensemble.
 # Everything here runs BEFORE any SCF: an ensemble that mixes molecules,
 # tautomers or stereoisomers is refused here, not averaged later.
-CONTACT_MIN_BONDS = 5          # a 1,5 pair of a gauche kink is 4 bonds apart
+# Measured in docs/ensemble-spec.md section 8.2 (bench/ensemble_rdkit.jsonl,
+# bench/ensemble_dft.jsonl). Contacts at 5 bonds are the g+g- and cis-alkene
+# neighbourhoods (53 of 58 contacts over 100 C18 conformers); every 5-bond-only
+# conformer computed had genus 0, and >= 7 bonds missed conformer 70 (genus 2).
+# Over 17 conformers with a measured genus, >= 6 bonds misses no folded one.
+CONTACT_MIN_BONDS = 6          # heavy-atom pairs at least this many bonds apart
 CONTACT_SLACK = 0.5            # A over the Bondi sum
-DEDUP_RMSD = 0.5               # A, heavy atoms; provisional until section 8
+# 0.5 A merged real conformers from n-pentane on, and every merged pair
+# differed in a site mean by 0.48-0.86 kcal/mol, beyond the 0.15 grid row;
+# 0.35 A lost no backbone-torsion class in the chains measured.
+DEDUP_RMSD = 0.35              # A, heavy atoms
+CONTACT_RULE_STATUS = "measured: docs/ensemble-spec.md 8.2"
+DEDUP_STATUS = "measured: docs/ensemble-spec.md 8.2"
 N_EMBED = 100
 SELECTION_RULES = ("rg_spread",)
 
@@ -2228,7 +2261,7 @@ def run_scf(atom, basis="def2-tzvp", xc="b3lyp", charge=0, spin=0, verbose=0,
                            f"{', spin=%d' % spin if spin else ''})")
     if gpu:
         mf = mf.to_cpu()    # np.asarray in total_dm refuses CuPy arrays
-    if basis_key(basis) in SMALL_BASIS:
+    if basis_is_small(basis):
         print(f"WARNING: {basis} is double-zeta or smaller. Measured error on "
               f"the chlorobenzene sigma-hole V_max is +3.5 kcal/mol relative to "
               f"def2-TZVPP.\n         Adequate for a picture; do not quote a "
@@ -3130,11 +3163,12 @@ def _dft_label(xc, basis, solvent):
     """dft:<xc>/<basis_key>[/<solvent>], or None if PySCF cannot read xc. A
     display name is kept as written, so a label reads the same everywhere."""
     solv = None if solvent in (None, "vacuum") else solvent.lower()
-    if xc.lower() not in {n for n, _ in _XC_NAMES}:
-        try:
-            xc = xc_name(xc) or xc
-        except Exception:
-            return None
+    # Review 6 S20: the display name of what xc RESOLVES to, as xc_key gives,
+    # so a site setting B3LYP_WITH_VWN5 labels "b3lyp" geometries b3lyp5
+    try:
+        xc = xc_name(xc) or xc
+    except Exception:
+        return None
     return f"dft:{xc.lower()}/{basis_key(basis)}" + (f"/{solv}" if solv else "")
 
 
@@ -3340,7 +3374,13 @@ def gipf_stats(P, faces, V):
         return mu, float((a[m] * (vf[m] - mu) ** 2).sum() / a[m].sum())
     mp, sp = part(vf > 0, "positive")
     mn, sn = part(vf < 0, "negative")
-    tot = None if sp is None and sn is None else (sp or 0.0) + (sn or 0.0)
+    # Review 6 S19: a sign below the floor is undefined, not zero, so the
+    # sum is undefined too; it was 8.64 at 4.9 % positive area and 17.65 at
+    # 5.0 %. Only a sign with no area at all contributes a true zero.
+    zero = {"positive": not (vf > 0).any(), "negative": not (vf < 0).any()}
+    parts = [(sp, zero["positive"]), (sn, zero["negative"])]
+    tot = (None if any(s is None and not z for s, z in parts) or all(s is None for s, _ in parts)
+           else sum(s or 0.0 for s, _ in parts))
     nu = (sp * sn / tot ** 2 if sp is not None and sn is not None and tot > 0 else None)
     reason = (None if not small else
               f"{' and '.join(small)} area below {GIPF_MIN_AREA_FRACTION:.0%} of the surface: "
@@ -3666,7 +3706,7 @@ def budget_rows(*, basis, solvent, charge, n_rot, geometry_method):
     attached on charge alone, so the DFT-geometry P3 fixtures carried an
     uncertainty they do not have; the basis row was attached to def2-TZVP
     runs, which it does not describe."""
-    keep = {"basis": basis_key(basis) in SMALL_BASIS,
+    keep = {"basis": basis_is_small(basis),
             "solvent water": solvent is None, "solvent chloroform": solvent is None,
             "anion geometry": charge < 0 and not geometry_method.startswith("dft:"),
             "conformer C18": n_rot is None or n_rot > 0}
@@ -3761,6 +3801,25 @@ def selftest(basis="def2-svp"):
         ok &= good
         print(f"  {'PASS' if good else 'FAIL'}  ALIE = -e_1 everywhere: {label} "
               f"(max dev {np.abs(got - want).max():.1e} Ha)")
+
+    # review 6 S18: the identities above cannot see a dropped beta channel,
+    # beta given alpha's energies, or a skipped chunk. OH radical (UKS, its
+    # alpha and beta orbitals differ), 40 points, 16 per chunk, against the
+    # definition evaluated directly per spin.
+    from pyscf.dft import numint
+    m1, f1 = run_scf("O 0 0 0; H 0 0 0.97", basis=basis, spin=1)
+    rng = np.random.default_rng(0)
+    probes = rng.normal(scale=1.8, size=(40, 3))
+    ao = numint.eval_ao(m1, probes)
+    num = den = 0.0
+    for C, e, n in zip(f1.mo_coeff, f1.mo_energy, f1.mo_occ):
+        w = (ao @ C[:, n > 0]) ** 2 * n[n > 0]
+        num, den = num + w @ -e[n > 0], den + w.sum(axis=1)
+    got = alie_at_points(m1, f1, probes, mem_budget_gb=16 * 8 * 2 * m1.nao / 1e9)
+    good = bool(np.allclose(got, num / den, rtol=0, atol=1e-10))
+    ok &= good
+    print(f"  {'PASS' if good else 'FAIL'}  ALIE = direct definition: OH radical, UKS, "
+          f"40 points in chunks of 16 (max dev {np.abs(got - num / den).max():.1e} Ha)")
 
     # colormap orientation. Caught two inverted sequential maps when added;
     # the convention is intense/warm = electron-rich on every scale.
