@@ -1709,6 +1709,91 @@
    "header": "3D",
    "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
    "why": "a real heteroaromatic whose N-O sits near a length tolerance"
+  },
+  {
+   "file": "real_uracil.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s with H, rotated into xy, then z = 0 (max |z| was 0.00 A)",
+   "why": "a real nucleobase, planar, with H"
+  },
+  {
+   "file": "real_cytosine.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s with H, rotated into xy, then z = 0 (max |z| was 0.00 A)",
+   "why": "a real nucleobase, planar, with H"
+  },
+  {
+   "file": "real_guanine.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s with H, rotated into xy, then z = 0 (max |z| was 0.00 A)",
+   "why": "a real nucleobase, planar, with H"
+  },
+  {
+   "file": "real_thymine.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s with H, rotated, z kept (max |z| 0.89 A: methyl H)",
+   "why": "a real nucleobase whose methyl H leave the plane"
+  },
+  {
+   "file": "real_13chd_noH.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, rotated, z kept (max |z| 0.092 A)",
+   "why": "a real ring that is nearly, not exactly, planar: within 0.1 A of its plane"
   }
  ]
 }

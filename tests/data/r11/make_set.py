@@ -312,6 +312,38 @@ _write("real_isoxazole", _mmff("o1nccc1"), True, REAL, "geometry", "geometry",
        "RDKit ETKDG + MMFF94s, rotated into the xy plane",
        "a real heteroaromatic whose N-O sits near a length tolerance")
 
+# --- L. nucleobases and a nearly planar real ring -------------------------------
+# Added after the probe of PR #60 at 92492ed refused real uracil: nucleobases
+# are an obvious espmap input, and a real one from a DFT run must be kept.
+def _mmff_raw(smiles, keep_h=True, seed=11):
+    m = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    AllChem.EmbedMolecule(m, randomSeed=seed)
+    AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=5000)
+    if not keep_h:
+        m = Chem.RemoveHs(m)
+    X = _xyz(m)
+    X -= X.mean(axis=0)
+    X = X @ np.linalg.svd(X)[2].T              # best-fit plane -> xy, z kept
+    return _set_xyz(m, X), float(np.abs(X[:, 2]).max())
+
+
+for smi, nm in (("O=c1cc[nH]c(=O)[nH]1", "uracil"), ("Nc1cc[nH]c(=O)n1", "cytosine"),
+                ("Nc1nc2[nH]cnc2c(=O)[nH]1", "guanine")):
+    m, dev = _mmff_raw(smi)
+    X = _xyz(m)
+    X[:, 2] = 0.0                               # a planar DFT geometry is written flat
+    _write(f"real_{nm}", _set_xyz(m, X), True, REAL, "geometry", "geometry",
+           f"RDKit ETKDG + MMFF94s with H, rotated into xy, then z = 0 "
+           f"(max |z| was {dev:.2f} A)", "a real nucleobase, planar, with H")
+m, dev = _mmff_raw("Cc1c[nH]c(=O)[nH]c1=O")
+_write("real_thymine", m, True, REAL, "geometry", "geometry",
+       f"RDKit ETKDG + MMFF94s with H, rotated, z kept (max |z| {dev:.2f} A: methyl H)",
+       "a real nucleobase whose methyl H leave the plane")
+m, dev = _mmff_raw("C1=CC=CCC1", keep_h=False)
+_write("real_13chd_noH", m, True, REAL, "geometry", "geometry",
+       f"RDKit ETKDG + MMFF94s, H removed, rotated, z kept (max |z| {dev:.3f} A)",
+       "a real ring that is nearly, not exactly, planar: within 0.1 A of its plane")
+
 (OUT / "manifest.json").write_text(json.dumps(
     {"about": __doc__.split("\n\n")[0], "severity": SEVERITY, "cases": CASES}, indent=1) + "\n", encoding="utf-8")
 print(len(CASES), "cases")
