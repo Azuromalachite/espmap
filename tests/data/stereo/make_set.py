@@ -309,6 +309,30 @@ _case("sdf_record2_drawing", "file", "two_records.sdf", U, "block",
       "record 1: ETKDG + MMFF94s alanine; record 2: a plain 2D drawing",
       "--record 2 picks the drawing, whose centre has no wedge", record=2)
 
+# --- J. review 6 S7: a flat drawing under a 3D header, with z noise -----------------
+# A converter or a hand edit writes small z values into an unwedged drawing.
+# The chirality then read from 3D is the noise's, not the author's: two seeds
+# of one drawing gave two diastereomers, both verified. Every seed is kept.
+import random  # noqa: E402
+
+_rng = random.Random(20261024)
+for s, nm in (("C[C@H](N)C(=O)O", "ala"), ("C[C@@H](O)[C@H](N)C(=O)O", "threonine")):
+    for zn in (0.02, 0.05):
+        for seed in (1, 2, 3):
+            m = Chem.MolFromSmiles(s)
+            Chem.RemoveStereochemistry(m)
+            AllChem.Compute2DCoords(m, canonOrient=True)
+            c = m.GetConformer()
+            for i in range(m.GetNumAtoms()):
+                p = c.GetAtomPosition(i)
+                c.SetAtomPosition(i, (p.x, p.y, _rng.uniform(-zn, zn)))
+            c.Set3D(True)
+            name = f"draw3d_{nm}_znoise_{zn}_s{seed}"
+            _write(f"{name}.mol", Chem.MolToMolBlock(m))
+            _case(name, "file", f"{name}.mol", U, "block",
+                  f"RDKit 2D depiction of {s}, stereo stripped, 3D header, z uniform in +-{zn} A",
+                  "an unwedged drawing with z noise: any chirality read from 3D is the noise's")
+
 (OUT / "manifest.json").write_text(json.dumps(
     {"about": __doc__.split("\n\n")[0], "severity": SEVERITY, "cases": CASES},
     indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")

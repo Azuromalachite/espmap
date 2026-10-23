@@ -344,6 +344,115 @@ _write("real_13chd_noH", m, True, REAL, "geometry", "geometry",
        f"RDKit ETKDG + MMFF94s, H removed, rotated, z kept (max |z| {dev:.3f} A)",
        "a real ring that is nearly, not exactly, planar: within 0.1 A of its plane")
 
+# --- M. review 6: classes the R11 rule at v0.2.1 gets wrong -------------------
+# Added as cases before any rule change (review 6 S8, S15-S17), several
+# variants per class so a fix cannot special-case one file.
+
+def _write_text(name, text, flag3d, allowed, prefer, kind, source, why, ext="sdf"):
+    (OUT / f"{name}.{ext}").write_text(text, encoding="utf-8")
+    assert prefer is None or prefer in allowed, name
+    CASES.append(dict(file=f"{name}.{ext}", kind=kind, allowed=allowed, prefer=prefer,
+                      outcomes=_outcomes(kind, flag3d),
+                      header="3D" if flag3d else "2D", source=source, why=why))
+
+
+def _block(mol, flag3d=True):
+    mol = Chem.Mol(mol)
+    mol.GetConformer().Set3D(flag3d)
+    return Chem.MolToMolBlock(mol)
+
+
+# S15: text after the last $$$$ (a converter's trailer, a hand-added comment)
+# must not shift which header line belongs to which record.
+for nm, mol, flag3d, kind, allowed, prefer, tail in (
+        ("real_C2F4_trailing_comment", _mmff("FC(F)=C(F)F"), True, "geometry", REAL, "geometry",
+         "converted by hand from a Gaussian log\n"),
+        ("real_C6F6_trailing_lines", _mmff("Fc1c(F)c(F)c(F)c(F)c1F"), True, "geometry", REAL, "geometry",
+         "\n\nend of file\n"),
+        ("real_C2F4_trailing_header_like", _mmff("FC(F)=C(F)F"), True, "geometry", REAL, "geometry",
+         "note\n  -OEChem-10232614502D\n"),
+        ("draw_chlorobenzene_2Dheader_trailing", _depiction("Clc1ccccc1", 1.5), False, "drawing", DRAW,
+         "drawing", "exported by an editor\n")):
+    _write_text(nm, _block(mol, flag3d) + "$$$$\n" + tail, flag3d, allowed, prefer, kind,
+                "one SDF record, then text after the last $$$$",
+                "trailing text after the only record: the header that counts is that record's own")
+
+# S16: drawings with z noise up to 0.09 A. The largest |z| stays under the
+# flatness tolerance, but a least-squares plane can tilt to fit the noise and
+# report a larger deviation. Every seed is kept, not only those that fail.
+_noise16 = np.random.default_rng(20261024)
+for smi, nm, L in (("OC1CCCCC1", "cyclohexanol", 1.5), ("CC(O)CN", "aminopropanol", 1.45),
+                   ("CCCCCC", "hexane", 1.5)):
+    for zn in (0.08, 0.09):
+        for seed in (1, 2):
+            m = _depiction(smi, L)
+            X = _xyz(m)
+            X[:, 2] = _noise16.uniform(-zn, zn, len(X))
+            _write(f"draw_{nm}_znoise_{zn}_s{seed}_{L}", _set_xyz(m, X), True, DRAW, "drawing",
+                   "drawing", f"RDKit depiction at {L} A, z uniform in +-{zn} A",
+                   "a flat sp3 drawing whose noise stays inside the flatness tolerance; "
+                   "real puckering is ~0.2 A or more")
+# review 6's own reproductions (docs/review-6/a_stereo3.py): small molecules,
+# where a few atoms let the fitted plane tilt furthest
+for smi, nm, seed in (("CC(N)C(=O)O", "alanine", 12), ("CC(N)C(=O)O", "alanine", 35),
+                      ("CC(O)C(N)C(=O)O", "threonine", 11)):
+    m = Chem.MolFromSmiles(smi)
+    AllChem.Compute2DCoords(m)
+    X = _xyz(m)
+    X[:, 2] = np.random.default_rng(seed).uniform(-0.09, 0.09, len(X))
+    _write(f"draw_{nm}_znoise_0.09_review6_s{seed}", _set_xyz(m, X), True, DRAW, "drawing",
+           "drawing", f"RDKit depiction (1.5 A), z uniform in +-0.09 A, numpy seed {seed}",
+           "review 6 S16: max |z| under the flatness tolerance, best-plane deviation over it")
+
+# S17: real species at bond lengths and angles near the rule's thresholds.
+# Literature-typical values, rounded; heavy atoms only where H are absent anyway
+# or where a heavy-atom-only file is what a user would have.
+_write("real_dicyanamide", _built("[N-](C#N)C#N", [(0, 0), _polar(1.31, 30), (
+       _polar(1.31, 30)[0] + 1.16 * math.cos(math.radians(30 - 6)),
+       _polar(1.31, 30)[1] + 1.16 * math.sin(math.radians(30 - 6))), _polar(1.31, 150), (
+       _polar(1.31, 150)[0] + 1.16 * math.cos(math.radians(150 + 6)),
+       _polar(1.31, 150)[1] + 1.16 * math.sin(math.radians(150 + 6)))]), True, REAL, "geometry",
+       "geometry", "built: N-C 1.31 A, C#N 1.16 A, C-N-C 120 deg, N-C-N 174 deg",
+       "real dicyanamide: its central N-C is 11 % short of a single-bond reference because it is "
+       "delocalised, not because it is drawn")
+_write("real_cyanamide_noH", _built("NC#N", [(0, 0), (1.35, 0), (1.35 + 1.16, 0)]), True, REAL,
+       "geometry", "geometry", "built: N-C 1.35 A, C#N 1.16 A, linear",
+       "real cyanamide's heavy atoms: a short, delocalised N-C single bond")
+for ang in (144.0, 150.0):
+    _write(f"real_disiloxane_noH_{int(ang)}", _built("[SiH3]O[SiH3]", [
+           _polar(1.63, 90 + ang / 2), (0, 0), _polar(1.63, 90 - ang / 2)]), True, REAL,
+           "geometry", "geometry", f"built: Si-O 1.63 A, Si-O-Si {ang:.0f} deg (heavy atoms only)",
+           "Si-O-Si is wide in reality (about 142-150 deg); an sp3 O angle window for C-O-C "
+           "does not apply to O between silicons")
+_write("real_trisilylamine_noH", _built("[SiH3]N([SiH3])[SiH3]", [
+       _polar(1.73, 90), (0, 0), _polar(1.73, 210), _polar(1.73, 330)]), True, REAL, "geometry",
+       "geometry", "built: Si-N 1.73 A, planar N (heavy atoms only)",
+       "N(SiH3)3 is planar at N in reality: a flat N between heavy atoms is not a drawing")
+
+# S8: a 2D header is the file's own statement, also when z is not 0.
+m = _depiction("C[C@@H](O)[C@H](N)C(=O)O", 1.5)
+X = _xyz(m)
+for i, a in enumerate(m.GetAtoms()):
+    if a.GetSymbol() in ("O", "N") and a.GetDegree() == 1:
+        X[i, 2] = 0.8 if i % 2 else -0.8                   # wedge ends lifted, as some editors do
+_write("draw2d_threonine_wedge_z_1.5", _set_xyz(m, X), False, DRAW, "drawing", "drawing",
+       "RDKit depiction at 1.5 A, 2D header, terminal O/N at z +-0.8",
+       "a 2D drawing whose editor wrote wedge depth into z; the header says 2D")
+for smi, nm in (("Clc1ccccc1", "chlorobenzene"), ("CC(O)CN", "aminopropanol")):
+    m = _depiction(smi, 1.5)
+    X = _xyz(m)
+    X[0, 2] = 0.3
+    _write(f"draw2d_{nm}_one_z_1.5", _set_xyz(m, X), False, DRAW, "drawing", "drawing",
+           "RDKit depiction at 1.5 A, 2D header, atom 0 at z = 0.3",
+           "one atom nudged out of the plane in an editor; the header still says 2D")
+m = Chem.AddHs(Chem.MolFromSmiles("CC(O)CC"))
+AllChem.EmbedMolecule(m, randomSeed=0xC0FFEE)
+AllChem.MMFFOptimizeMolecule(m, mmffVariant="MMFF94s", maxIters=2000)
+_write("real_2butanol_2Dheader", m, False, DRAW, "drawing", "geometry",
+       "RDKit ETKDG + MMFF94s 2-butanol saved with a 2D header",
+       "the header is the file's own statement; the reader cannot overrule it (as "
+       "real_chlorobenzene_2Dheader, but not flat)")
+
 (OUT / "manifest.json").write_text(json.dumps(
     {"about": __doc__.split("\n\n")[0], "severity": SEVERITY, "cases": CASES}, indent=1) + "\n", encoding="utf-8")
 print(len(CASES), "cases")
