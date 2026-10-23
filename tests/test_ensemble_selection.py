@@ -308,3 +308,12 @@ def test_two_records_with_one_unreadable_are_still_two_records():
     company (it was read as a single-record file)."""
     m, probs, n = em.read_structure(_DIR / "E25_record_2_unreadable.sdf")
     assert m is None and n == 3 and probs[0][1] == "MULTIPLE_RECORDS"
+
+
+@pytest.mark.xfail(strict=True, reason="Arrowfield's review of 2887cd2: E/Z is a CIP label")
+@pytest.mark.parametrize("smiles", ["Cl/C1=C/CCCCCC1", "O/C1=C/CCCCCC1"])
+def test_a_specified_cis_ring_bond_written_as_E_is_not_left_open(smiles):
+    """1-chloro- and 1-hydroxy-cis-cyclooctene: the substituent outranks the
+    ring carbon, so the CIS ring bond is labelled E. Fully specified, it
+    must pass --require-stereo."""
+    assert em.stereo_left_open(Chem.MolFromSmiles(smiles)) == []
