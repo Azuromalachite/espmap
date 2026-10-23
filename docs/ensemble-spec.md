@@ -273,6 +273,24 @@ espmap compare A.json B.json --sites correspondence.json --out cmp.json
 The comparison record carries `subject_A` and `subject_B` copied from the
 inputs, and the sha256 of each input record.
 
+**Additions from the consumer review** (Arrowfield, against the Atlas's
+prospective analysis plan, before the code):
+- a site may include its own hydrogens, `"n+H"` by map or `include_h` by
+  SMARTS, recombined exactly from the members' per-atom rows (triangles are
+  owned per atom); single-atom values stay diagnostic;
+- per-member rows per side (`conformer`, `folded`, both rules), so any other
+  decision rule, a bootstrap or an extended-only reading can be recomputed
+  from the record alone;
+- the partition used by the rule is named (`delta_between_rules`); two other
+  readings are recorded as descriptive numbers (`between_side_means`,
+  `max_member`), never used by the rule;
+- a `global_extrema` block for V_min and V_max, shaped like a site;
+- per ensemble side, the excluded count, their folded flags,
+  `validity.unbiased` (flag `SELECTION_BIASED` when false) and convergence;
+- `resolved_under` names the rule, so `resolved` is never read as a
+  consumer's own verdict; a single-geometry side says
+  `measured: not_measured`.
+
 A comparison of two single-geometry records of flexible molecules is
 allowed. Its conformational component is "not measured", and it can't be
 `resolved` beyond the partition uncertainty alone. The record says so in a

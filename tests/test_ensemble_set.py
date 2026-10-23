@@ -27,7 +27,7 @@ _BY_ID = {c["id"]: c for c in _CASES}
 # with review 6's fixes E18, E20-E22, E24 and E25 (E23 refused already).
 NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "E16",
                                        "E17", "E18", "E20", "E21", "E22", "E23",
-                                       "E24", "E25"}
+                                       "E24", "E25", "C3", "C8", "C9"}
 
 
 def _records(name):
@@ -221,9 +221,8 @@ def _run(case, tmp_path=None):
         except em.EnsembleRefused:
             return
     if "A" in r:
-        if not hasattr(em, "compare_records"):
-            pytest.fail("comparison records are not implemented yet")
-        raise NotImplementedError("wire the comparison recipe to compare_records (step 5)")
+        _run_compare(case, tmp_path)
+        return
     if r.get("inject"):
         raise NotImplementedError(f"injection {r['inject']!r} is not wired yet")
     if "members_from" in r:
@@ -243,6 +242,64 @@ def _run(case, tmp_path=None):
     rec = em.run_ensemble(plan, tmp_path, PROTOCOL + (["--optimize"] if r.get("optimize") else []))
     assert e["outcome"] == "accept"
     _check(rec, e.get("checks", {}))
+
+
+def _side(spec, r, tmp_path, name):
+    """Compute one side of a comparison case: an ensemble when the side asks
+    for one, else a single record through the CLI."""
+    import subprocess
+    import sys
+    spec = r["A"] if spec == "same_as_A" else spec
+    basis = ["--basis", spec.get("basis", "def2-svp"), "--density-fit"]
+    solv = ["--solvent", spec["solvent"]] if spec.get("solvent") else []
+    if spec.get("ensemble"):
+        plan = em.plan_ensemble(smiles=spec["smiles"], ensemble=spec["ensemble"])
+        em.run_ensemble(plan, tmp_path / name, basis + solv)
+        return tmp_path / name / "ensemble.json"
+    out = tmp_path / f"{name}.json"
+    subprocess.run([sys.executable, em.__file__, "--smiles", spec["smiles"], "--json", str(out),
+                    "--out", str(tmp_path / f"{name}.png")] + basis + solv, check=True)
+    return out
+
+
+def _run_compare(case, tmp_path):
+    r, e = case["recipe"], case["expect"]
+    corr = r["sites"]
+    if e["outcome"] == "refuse":
+        # a correspondence that cannot resolve is refused from the molecules
+        # alone (C3, C8, C9); anything else needs the records
+        mols = {s: Chem.AddHs(Chem.MolFromSmiles((r["A"] if r[s] == "same_as_A" else r[s])["smiles"]))
+                for s in "AB"}
+        try:
+            em.check_correspondence(mols["A"], mols["B"], corr)
+        except em.CompareRefused:
+            return
+    if r.get("inject"):
+        raise NotImplementedError(f"injection {r['inject']!r} is not wired yet")
+    a, b = _side(r["A"], r, tmp_path, "A"), _side(r["B"], r, tmp_path, "B")
+    if e["outcome"] == "refuse":
+        with pytest.raises(em.CompareRefused):
+            em.compare_records(a, b, corr)
+        return
+    c = em.compare_records(a, b, corr)
+    for name, want in e.get("checks", {}).items():
+        if name == "flags":
+            assert set(want) <= set(c["flags"]), c["flags"]
+        elif name == "flags_any":
+            assert set(want) & set(c["flags"]), c["flags"]
+        elif name == "delta_mean_abs_max":
+            assert all(abs(x["delta_mean"]) <= want for s in c["sites"]
+                       for x in s["by_rule"].values() if x["delta_mean"] is not None)
+        elif name == "resolved":
+            assert all(x["resolved"] is want for s in c["sites"] for x in s["by_rule"].values())
+        elif name in ("site_atoms_A", "site_atoms_B"):
+            assert len(c["correspondence"]["pairs"][0]["atoms_" + name[-1]]) == want
+        elif name == "versions_recorded":
+            assert len([c["inputs"][s]["espmap_version"] for s in "AB"]) == want
+        elif name == "single_side":
+            assert c["inputs"][want]["kind"] == "single"
+        else:
+            raise AssertionError(f"no check named {name!r}")
 
 
 @pytest.mark.parametrize("case", _params("fast"))
