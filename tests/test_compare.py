@@ -135,7 +135,8 @@ def _ensemble(tmp, name, recs, folded=None, converged=True, unbiased=True, exclu
                             folded=bool(folded and folded[i])))
     e = dict(schema="espmap.ensemble/1", subject=name, analysis_key=recs[0]["analysis_key"],
              members=members, excluded=list(excluded),
-             convergence=dict(converged=converged), validity=dict(unbiased=unbiased))
+             convergence=dict(converged=converged),
+             validity=dict(unbiased=unbiased, convergence=converged))
     (d / "ensemble.json").write_text(json.dumps(e))
     return d / "ensemble.json"
 
@@ -283,3 +284,81 @@ def test_a_one_member_ensemble_is_a_single_geometry(tmp_path):
     s = c["sites"][0]["by_rule"][NN]
     assert s["resolved"] is False and s["conformational"]["A"]["measured"] == "not_measured"
     assert "CONFORMERS_NOT_SAMPLED" in c["flags"] and "side A" in s["not_resolvable"]
+
+
+# --- review 7: counterexamples before the fixes ------------------------------------
+def _no_resolution(s):
+    return all(s["by_rule"][rl]["resolved"] is not True for rl in em.PARTITION_RULES)
+
+
+@pytest.mark.xfail(strict=True, reason="R7-4: a buried member is dropped and n shrinks")
+def test_r7_e8_a_site_missing_on_one_member_is_not_evaluated_on_n_minus_1(tmp_path):
+    """Review 7 R7-E8: the folded member buries the site (None under both
+    rules). The comparison may not quietly use the other two."""
+    a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: v, RS: v}) for v in (1.0, 1.2)]
+                  + [_record("CCCCCCO", {NN: None, RS: None})], folded=[False, False, True])
+    b = _ensemble(tmp_path, "b", [_record("CCCCCCCO", {NN: v, RS: v}) for v in (5.0, 5.2, 5.4)])
+    try:
+        c = em.compare_records(a, b, CORR)
+    except em.CompareRefused as e:
+        assert {code for _, code, _, _ in e.value.findings} == {"COMPARE_SITE_INCOMPLETE"}
+        return
+    s = c["sites"][0]
+    assert _no_resolution(s)
+    assert s.get("evaluable") is False and "conf_02" in json.dumps(s.get("not_evaluable"))
+
+
+@pytest.mark.xfail(strict=True, reason="R7-5: convergence false does not gate resolved")
+def test_r7_e9_an_unconverged_ensemble_never_resolves(tmp_path):
+    """Review 7 R7-E9: a huge delta, but side A's convergence is false."""
+    a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: v, RS: v}, vmin=-v)
+                                  for v in (1.0, 1.2, 1.4)], converged=False)
+    b = _ensemble(tmp_path, "b", [_record("CCCCCCCO", {NN: v, RS: v}, vmin=-v)
+                                  for v in (50.0, 50.2, 50.4)])
+    c = em.compare_records(a, b, CORR)
+    s = c["sites"][0]
+    assert _no_resolution(s)
+    assert "convergence" in s["by_rule"][NN].get("not_resolvable", "")
+    assert all(g["resolved"] is not True for g in c["global_extrema"].values())
+
+
+@pytest.mark.xfail(strict=True, reason="R7-5: convergence null does not gate resolved")
+def test_r7_e10_convergence_not_judgeable_never_resolves(tmp_path):
+    """Review 7 R7-E10: K = 2 on each side, so convergence is null."""
+    a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: v, RS: v}) for v in (1.0, 1.2)],
+                  converged=None)
+    b = _ensemble(tmp_path, "b", [_record("CCCCCCCO", {NN: v, RS: v}) for v in (50.0, 50.2)],
+                  converged=None)
+    s = em.compare_records(a, b, CORR)["sites"][0]
+    assert _no_resolution(s)
+    assert "convergence" in s["by_rule"][NN].get("not_resolvable", "")
+
+
+@pytest.mark.xfail(strict=True, reason="R7-8: members are not checked against the parent")
+def test_r7_e12_a_parent_claiming_another_analysis_key_is_refused(tmp_path):
+    """Review 7 R7-E12: both parents claim key x, their members were computed
+    under key k. The parent's claim is what the key check reads."""
+    paths = []
+    for name, smi in (("a", "CCCCCCO"), ("b", "CCCCCCCO")):
+        p = _ensemble(tmp_path, name, [_record(smi, {NN: v, RS: v}) for v in (1.0, 2.0, 3.0)])
+        e = json.loads(p.read_text())
+        e["analysis_key"] = "x" * 40
+        p.write_text(json.dumps(e))
+        paths.append(p)
+    assert _codes(em.compare_records, *paths, CORR)
+
+
+@pytest.mark.xfail(strict=True, reason="R7-8: an unknown schema is read as a record")
+@pytest.mark.parametrize("doc", [
+    "record2",                                    # a future record, otherwise readable
+    "foreign",                                    # not an espmap file at all
+])
+def test_r7_e13_an_unknown_schema_is_refused_safely(tmp_path, doc):
+    """Review 7 R7-E13: refuse with COMPARE_SCHEMA_UNSUPPORTED; never
+    interpret the file, never crash with a KeyError."""
+    good = _single(tmp_path, "good", _record("CCO", {NN: 1.0, RS: 1.0}))
+    rec = (dict(_record("CCCO", {NN: 1.0, RS: 1.0}), schema="espmap.record/2")
+           if doc == "record2" else {"hello": 1})
+    bad = _single(tmp_path, "bad", rec)
+    for args in ((good, bad), (bad, good)):
+        assert _codes(em.compare_records, *args, CORR) == {"COMPARE_SCHEMA_UNSUPPORTED"}
