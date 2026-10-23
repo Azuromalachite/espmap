@@ -6,6 +6,26 @@ Labels: `[V]` verified in the repo · `[M]` measured or computed by me · `[I]` 
 
 **Revision 2 (2026-10-22).** The measurements this review asked for have been run (`bench/`). This revision replaces estimates with them, retracts four of my claims, adds F9 (fixed and verified), and adds a reactivity-descriptors direction.
 
+**Status at v0.2.0 (2026-10-23).** Item 1 of the revised order is done for
+what the record needed first. `--json` writes a versioned record,
+`espmap.record/1`, whose key tree is `docs/record-schema.json`. It carries:
+- area-weighted surface statistics (`results.surface_stats`) and GIPF
+  statistics (`results.gipf`);
+- the dipole and the computed geometry;
+- a `validity` envelope;
+- per-site statistics under two partition rules (`docs/per-site-spec.md`,
+  stages P0 to P3).
+
+Six fixture records are in `fixtures/records/`. F5's radius of gyration,
+stereo descriptors and conformer ID are still missing. The rest of the
+revised order stands; the reactivity descriptors (item 6) are the spec's
+P4. The findings below are as of revision 2.
+
+**Review 6** is scheduled for the start of the `espmap.record/2` or P4 work,
+whichever comes first: a whole-repo adversarial review, with its brief written
+then. Until then, R11 (drawing vs geometry) is handled on its own: a hostile
+input set first (`tests/data/r11`), then a rule written to pass it.
+
 ## Retractions — read these first
 
 1. **F1's cost table was 10–20× too pessimistic.** I extrapolated one-core aromatic timings to the C18 targets, with a scaling exponent fitted on two points, and projected 4–5 h for the acetate. On the author's 16-thread laptop it took **875 s** `[M]`, and decanoic acid took 211 s, not ~30 min. The recommendation "measure first" stands. The conclusion I drew from the estimate does not: a fast mode is **not** a prerequisite for C18 work.
@@ -198,7 +218,8 @@ These are the hard calls, checked:
 | F9 | χ = 2 refuses folded surfaces | MEDIUM | **fixed and verified** on both refused conformers |
 
 **Revised order:**
-1. extend `--json` with shape descriptors (F5)
+1. extend `--json` with shape descriptors (F5): the record, surface and site
+   statistics are done in v0.2.0; Rg, stereo and conformer ID remain
 2. comparison mode with the F2 rule, F7 gating and head-group alignment (F6)
 3. ~~fix the surface check (F9)~~ done
 4. ensembles reporting shape descriptors (F3)
