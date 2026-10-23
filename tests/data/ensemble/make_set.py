@@ -102,6 +102,68 @@ m.SetProp("chain_atoms", " ".join(map(str, chain)))
 w.write(m)
 w.close()
 
+# --- review 6 (S1, S2, S6): files the first 29 cases did not try ------------------
+def torsion_sign(m, cid, quad):
+    return 1 if rdMolTransforms.GetDihedralDeg(m.GetConformer(cid), *quad) > 0 else -1
+
+
+def one_of_each_sign(smiles, quad, n=30):
+    """Two conformers of one input whose defining torsion has opposite signs:
+    two configurations RDKit's stereo perception does not see."""
+    m, cids = confs(smiles, n)
+    by = {}
+    for c in cids:
+        by.setdefault(torsion_sign(m, c, quad), c)
+    return m, by[1], by[-1]
+
+
+TCO = "O[C@H]1CC/C=C/CCC1"                     # trans-cyclooct-4-enol, centre fixed
+TCO_RING = (3, 4, 5, 6)                        # C-C=C-C inside the ring
+m, cp, cm = one_of_each_sign(TCO, TCO_RING)
+f_tco = write_sdf("E20_tco_two_helicities.sdf",
+                  [(m, cp, "(R) helicity +"), (m, cp, "(R) helicity + again"),
+                   (m, cm, "(R) helicity -")])
+ALLENE = "C[C@H](O)C=C=CC"
+ALLENE_AXIS = (1, 3, 5, 6)                     # substituent - C=C=C - substituent
+m, ap, am = one_of_each_sign(ALLENE, ALLENE_AXIS)
+f_allene = write_sdf("E21_allene_two_axes.sdf", [(m, ap, "(R, axis +)"), (m, am, "(R, axis -)")])
+f_allene3d = write_sdf("E19_allene_one_axis_3d.sdf", [(m, ap, "(R, axis +), one conformer")])
+
+
+def same_nuclei(smiles, src, cid):
+    """smiles (same atom order as src) carrying src's coordinates."""
+    t = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    assert t.GetNumAtoms() == src.GetNumAtoms(), smiles
+    c = Chem.Conformer(t.GetNumAtoms())
+    for i, x in enumerate(src.GetConformer(cid).GetPositions()):
+        c.SetAtomPosition(i, x.tolist())
+    c.Set3D(True)
+    t.AddConformer(c, assignId=True)
+    return t
+
+
+cat, cc = confs("C[CH2+]", 3)
+redox = [(cat, cc[0], "ethyl cation"), (same_nuclei("C[CH2]", cat, cc[1]), -1, "ethyl radical"),
+         (same_nuclei("C[CH2-]", cat, cc[2]), -1, "ethyl anion")]
+f_redox = write_sdf("E22_one_skeleton_three_charges.sdf", redox)
+f_redox_rad = write_sdf("E23_radical_first.sdf", [redox[1], redox[0], redox[2]])
+
+mp, mc = confs("[CH3:1][CH2:2][OH:3]", 2)
+swapped = Chem.Mol(mp)
+for a in swapped.GetAtoms():
+    a.SetAtomMapNum({1: 3, 3: 1}.get(a.GetAtomMapNum(), a.GetAtomMapNum()))
+f_maps = write_sdf("E24_atom_maps_disagree.sdf",
+                   [(mp, mc[0], "maps 1,2,3"), (swapped, mc[1], "maps 3,2,1")])
+
+pr, prc = confs("CCCO", 3)
+f_bad = write_sdf("E25_record_2_unreadable.sdf", [(pr, c, f"conf {i + 1}") for i, c in enumerate(prc)])
+SEP = "$" * 4 + "\n"
+blocks = (OUT / f_bad).read_text().split(SEP)
+lines = blocks[1].split("\n")
+lines[3] = "999" + lines[3][3:]               # counts line: an atom count the block lacks
+blocks[1] = "\n".join(lines)
+(OUT / f_bad).write_text(SEP.join(blocks))
+
 # --- ensemble cases --------------------------------------------------------------
 case("E1", "benzene, K = 10", {"smiles": "c1ccccc1", "ensemble": 10},
      {"outcome": "accept", "checks": {"k_requested": 10, "k_obtained": 1}},
@@ -176,6 +238,42 @@ case("E17", "supplied: a constitutional isomer mixed in", {"file": f_iso, "ensem
 
 # --- comparison cases ------------------------------------------------------------
 ACET = "CC(=O)[O-]"
+case("E18", "trans-cyclooctenol from SMILES, generated",
+     {"smiles": TCO, "ensemble": 10},
+     {"outcome": "refuse", "before_compute": True},
+     "members of both ring helicities averaged as one stereoisomer", "fast",
+     "review 6 S1: an E bond in a ring of 8 or fewer fixes the bond, not the ring's "
+     "planar chirality, and no SMILES can fix it")
+case("E19", "generated from a 3D allene file that fixes the axis",
+     {"file": f_allene3d, "ensemble": 10},
+     {"outcome": "accept", "checks": {"configurations": 1},
+      "or": {"outcome": "refuse", "before_compute": True}},
+     "members of both axes averaged", "slow",
+     "review 6 S1: re-embedding from the graph drops the axis the file fixed")
+case("E20", "supplied: trans-cyclooctenol, both ring helicities", {"file": f_tco, "ensemble": "supplied"},
+     {"outcome": "refuse", "before_compute": True},
+     "diastereomers averaged", "fast",
+     "review 6 S1: verify_computed and the 3D stereo check see the centre, not the helicity")
+case("E21", "supplied: an allene, both axes, one centre", {"file": f_allene, "ensemble": "supplied"},
+     {"outcome": "refuse", "before_compute": True},
+     "diastereomers averaged", "fast", "review 6 S1: RDKit assigns no allene axis from 3D")
+case("E22", "supplied: ethyl cation, radical and anion on one skeleton",
+     {"file": f_redox, "ensemble": "supplied"},
+     {"outcome": "refuse", "before_compute": True},
+     "three species computed as record 1's", "fast",
+     "review 6 S2: same nuclei, different electron count; only record 1 was gated")
+case("E23", "E22 with the radical first", {"file": f_redox_rad, "ensemble": "supplied"},
+     {"outcome": "refuse", "before_compute": True},
+     "an outcome that depends on record order", "fast", "review 6 S2")
+case("E24", "supplied: atom maps that disagree between records",
+     {"file": f_maps, "ensemble": "supplied"},
+     {"outcome": "refuse", "before_compute": True},
+     "a site keyed by map 1 pointing at different atoms in different members", "fast",
+     "review 6 S2: maps are the user's names for atoms; members must agree")
+case("E25", "supplied: record 2 of 3 cannot be read", {"file": f_bad, "ensemble": "supplied"},
+     {"outcome": "refuse", "before_compute": True},
+     "a two-member ensemble with the lost record never named", "fast",
+     "review 6 S6: unreadable records were dropped and the rest renumbered")
 case("C1", "A compared with itself",
      {"A": {"smiles": "CCCCCCO", "ensemble": 6}, "B": "same_as_A",
       "sites": {"by": "smarts", "pairs": [{"name": "O", "A": "[OX2H]", "B": "[OX2H]"}]}},

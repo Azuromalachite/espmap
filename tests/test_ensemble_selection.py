@@ -195,3 +195,68 @@ def test_shape_descriptors_of_a_rod_and_a_ball():
     ball = Chem.AddHs(Chem.MolFromSmiles("C12C3C4C1C5C2C3C45"))      # cubane
     em._embed_and_minimise(ball, 1, 1)
     assert em.shape_descriptors(ball)["asphericity"] < 0.02
+
+
+# --- review 6: committed as strict xfails before the fixes --------------------
+C18 = "CC(=O)OCC/C=C\CCCCCCCC/C=C\CCCC"
+BENCH_C18_IDS = [4, 28, 34, 40, 53, 54, 57, 67, 72, 82]      # bench/conformers.jsonl conf_id
+
+
+@pytest.mark.xfail(strict=True, reason="review 6 S4: Rg is not the bench's")
+def test_selection_reproduces_the_measured_c18_members():
+    """The conformer rows (5.1 / 2.69 / 5.2) were measured on these ten; the
+    docstring cites bench/conformers.py select(), so the selection must be it."""
+    p = em.plan_ensemble(smiles=C18, ensemble=10)
+    assert sorted(m["embed_conf_id"] for m in p["members"]) == BENCH_C18_IDS
+
+
+@pytest.mark.xfail(strict=True, reason="review 6 S4: a collision tops up with the next compact")
+def test_a_collision_with_the_lowest_energy_member_re_spreads():
+    """1-octanol, K = 3: the lowest-energy conformer is the most extended, so
+    the Rg-spread pick at the top collides with it. The third member must
+    come from the middle of the range, not be the second most compact."""
+    p = em.plan_ensemble(smiles="CCCCCCCCO", ensemble=3)
+    rg = sorted(m["rg"] for m in p["members"])
+    lo, hi = rg[0], rg[-1]
+    assert lo + 0.25 * (hi - lo) <= rg[1] <= lo + 0.75 * (hi - lo)
+
+
+@pytest.mark.xfail(strict=True, reason="review 6 S5: the symmetry-match cap truncates silently")
+def test_a_capped_symmetry_search_never_keeps_a_symmetry_copy():
+    """(tBuOCH2)3CH has 1296 heavy-atom automorphisms, past the cap of 1000."""
+    mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)(C)OCC(COC(C)(C)C)COC(C)(C)C"))
+    *_, conv = em._embed_and_minimise(mol, 30, 0xC0FFEE)
+    exact = em.select_ensemble(mol, conv, 30, max_matches=10 ** 6)["n_unique"]
+    try:
+        capped = em.select_ensemble(mol, conv, 30)
+    except ValueError:
+        return                                   # a refusal is a correct outcome
+    assert capped["n_unique"] == exact
+
+
+@pytest.mark.xfail(strict=True, reason="review 6 S6: unreadable records are dropped and renumbered")
+def test_records_keep_their_file_numbers():
+    path = _DIR / "E25_record_2_unreadable.sdf"
+    m, probs, n = em.read_structure(path, record=2)
+    assert m is None and n == 3 and "record 2" in probs[0][2]
+    m, probs, n = em.read_structure(path, record=3)
+    assert m is not None and m.GetProp("_Name") == "conf 3"
+
+
+@pytest.mark.xfail(strict=True, reason="review 6 S1: re-embedding drops the file's allene axis")
+def test_a_generated_ensemble_keeps_the_configuration_its_3d_file_fixes():
+    from rdkit.Chem import rdMolTransforms
+    path = _DIR / "E19_allene_one_axis_3d.sdf"
+    try:
+        p = em.plan_ensemble(path=path, ensemble=10)
+    except em.EnsembleRefused:
+        return                                   # refusing is allowed (E19's "or")
+    mol = Chem.AddHs(Chem.MolFromSmiles("C[C@H](O)C=C=CC"))
+    signs = set()
+    for m in p["members"]:
+        rows = [r.split() for r in m["spec"].split(";")]
+        c = Chem.Conformer(len(rows))
+        for i, r in enumerate(rows):
+            c.SetAtomPosition(i, [float(x) for x in r[1:]])
+        signs.add(rdMolTransforms.GetDihedralDeg(c, 1, 3, 5, 6) > 0)
+    assert signs == {True}
