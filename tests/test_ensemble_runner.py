@@ -264,3 +264,14 @@ def test_the_record_states_the_measured_thresholds(plan, tmp_path):
     assert (fr["min_bonds"], fr["slack_A"], fr["status"]) == (6, 0.5, "measured")
     assert fr["source"] == sel["dedup_source"] == "docs/ensemble-spec.md 8.2"
     assert (sel["dedup_rmsd_A"], sel["dedup_status"]) == (0.35, "measured")
+
+
+def test_the_record_carries_relabelling_and_the_isotope_rule(tmp_path):
+    """Review 6 S10 and S11 in espmap.ensemble/1: which members were relabelled
+    to member 1's diastereotopic labels, and that isotope labels must match."""
+    plan = em.plan_ensemble(path=Path(__file__).parent / "data" / "ensemble" /
+                            "E7_poses_one_ligand.sdf", ensemble="supplied")
+    plan = dict(plan, members=plan["members"][:4])
+    rec = em.run_ensemble(plan, tmp_path, runner=Stub(), log=lambda s: None)
+    assert [bool(m["relabelled"]) for m in rec["members"]] == [False, True, False, True]
+    assert rec["identity"]["isotopes"] == "must_match" and rec["identity"]["isotope_labels"] == []

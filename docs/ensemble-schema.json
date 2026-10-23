@@ -85,7 +85,8 @@
     "n_radical",
     "atom_maps",
     "configuration",
-    "isotopes"
+    "isotopes",
+    "isotope_labels"
    ],
    "properties": {
     "smiles": {
@@ -125,10 +126,24 @@
      "description": "R6 S1: configuration_signs, the stereo elements RDKit does not perceive (small-ring trans helicity, cumulene axes, biaryl axes), shared by every member. {} when there are none"
     },
     "isotopes": {
-     "enum": [
-      "ignored"
-     ],
-     "description": "R6 S11: isotope labels are not part of identity (the ESP cannot see them). Placeholder until S11 picks the rule; the field forces the choice to be stated"
+     "const": "must_match",
+     "description": "review 6 S11, the user's decision: one isotopologue per ensemble; every member's isotope labels equal member 1's, never normalised"
+    },
+    "isotope_labels": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "prefixItems": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "integer"
+       }
+      ],
+      "items": false
+     },
+     "description": "[atom index, mass number] for every labelled atom of the approved structure; [] when none"
     }
    }
   },
@@ -324,7 +339,8 @@
      "genus_excess",
      "optimized",
      "scf_energy_Ha",
-     "validity"
+     "validity",
+     "relabelled"
     ],
     "properties": {
      "conformer": {
@@ -483,6 +499,22 @@
        "type": "string"
       },
       "description": "every failed attempt, '<kind>, rc <n>: <last stderr line>'. Only an infrastructure failure (killed, no record) is retried; a deterministic one stays excluded across reruns, since rerunning until it passes would be selection on outcome"
+     },
+     "relabelled": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "prefixItems": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "integer"
+        }
+       ],
+       "items": false
+      },
+      "description": "review 6 S10: [i, j] pairs: index i now holds what the member's input had at j, so its diastereotopic groups carry member 1's labels; [] when unchanged"
      }
     }
    }
