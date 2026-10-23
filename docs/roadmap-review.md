@@ -21,8 +21,15 @@ stereo descriptors and conformer ID are still missing. The rest of the
 revised order stands; the reactivity descriptors (item 6) are the spec's
 P4. The findings below are as of revision 2.
 
-**Review 6** is scheduled for the start of the `espmap.record/2` or P4 work,
-whichever comes first: a whole-repo adversarial review, with its brief written
+**v0.3 is ensembles and comparison records** (the user's decision of
+2026-10-23; `docs/ensemble-spec.md`), followed by uncertainty decomposition
+(v0.4), site fingerprints and patch topology (v0.5) and batch workflows
+(v0.6). espmap is developed as an independent measurement instrument;
+consumers read its records but never decide its features. P4's ALIE record
+integration is deferred (`docs/p4-spec.md`).
+
+**Review 6** is scheduled for the start of the first v0.3 code PR:
+a whole-repo adversarial review, with its brief written
 then.
 
 **Review 5 R11 (drawing vs geometry) is done** (2026-10-23). Two rules written
