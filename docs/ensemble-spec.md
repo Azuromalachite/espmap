@@ -151,7 +151,8 @@ so files already written under the Atlas's index stay valid. The Atlas's
 ```
 schema: espmap.ensemble/1
 subject: opaque caller label from --subject, copied verbatim, never read
-ensemble_key: hash of (member analysis_key, protocol)
+ensemble_key: hash of (schema, identity, analysis_key, protocol, ordered
+              member ids, excluded conformers) (review 7 R7-2)
 analysis_key: the members' shared key (all members must share it)
 protocol: {source: generated|supplied, n_embed, seed, dedup_rmsd,
            selection: {rule, k, ...}, weighting: none|dft, temperature_K?}

@@ -2341,6 +2341,46 @@ def write_member_sdf(path, mol, conf_id, origin):
     w.close()
 
 
+def ensemble_identity(plan):
+    """The molecule an ensemble is of, as the record states it. One function,
+    so the record, the run manifest and ensemble_key cannot disagree."""
+    ident = plan["identity"]
+    return dict(smiles=ident["smiles"], inchikey=ident["inchikey"],
+                charge=ident["charge"], n_radical=ident["n_radical"],
+                atom_maps=ident.get("atom_maps", []),
+                configuration=ident.get("configuration", {}),
+                isotopes="must_match", isotope_labels=ident.get("isotope_labels", []))
+
+
+RUN_MANIFEST = "run_manifest.json"
+
+
+def _check_run_manifest(out, manifest):
+    """Review 7 R7-1: resume authenticated the geometry, not the calculation.
+    A rerun under another basis or solvent in the same directory kept every
+    member, and a deterministic failure under one protocol suppressed the run
+    under another. The directory now holds the manifest of the run that made
+    it, and a rerun that asks for anything else is refused: recomputing into
+    the same namespace would leave two protocols' files under one name."""
+    import json
+    path = out / RUN_MANIFEST
+    if path.exists():
+        old = json.loads(path.read_text(encoding="utf-8"))
+        if old != manifest:
+            diff = sorted(k for k in set(old) | set(manifest) if old.get(k) != manifest.get(k))
+            raise EnsembleRefused([_ensemble_block(
+                "ENSEMBLE_RESUME_PROTOCOL_MISMATCH",
+                f"{out} was computed with another {', '.join(diff)}",
+                "use a new output directory for another protocol, molecule or member set")])
+        return
+    if any((out / "conformers").glob("*.json")) or (out / "run_log.jsonl").exists():
+        raise EnsembleRefused([_ensemble_block(
+            "ENSEMBLE_RESUME_PROTOCOL_MISMATCH",
+            f"{out} holds member runs but no {RUN_MANIFEST}, so what computed them is unknown",
+            "use a new output directory")])
+    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def _member_complete(json_path, npz_path, sha1):
     """Resume only a member whose record parses, carries the expected
     geometry, and whose NPZ exists with the same geometry. The runner renames
@@ -2416,6 +2456,18 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     conf_dir = out / "conformers"
     conf_dir.mkdir(parents=True, exist_ok=True)
     log_path = out / "run_log.jsonl"
+    from rdkit import Chem
+    inputs = []
+    for i, m in enumerate(plan["members"]):
+        # the SDF is the member's input, and it keeps 4 decimals: the record
+        # will carry the geometry as written, so the expected sha1 is read back
+        sdf = conf_dir / f"{member_label(i)}.sdf"
+        write_member_sdf(sdf, m["_mol"], m["_cid"], m.get("geometry_origin"))
+        inputs.append(spec_sha1(_mol_to_spec(Chem.MolFromMolFile(str(sdf), removeHs=False))))
+    _check_run_manifest(out, dict(schema="espmap.ensemble_run/1",
+                                  identity=ensemble_identity(plan),
+                                  member_args=[str(x) for x in member_args],
+                                  member_inputs=inputs))
     history = {}
     if log_path.exists():
         for line in log_path.read_text(encoding="utf-8").splitlines():
@@ -2425,11 +2477,7 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     for i, m in enumerate(plan["members"]):
         label = member_label(i)
         sdf, js, nz = conf_dir / f"{label}.sdf", conf_dir / f"{label}.json", out / f"{label}.npz"
-        # the SDF is the member's input, and it keeps 4 decimals: the record
-        # will carry the geometry as written, so the expected sha1 is read back
-        write_member_sdf(sdf, m["_mol"], m["_cid"], m.get("geometry_origin"))
-        from rdkit import Chem
-        sha1 = spec_sha1(_mol_to_spec(Chem.MolFromMolFile(str(sdf), removeHs=False)))
+        sha1 = inputs[i]
         if _member_complete(js, nz, sha1):
             log(f"{label}: done earlier, kept")
             done.append((i, label))
@@ -2654,21 +2702,23 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
     akey = first["analysis_key"] if first else None
     timing_free = {k: v for k, v in protocol.items() if k != "input_file"}
     prov = (first or {}).get("provenance", {})
+    identity = ensemble_identity(plan)
+    # Review 7 R7-2: (analysis_key, protocol) alone collided across molecules
+    # and across supplied conformer sets of one molecule. The key now names
+    # what exists: the molecule, the protocol, and the ordered members.
+    ensemble_key = _sha1(json.dumps(dict(
+        schema=ENSEMBLE_SCHEMA, identity=identity, analysis_key=akey, protocol=timing_free,
+        members=[[mm["conformer"], mm["member_id"]] for mm in members],
+        excluded=[e["conformer"] for e in excluded]), sort_keys=True))
     return dict(
         schema=ENSEMBLE_SCHEMA, subject=plan.get("subject"),
-        ensemble_key=_sha1(json.dumps(dict(analysis_key=akey, protocol=timing_free),
-                                      sort_keys=True)),
+        ensemble_key=ensemble_key,
         analysis_key=akey, analysis=first["key_fields"]["analysis"] if first else None,
         espmap=dict(version=prov.get("espmap_version", __version__),
                     commit=(prov.get("code") if re.fullmatch(r"[0-9a-f]{7,40}", str(prov.get("code")))
                             else None),
                     code=prov.get("code"), rdkit=prov.get("rdkit"), pyscf=prov.get("pyscf")),
-        identity=dict(smiles=plan["identity"]["smiles"], inchikey=plan["identity"]["inchikey"],
-                      charge=plan["identity"]["charge"], n_radical=plan["identity"]["n_radical"],
-                      atom_maps=plan["identity"].get("atom_maps", []),
-                      configuration=plan["identity"].get("configuration", {}),
-                      isotopes="must_match",
-                      isotope_labels=plan["identity"].get("isotope_labels", [])),
+        identity=identity,
         protocol=protocol, k_requested=sel["k_requested"], k_obtained=len(members),
         folded_rule=dict(min_bonds=CONTACT_MIN_BONDS, slack_A=CONTACT_SLACK,
                          radii="Bondi; Mantina 2009 for B",

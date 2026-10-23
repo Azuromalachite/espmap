@@ -37,7 +37,7 @@
   "ensemble_key": {
    "type": "string",
    "pattern": "^[0-9a-f]{40}$",
-   "description": "sha1 of (analysis_key, protocol minus timings): two callers computing the same ensemble get the same key"
+   "description": "sha1 of (schema, identity, analysis_key, protocol minus timings, ordered [conformer, member_id] pairs, excluded conformers): equal keys, the same members of the same molecule under one protocol (review 7 R7-2)"
   },
   "analysis_key": {
    "type": "string",

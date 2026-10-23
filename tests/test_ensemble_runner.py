@@ -405,17 +405,14 @@ def _rerun_is_safe(plan, tmp_path, first, second):
     assert rec["analysis_key"] == em._sha1(" ".join(second))
 
 
-@pytest.mark.xfail(strict=True, reason="R7-1: resume authenticates geometry, not the protocol")
 def test_r7_e1_a_rerun_under_another_basis_does_not_reuse_members(plan, tmp_path):
     _rerun_is_safe(plan, tmp_path, ["--basis", "def2-svp"], ["--basis", "def2-tzvp"])
 
 
-@pytest.mark.xfail(strict=True, reason="R7-1: resume authenticates geometry, not the protocol")
 def test_r7_e2_a_rerun_in_solvent_does_not_reuse_gas_members(plan, tmp_path):
     _rerun_is_safe(plan, tmp_path, ["--basis", "def2-svp"], ["--basis", "def2-svp", "--solvent", "water"])
 
 
-@pytest.mark.xfail(strict=True, reason="R7-1: failure memory is keyed by conformer only")
 def test_r7_e3_a_failure_under_one_protocol_does_not_suppress_another(plan, tmp_path):
     em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(fail={"conf_01"}),
                     log=lambda s: None)
@@ -429,7 +426,6 @@ def test_r7_e3_a_failure_under_one_protocol_does_not_suppress_another(plan, tmp_
     assert all(e["conformer"] != "conf_01" for e in rec["excluded"])
 
 
-@pytest.mark.xfail(strict=True, reason="R7-2: ensemble_key has no identity")
 def test_r7_e4_two_molecules_have_different_ensemble_keys(tmp_path):
     keys = []
     for smi in ("CO", "CN"):                           # one selection outcome each: 1 member
@@ -438,7 +434,6 @@ def test_r7_e4_two_molecules_have_different_ensemble_keys(tmp_path):
     assert keys[0] != keys[1]
 
 
-@pytest.mark.xfail(strict=True, reason="R7-2: ensemble_key has no member ids")
 def test_r7_e5_two_supplied_sets_of_one_molecule_have_different_keys(tmp_path):
     path = Path(__file__).parent / "data" / "ensemble" / "E7_poses_one_ligand.sdf"
     p = em.plan_ensemble(path=path, ensemble="supplied")
@@ -497,3 +492,20 @@ def test_r7_e7_two_starts_at_one_minimum_are_not_double_counted(tmp_path):
     dup = [e for e in rec["excluded"] if e["conformer"] == "conf_01"]
     assert dup and "minimum" in dup[0]["reason"]
     assert sum(m["weight"] for m in rec["members"]) == pytest.approx(1.0)
+
+
+def test_r7_1_a_directory_without_a_manifest_is_not_resumed(plan, tmp_path):
+    """Member runs from before the manifest existed: what computed them is
+    unknown, so nothing is resumed."""
+    em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(), log=lambda s: None)
+    (tmp_path / em.RUN_MANIFEST).unlink()
+    with pytest.raises(em.EnsembleRefused) as e:
+        em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(), log=lambda s: None)
+    assert e.value.findings[0][1] == "ENSEMBLE_RESUME_PROTOCOL_MISMATCH"
+
+
+def test_r7_1_the_same_protocol_resumes(plan, tmp_path):
+    em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(), log=lambda s: None)
+    again = Stub()
+    em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=again, log=lambda s: None)
+    assert again.calls == []
