@@ -132,6 +132,7 @@ def _ensemble(tmp, name, recs, folded=None, converged=True, unbiased=True, exclu
         f.write_text(json.dumps(r))
         members.append(dict(conformer=f"conf_{i:02d}", record=f"conformers/conf_{i:02d}.json",
                             record_sha256=hashlib.sha256(f.read_bytes()).hexdigest(),
+                            geometry_sha1=r["geometry"]["sha1"],
                             folded=bool(folded and folded[i])))
     e = dict(schema="espmap.ensemble/1", subject=name, analysis_key=recs[0]["analysis_key"],
              members=members, excluded=list(excluded),
@@ -291,7 +292,6 @@ def _no_resolution(s):
     return all(s["by_rule"][rl]["resolved"] is not True for rl in em.PARTITION_RULES)
 
 
-@pytest.mark.xfail(strict=True, reason="R7-4: a buried member is dropped and n shrinks")
 def test_r7_e8_a_site_missing_on_one_member_is_not_evaluated_on_n_minus_1(tmp_path):
     """Review 7 R7-E8: the folded member buries the site (None under both
     rules). The comparison may not quietly use the other two."""
@@ -308,7 +308,6 @@ def test_r7_e8_a_site_missing_on_one_member_is_not_evaluated_on_n_minus_1(tmp_pa
     assert s.get("evaluable") is False and "conf_02" in json.dumps(s.get("not_evaluable"))
 
 
-@pytest.mark.xfail(strict=True, reason="R7-5: convergence false does not gate resolved")
 def test_r7_e9_an_unconverged_ensemble_never_resolves(tmp_path):
     """Review 7 R7-E9: a huge delta, but side A's convergence is false."""
     a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: v, RS: v}, vmin=-v)
@@ -322,7 +321,6 @@ def test_r7_e9_an_unconverged_ensemble_never_resolves(tmp_path):
     assert all(g["resolved"] is not True for g in c["global_extrema"].values())
 
 
-@pytest.mark.xfail(strict=True, reason="R7-5: convergence null does not gate resolved")
 def test_r7_e10_convergence_not_judgeable_never_resolves(tmp_path):
     """Review 7 R7-E10: K = 2 on each side, so convergence is null."""
     a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: v, RS: v}) for v in (1.0, 1.2)],
@@ -334,7 +332,6 @@ def test_r7_e10_convergence_not_judgeable_never_resolves(tmp_path):
     assert "convergence" in s["by_rule"][NN].get("not_resolvable", "")
 
 
-@pytest.mark.xfail(strict=True, reason="R7-8: members are not checked against the parent")
 def test_r7_e12_a_parent_claiming_another_analysis_key_is_refused(tmp_path):
     """Review 7 R7-E12: both parents claim key x, their members were computed
     under key k. The parent's claim is what the key check reads."""
@@ -348,7 +345,6 @@ def test_r7_e12_a_parent_claiming_another_analysis_key_is_refused(tmp_path):
     assert _codes(em.compare_records, *paths, CORR)
 
 
-@pytest.mark.xfail(strict=True, reason="R7-8: an unknown schema is read as a record")
 @pytest.mark.parametrize("doc", [
     "record2",                                    # a future record, otherwise readable
     "foreign",                                    # not an espmap file at all
@@ -362,3 +358,44 @@ def test_r7_e13_an_unknown_schema_is_refused_safely(tmp_path, doc):
     bad = _single(tmp_path, "bad", rec)
     for args in ((good, bad), (bad, good)):
         assert _codes(em.compare_records, *args, CORR) == {"COMPARE_SCHEMA_UNSUPPORTED"}
+
+
+# --- review 7 R7-10: the record validates against docs/compare-schema.json -------
+def _validator():
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = json.loads((Path(__file__).resolve().parents[1] / "docs" / "compare-schema.json")
+                        .read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(schema)
+    return jsonschema.Draft202012Validator(schema)
+
+
+def test_r7_10_comparison_records_validate_against_the_schema(tmp_path):
+    v = _validator()
+    ens = lambda n, smi, vals, **kw: _ensemble(tmp_path, n, [_record(smi, {NN: x, RS: x}) for x in vals], **kw)
+    cases = [
+        (ens("a", "CCCCCCO", (1.0, 1.2, 1.4)), ens("b", "CCCCCCCO", (5.0, 5.2, 5.4))),     # resolved
+        (_single(tmp_path, "s1", _record("CCO", {NN: 1.0, RS: 2.0})),
+         _single(tmp_path, "s2", _record("CCCO", {NN: 3.0, RS: 3.5}))),                   # singles
+        (ens("c", "CCCCCCO", (1.0, 1.2), converged=None),
+         ens("d", "CCCCCCCO", (9.0, 9.2), converged=None)),                               # null
+        (_ensemble(tmp_path, "e", [_record("CCCCCCO", {NN: 1.0, RS: 1.0}),
+                                   _record("CCCCCCO", {NN: None, RS: None})]),
+         ens("f", "CCCCCCCO", (2.0, 2.1, 2.2))),                                          # buried
+    ]
+    seen = set()
+    for a, b in cases:
+        c = json.loads(json.dumps(em.compare_records(a, b, CORR)))       # as written to disk
+        errors = sorted(v.iter_errors(c), key=lambda e: list(e.path))
+        assert not errors, [f"{list(e.path)}: {e.message}" for e in errors]
+        seen.add(c["sites"][0]["by_rule"][NN]["resolved"])
+    assert seen == {True, False}
+
+
+def test_r7_10_the_schema_rejects_a_resolved_site_that_was_not_evaluable(tmp_path):
+    v = _validator()
+    a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: x, RS: x}) for x in (1.0, 1.2, 1.4)])
+    b = _ensemble(tmp_path, "b", [_record("CCCCCCCO", {NN: x, RS: x}) for x in (5.0, 5.2, 5.4)])
+    c = json.loads(json.dumps(em.compare_records(a, b, CORR)))
+    assert not list(v.iter_errors(c))
+    c["sites"][0]["evaluable"] = False                     # a tampered record
+    assert list(v.iter_errors(c))

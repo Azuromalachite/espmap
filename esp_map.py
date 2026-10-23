@@ -2917,16 +2917,74 @@ def site_value(rec, atoms, rule):
     return num / area if area > 0 else None
 
 
+# what compare reads of a record and of an ensemble, by path; a file missing
+# any of them is refused before anything is interpreted (review 7 R7-8)
+_RECORD_NEEDS = (("analysis_key",), ("key_fields", "analysis"), ("validity",),
+                 ("geometry", "sha1"), ("geometry", "symbols"), ("geometry", "bonds"),
+                 ("input",), ("results", "V_min_kcal_mol"), ("results", "V_max_kcal_mol"),
+                 ("sites",), ("provenance",))
+_ENSEMBLE_NEEDS = (("analysis_key",), ("members",), ("validity",), ("convergence",))
+_MEMBER_NEEDS = ("conformer", "record", "record_sha256", "folded", "geometry_sha1")
+
+
+def _missing(rec, needs):
+    out = []
+    for path in needs:
+        node = rec
+        for k in path:
+            if not isinstance(node, dict) or k not in node:
+                out.append(".".join(path))
+                break
+            node = node[k]
+    return out
+
+
+def validate_record(rec, where):
+    """Refuse anything compare would misread as an espmap.record/1."""
+    if not isinstance(rec, dict) or rec.get("schema") != RECORD_SCHEMA:
+        got = rec.get("schema") if isinstance(rec, dict) else type(rec).__name__
+        raise CompareRefused([_cmp_block(
+            "COMPARE_SCHEMA_UNSUPPORTED", f"{where}: schema {got!r}, not {RECORD_SCHEMA}",
+            f"compare {RECORD_SCHEMA} or {ENSEMBLE_SCHEMA} files written by espmap")])
+    miss = _missing(rec, _RECORD_NEEDS)
+    if miss:
+        raise CompareRefused([_cmp_block(
+            "COMPARE_SCHEMA_UNSUPPORTED", f"{where}: no {', '.join(miss)}",
+            "compare records written by espmap, unedited")])
+
+
+def validate_ensemble(rec, where):
+    """Refuse an ensemble record compare would misread."""
+    miss = _missing(rec, _ENSEMBLE_NEEDS)
+    if not miss and not isinstance(rec["members"], list):
+        miss = ["members"]
+    for i, m in enumerate(rec.get("members") or []):
+        miss += [f"members[{i}].{k}" for k in _MEMBER_NEEDS if not isinstance(m, dict) or k not in m]
+    if miss:
+        raise CompareRefused([_cmp_block(
+            "COMPARE_SCHEMA_UNSUPPORTED", f"{where}: no {', '.join(miss)}",
+            "compare ensemble records written by espmap, unedited")])
+
+
 def _load_side(path):
-    """(kind, record, sha256, [(conformer, folded, member record)])."""
+    """(kind, record, sha256, [(conformer, folded, member record)]). Every
+    member is checked against what its parent says of it: the file's sha256,
+    the analysis_key and the geometry (review 7 R7-8: a parent claiming a
+    key its members were not computed under was compared on the claim)."""
     import hashlib
     import json
     p = Path(path)
     raw = p.read_bytes()
-    rec = json.loads(raw)
+    try:
+        rec = json.loads(raw)
+    except ValueError:
+        raise CompareRefused([_cmp_block(
+            "COMPARE_SCHEMA_UNSUPPORTED", f"{p} is not JSON",
+            "compare espmap JSON records")]) from None
     sha = hashlib.sha256(raw).hexdigest()
-    if rec.get("schema") == ENSEMBLE_SCHEMA:
-        members = []
+    if isinstance(rec, dict) and rec.get("schema") == ENSEMBLE_SCHEMA:
+        validate_ensemble(rec, str(p))
+        members, bad = [], []
         for m in rec["members"]:
             mp = p.parent / m["record"]
             mraw = mp.read_bytes()
@@ -2934,8 +2992,28 @@ def _load_side(path):
                 raise CompareRefused([_cmp_block(
                     "COMPARE_MEMBER_CHANGED", f"{mp} is not the member {p} lists",
                     "recompute the ensemble, or restore the member record")])
-            members.append((m["conformer"], m["folded"], json.loads(mraw)))
+            try:
+                mrec = json.loads(mraw)
+            except ValueError:
+                mrec = None
+            validate_record(mrec, str(mp))
+            if mrec["analysis_key"] != rec["analysis_key"]:
+                bad.append(f"{m['conformer']} has analysis_key {mrec['analysis_key'][:10]}, "
+                           f"the parent says {str(rec['analysis_key'])[:10]}")
+            if mrec["geometry"]["sha1"] != m["geometry_sha1"]:
+                bad.append(f"{m['conformer']} has geometry {mrec['geometry']['sha1'][:10]}, "
+                           f"the parent says {str(m['geometry_sha1'])[:10]}")
+            members.append((m["conformer"], m["folded"], mrec))
+        if bad:
+            raise CompareRefused([_cmp_block(
+                "COMPARE_MEMBER_MISMATCH", f"{p}: " + "; ".join(bad),
+                "recompute the ensemble; never edit its record")])
+        if not members:
+            raise CompareRefused([_cmp_block(
+                "COMPARE_SCHEMA_UNSUPPORTED", f"{p} has no members",
+                "compare an ensemble that kept at least one member")])
         return "ensemble", rec, sha, members
+    validate_record(rec, str(p))
     return "single", rec, sha, [("single", None, rec)]
 
 
@@ -2946,9 +3024,11 @@ def _side_stats(vals):
                 min=s["min"], max=s["max"], range=s["range"], n=s["n"])
 
 
-def _pair_entry(rows_a, rows_b, key, rule_cfg, partition, single):
+def _pair_entry(rows_a, rows_b, key, rule_cfg, partition, single, blockers=()):
     """mean, delta, conformational, sign consistency, U and resolved for one
-    quantity (a site under one rule, or a global extremum)."""
+    quantity (a site under one rule, or a global extremum). blockers are
+    reasons the quantity may not be resolved whatever the numbers say
+    (review 7: a site missing on a member, convergence not established)."""
     va = [r[key] for r in rows_a]
     vb = [r[key] for r in rows_b]
     sa, sb = _side_stats(va), _side_stats(vb)
@@ -2966,15 +3046,16 @@ def _pair_entry(rows_a, rows_b, key, rule_cfg, partition, single):
     # measured, and the comparison reports delta and partition but is never
     # resolved. A single record, or a one-member ensemble (benzene), counts.
     unmeasured = {s: n < 2 for s, n in (("A", sa["n"]), ("B", sb["n"]))}
-    resolved = bool(not any(unmeasured.values()) and abs(delta) > U
+    why = ((["conformers not sampled on side "
+             + " and ".join(s for s in "AB" if unmeasured[s])] if any(unmeasured.values()) else [])
+           + list(blockers))
+    resolved = bool(not why and abs(delta) > U
                     and sc is not None and sc >= rule_cfg["s_min"])
     conf = dict(A=dict(sa, measured="not_measured" if unmeasured["A"] else "members"),
                 B=dict(sb, measured="not_measured" if unmeasured["B"] else "members"))
     return dict(mean_A=sa["mean"], mean_B=sb["mean"], delta_mean=delta, conformational=conf,
                 sign_consistency=sc, U=U, resolved=resolved, resolved_under=rule_cfg["id"],
-                **({"not_resolvable": "conformers not sampled on side "
-                                      + " and ".join(s for s in "AB" if unmeasured[s])}
-                   if any(unmeasured.values()) else {}))
+                **({"not_resolvable": "; ".join(why)} if why else {}))
 
 
 def compare_records(path_a, path_b, correspondence, rule=None):
@@ -3016,14 +3097,24 @@ def compare_records(path_a, path_b, correspondence, rule=None):
             for s in "AB"}
     if vers["A"] != vers["B"]:
         flags.append("VERSIONS_DIFFER")
+    # Review 7 R7-5: convergence gates resolution, it is not only a flag. An
+    # ensemble side resolves only when its convergence is true; false, or
+    # null (not judgeable, K = 2), reports the numbers unresolved.
+    unconverged = []
     for s in "AB":
         r = sides[s]["rec"]
-        if sides[s]["kind"] == "ensemble" and (r.get("convergence") or {}).get("converged") is not True:
+        if sides[s]["kind"] != "ensemble":
+            continue
+        v = r.get("validity") or {}
+        conv = v["convergence"] if "convergence" in v else (r.get("convergence") or {}).get("converged")
+        if conv is not True:
+            unconverged.append(f"{s} ({'not judgeable' if conv is None else 'false'})")
             if "NOT_CONVERGED" not in flags:
                 flags.append("NOT_CONVERGED")
-        if sides[s]["kind"] == "ensemble" and not (r.get("validity") or {}).get("unbiased", True):
-            if "SELECTION_BIASED" not in flags:
-                flags.append("SELECTION_BIASED")
+        if not v.get("unbiased", True) and "SELECTION_BIASED" not in flags:
+            flags.append("SELECTION_BIASED")
+    conv_block = ([f"ensemble convergence not established on side {', '.join(unconverged)}"]
+                  if unconverged else [])
 
     sites = []
     for p in pairs:
@@ -3035,7 +3126,15 @@ def compare_records(path_a, path_b, correspondence, rule=None):
         deltas = [None if means[("B", rl)] is None or means[("A", rl)] is None
                   else means[("B", rl)] - means[("A", rl)] for rl in PARTITION_RULES]
         partition = None if None in deltas else abs(deltas[0] - deltas[1])
-        by_rule = {rl: _pair_entry(rows["A"], rows["B"], rl, rule, partition, single)
+        # Review 7 R7-4: a member where the site has no surface under either
+        # rule (a folded member burying it) made n shrink silently. Such a
+        # site is not evaluable: numbers reported, never resolved.
+        missing = [dict(side=s, conformer=x["conformer"], rule=rl)
+                   for s in "AB" for x in rows[s] for rl in PARTITION_RULES if x[rl] is None]
+        site_block = ([f"site not evaluable on every member ({len(missing)} member-rule "
+                       f"values missing)"] if missing else [])
+        by_rule = {rl: _pair_entry(rows["A"], rows["B"], rl, rule, partition, single,
+                                   site_block + conv_block)
                    for rl in PARTITION_RULES}
         both = [abs(x[PARTITION_RULES[0]] - x[PARTITION_RULES[1]]) for s in "AB" for x in rows[s]
                 if None not in (x[PARTITION_RULES[0]], x[PARTITION_RULES[1]])]
@@ -3047,12 +3146,13 @@ def compare_records(path_a, path_b, correspondence, rule=None):
                                                                       means[(s, PARTITION_RULES[1])])),
                                        default=None),
                 max_member=max(both, default=None)),
+            evaluable=not missing, not_evaluable=missing,
             by_rule=by_rule, members=rows))
     glob = {}
     for q in ("V_min_kcal_mol", "V_max_kcal_mol"):
         rows = {s: [dict(conformer=c, folded=f, value=r["results"][q])
                     for c, f, r in sides[s]["members"]] for s in "AB"}
-        glob[q] = dict(_pair_entry(rows["A"], rows["B"], "value", rule, None, single),
+        glob[q] = dict(_pair_entry(rows["A"], rows["B"], "value", rule, None, single, conv_block),
                        members=rows, partition="not applicable")
     inputs = {}
     for s, path in (("A", path_a), ("B", path_b)):
