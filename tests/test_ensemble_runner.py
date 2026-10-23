@@ -310,3 +310,15 @@ def test_not_judgeable_convergence_is_null_in_validity_and_allowed_by_the_schema
         rec = _conv_rec(plan, n, tmp_path / str(n))
         if rec["convergence"]["converged"] is None:
             assert rec["validity"]["convergence"] is None
+
+
+@pytest.mark.xfail(strict=True, reason="--optimize refuses every generated member (E11)")
+@pytest.mark.parametrize("origin, moves", [("etkdg_mmff94s", False), ("etkdg_uff", False),
+                                           ("mmff94s", False), (None, True),
+                                           ("dft:b3lyp/def2tzvp", True), ("undeclared", True)])
+def test_optimize_may_move_only_a_generated_geometry(origin, moves):
+    """The guard protects a pose or a reference geometry from --optimize. A
+    member file the ensemble wrote from its own embedder (etkdg_mmff94s) is
+    neither, and --weight dft needs those members optimised."""
+    gi = {"source": "file 3D coordinates used as-is", "declared_geometry": origin}
+    assert em.optimize_would_move_supplied(gi) is moves
