@@ -23,9 +23,22 @@ P4. The findings below are as of revision 2.
 
 **Review 6** is scheduled for the start of the `espmap.record/2` or P4 work,
 whichever comes first: a whole-repo adversarial review, with its brief written
-then. Until then, R11 (drawing vs geometry) is handled on its own: a hostile
-input set first (`tests/data/r11`, #59), then a rule written to pass it
-(`fix/r11-flat-files`: 80/80 safe, 78/80 preferred).
+then.
+
+**Review 5 R11 (drawing vs geometry) is done** (2026-10-23). Two rules written
+first each failed on a counterexample found afterwards, so the order was
+reversed:
+- a hostile input set came first, its expectations reviewed by the owner before
+  any rule existed: `tests/data/r11`, 80 cases (#59), 20 attack cases from an
+  independent probe of the first candidate (#61), CO₂ at 1.5 Å preferring
+  "drawing" (#62), and real nucleobases plus a nearly planar ring (#63);
+- the rule was then written against it (#60, merged at 4e4319a).
+
+On the final 105 cases: 0 unsafe; 8 not preferred, all refusals with a
+remedy. A held-out probe the rule's author never saw (58 cases, plus about 120
+targeted attacks) also found no unsafe case. The known residual: a drawing
+within a few percent and a few degrees of a real geometry is computed as one,
+which is low harm.
 
 ## Retractions — read these first
 
