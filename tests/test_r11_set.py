@@ -23,6 +23,11 @@ _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases
 # unsafe and these not preferred, every one a BLOCK:
 UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
+    # S17: delocalised N-C 1.31 A is 11 % short of its reference: refused
+    "real_dicyanamide.mol",
+    # one element pair projecting evenly is refused, not called a drawing: a
+    # symmetric real skeleton could do the same (_projected_kind)
+    "draw_decalin_noH_atom2_up_0.6_1.5.mol",
     # Kekule O=O at 1.278 A is 11 % from its reference: outside PLAUSIBLE_TOL
     "real_ozone.mol",
     # aromatic N-O is 10.0 % long against the covalent-radius reference; only
@@ -163,7 +168,7 @@ def _params(xfail_set, cases):
 def test_the_manifest_lists_every_file_once():
     files = [c["file"] for c in _CASES]
     assert len(files) == len(set(files))
-    assert set(files) == {p.name for p in _DIR.glob("*.mol")}
+    assert set(files) == {p.name for p in _DIR.iterdir() if p.suffix in (".mol", ".sdf")}
     assert UNSAFE_NOW <= set(files) and NOT_PREFERRED_NOW <= set(files)
     for c in _CASES:
         assert c["prefer"] is None or c["prefer"] in c["allowed"], c["file"]

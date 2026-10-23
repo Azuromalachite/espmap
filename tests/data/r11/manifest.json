@@ -1794,6 +1794,839 @@
    "header": "3D",
    "source": "RDKit ETKDG + MMFF94s, H removed, rotated, z kept (max |z| 0.092 A)",
    "why": "a real ring that is nearly, not exactly, planar: within 0.1 A of its plane"
+  },
+  {
+   "file": "real_C2F4_trailing_comment.sdf",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "one SDF record, then text after the last $$$$",
+   "why": "trailing text after the only record: the header that counts is that record's own"
+  },
+  {
+   "file": "real_C6F6_trailing_lines.sdf",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "one SDF record, then text after the last $$$$",
+   "why": "trailing text after the only record: the header that counts is that record's own"
+  },
+  {
+   "file": "real_C2F4_trailing_header_like.sdf",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "one SDF record, then text after the last $$$$",
+   "why": "trailing text after the only record: the header that counts is that record's own"
+  },
+  {
+   "file": "draw_chlorobenzene_2Dheader_trailing.sdf",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "overrules the file's 2D header"
+   },
+   "header": "2D",
+   "source": "one SDF record, then text after the last $$$$",
+   "why": "trailing text after the only record: the header that counts is that record's own"
+  },
+  {
+   "file": "draw_cyclohexanol_znoise_0.08_s1_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, z uniform in +-0.08 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_cyclohexanol_znoise_0.08_s2_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, z uniform in +-0.08 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_cyclohexanol_znoise_0.09_s1_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, z uniform in +-0.09 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_cyclohexanol_znoise_0.09_s2_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, z uniform in +-0.09 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_aminopropanol_znoise_0.08_s1_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A, z uniform in +-0.08 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_aminopropanol_znoise_0.08_s2_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A, z uniform in +-0.08 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_aminopropanol_znoise_0.09_s1_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A, z uniform in +-0.09 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_aminopropanol_znoise_0.09_s2_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A, z uniform in +-0.09 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_hexane_znoise_0.08_s1_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, z uniform in +-0.08 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_hexane_znoise_0.08_s2_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, z uniform in +-0.08 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_hexane_znoise_0.09_s1_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, z uniform in +-0.09 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_hexane_znoise_0.09_s2_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, z uniform in +-0.09 A",
+   "why": "a flat sp3 drawing whose noise stays inside the flatness tolerance; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_alanine_znoise_0.09_review6_s12.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction (1.5 A), z uniform in +-0.09 A, numpy seed 12",
+   "why": "review 6 S16: max |z| under the flatness tolerance, best-plane deviation over it"
+  },
+  {
+   "file": "draw_alanine_znoise_0.09_review6_s35.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction (1.5 A), z uniform in +-0.09 A, numpy seed 35",
+   "why": "review 6 S16: max |z| under the flatness tolerance, best-plane deviation over it"
+  },
+  {
+   "file": "draw_threonine_znoise_0.09_review6_s11.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction (1.5 A), z uniform in +-0.09 A, numpy seed 11",
+   "why": "review 6 S16: max |z| under the flatness tolerance, best-plane deviation over it"
+  },
+  {
+   "file": "real_dicyanamide.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built: N-C 1.31 A, C#N 1.16 A, C-N-C 120 deg, N-C-N 174 deg",
+   "why": "real dicyanamide: its central N-C is 11 % short of a single-bond reference because it is delocalised, not because it is drawn"
+  },
+  {
+   "file": "real_cyanamide_noH.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built: N-C 1.35 A, C#N 1.16 A, linear",
+   "why": "real cyanamide's heavy atoms: a short, delocalised N-C single bond"
+  },
+  {
+   "file": "real_disiloxane_noH_144.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built: Si-O 1.63 A, Si-O-Si 144 deg (heavy atoms only)",
+   "why": "Si-O-Si is wide in reality (about 142-150 deg); an sp3 O angle window for C-O-C does not apply to O between silicons"
+  },
+  {
+   "file": "real_disiloxane_noH_150.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built: Si-O 1.63 A, Si-O-Si 150 deg (heavy atoms only)",
+   "why": "Si-O-Si is wide in reality (about 142-150 deg); an sp3 O angle window for C-O-C does not apply to O between silicons"
+  },
+  {
+   "file": "real_trisilylamine_noH.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "built: Si-N 1.73 A, planar N (heavy atoms only)",
+   "why": "N(SiH3)3 is planar at N in reality: a flat N between heavy atoms is not a drawing"
+  },
+  {
+   "file": "draw_methylpropanoate_atom3_up_0.35_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 3 lifted 0.35 A out of the plane",
+   "why": "an edited drawing: not flat any more, but every bond projects to one drawing length"
+  },
+  {
+   "file": "draw_methylpropanoate_atom3_up_0.8_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 3 lifted 0.8 A out of the plane",
+   "why": "an edited drawing: not flat any more, but every bond projects to one drawing length"
+  },
+  {
+   "file": "draw_chlorobenzene_atom0_up_0.5_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 0 lifted 0.5 A out of the plane",
+   "why": "an edited drawing: not flat any more, but every bond projects to one drawing length"
+  },
+  {
+   "file": "draw_aminopropanol_atom1_up_1.0_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 1 lifted 1.0 A out of the plane",
+   "why": "an edited drawing: not flat any more, but every bond projects to one drawing length"
+  },
+  {
+   "file": "real_piperidine_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, not flattened",
+   "why": "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A"
+  },
+  {
+   "file": "real_diethylamine_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, not flattened",
+   "why": "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A"
+  },
+  {
+   "file": "real_tbutylamine_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, not flattened",
+   "why": "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A"
+  },
+  {
+   "file": "draw_methylpropanoate_atom3_up_0.8_tilted60_0_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 3 lifted 0.8 A along the page normal, then rotated 60 deg about x and 0 about y",
+   "why": "an edited drawing seen at an angle: one lifted atom must not decide its plane"
+  },
+  {
+   "file": "draw_chlorobenzene_atom0_up_1.0_tilted45_30_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 0 lifted 1.0 A along the page normal, then rotated 45 deg about x and 30 about y",
+   "why": "an edited drawing seen at an angle: one lifted atom must not decide its plane"
+  },
+  {
+   "file": "draw_decalin_noH_atom2_up_0.6_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction of H-free decalin at 1.5 A, atom 2 lifted 0.6 A",
+   "why": "one element pair (C-C): a drawing, but a symmetric real skeleton could look alike, so a refusal is safe and a geometry is not"
+  },
+  {
+   "file": "real_hexafluoroethane_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed",
+   "why": "a real non-flat skeleton"
+  },
+  {
+   "file": "real_hexafluoroethane_noH_3d_rot90x.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "the same, rotated 90 deg about x",
+   "why": "a real non-flat skeleton seen face-on along z"
+  },
+  {
+   "file": "real_norbornane_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed",
+   "why": "a real non-flat skeleton"
+  },
+  {
+   "file": "real_norbornane_noH_3d_rot90x.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "the same, rotated 90 deg about x",
+   "why": "a real non-flat skeleton seen face-on along z"
+  },
+  {
+   "file": "draw_methylpropanoate_lift_3+0.8_5+0.8_tilted60_0_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atoms [3, 5] lifted, then rotated 60 deg about x and 0 about y",
+   "why": "an edited drawing with several atoms lifted, seen at an angle"
+  },
+  {
+   "file": "draw_methylpropanoate_lift_3+0.8_1-0.8_tilted60_0_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atoms [3, 1] lifted, then rotated 60 deg about x and 0 about y",
+   "why": "an edited drawing with several atoms lifted, seen at an angle"
+  },
+  {
+   "file": "draw_chloroaniline_lift_0+0.7_3-0.6_6+0.5_tilted45_30_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atoms [0, 3, 6] lifted, then rotated 45 deg about x and 30 about y",
+   "why": "an edited drawing with several atoms lifted, seen at an angle"
+  },
+  {
+   "file": "real_z3_14_oac_chain_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG (seed 3) + MMFF94s, H removed",
+   "why": "a real chain ester: most C-C bonds near 1.53 A, many in one plane, but not all bonds even"
+  },
+  {
+   "file": "real_z3_14_oac_chain_noH_3d_rot90x.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "the same, rotated 90 deg about x",
+   "why": "a real chain ester seen face-on along z"
+  },
+  {
+   "file": "real_dodecyl_acetate_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG (seed 5) + MMFF94s, H removed",
+   "why": "a real chain ester: most C-C bonds near 1.53 A, many in one plane, but not all bonds even"
+  },
+  {
+   "file": "real_dodecyl_acetate_noH_3d_rot90x.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "the same, rotated 90 deg about x",
+   "why": "a real chain ester seen face-on along z"
+  },
+  {
+   "file": "draw2d_threonine_wedge_z_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "overrules the file's 2D header"
+   },
+   "header": "2D",
+   "source": "RDKit depiction at 1.5 A, 2D header, terminal O/N at z +-0.8",
+   "why": "a 2D drawing whose editor wrote wedge depth into z; the header says 2D"
+  },
+  {
+   "file": "draw2d_chlorobenzene_one_z_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "overrules the file's 2D header"
+   },
+   "header": "2D",
+   "source": "RDKit depiction at 1.5 A, 2D header, atom 0 at z = 0.3",
+   "why": "one atom nudged out of the plane in an editor; the header still says 2D"
+  },
+  {
+   "file": "draw2d_aminopropanol_one_z_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "overrules the file's 2D header"
+   },
+   "header": "2D",
+   "source": "RDKit depiction at 1.5 A, 2D header, atom 0 at z = 0.3",
+   "why": "one atom nudged out of the plane in an editor; the header still says 2D"
+  },
+  {
+   "file": "real_2butanol_2Dheader.mol",
+   "kind": "geometry",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "overrules the file's 2D header"
+   },
+   "header": "2D",
+   "source": "RDKit ETKDG + MMFF94s 2-butanol saved with a 2D header",
+   "why": "the header is the file's own statement; the reader cannot overrule it (as real_chlorobenzene_2Dheader, but not flat)"
   }
  ]
 }
