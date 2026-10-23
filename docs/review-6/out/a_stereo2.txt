@@ -1,0 +1,6 @@
+alanine    z noise +-0.02: {'drawing/BLOCK': 29, 'drawing/INFO': 11}  first passing: (8, 'C[C@H](N)C(=O)O')
+alanine    z noise +-0.05: {'drawing/BLOCK': 14, 'drawing/INFO': 26}  first passing: (1, 'C[C@H](N)C(=O)O')
+alanine    z noise +-0.09: {'drawing/BLOCK': 9, 'drawing/INFO': 29, 'geometry/INFO': 2}  first passing: (1, 'C[C@H](N)C(=O)O')
+threonine  z noise +-0.02: {'drawing/BLOCK': 37, 'drawing/INFO': 3}  first passing: (15, 'C[C@H](O)[C@H](N)C(=O)O')
+threonine  z noise +-0.05: {'drawing/BLOCK': 21, 'drawing/INFO': 19}  first passing: (1, 'C[C@H](O)[C@@H](N)C(=O)O')
+threonine  z noise +-0.09: {'drawing/BLOCK': 12, 'drawing/INFO': 27, 'geometry/INFO': 1}  first passing: (1, 'C[C@H](O)[C@@H](N)C(=O)O')

@@ -1,0 +1,29 @@
+===== det
+octanol K=8 members sha1 3cf96a45b5e9  ids [88, 95, 80, 14, 98, 36, 5, 89]
+===== matches
+CC(C)(C)OCC(COC(C)(C)C)COC(C)(C)C: 1296 heavy-atom automorphisms; cap 1000
+automorphisms outside the first 1000: 296
+identical conformer, relabelled by an automorphism past the cap: RMSD 0.820 A with the cap, 0.000 A with every automorphism (DEDUP_RMSD 0.5)
+  30 conformers, max_matches=1000: n_unique 11, 1.1 s
+  30 conformers, max_matches=2000: n_unique 10, 1.2 s
+===== c18
+embedded 100, converged 100, 6.9 s
+conf  bench_rg  rg_mass_allatoms  genus  folded  n_contacts  min_bonds  closest(d - limit)
+   4  6.1622    6.1622            0      False    0         None          None
+  28  5.3947    5.3947            0      False    0         None          None
+  34  5.6108    5.6108            0      False    0         None          None
+  40  3.8944    3.8944            2      True     1         20          -0.21
+  53  5.9044    5.9044            0      False    0         None          None
+  54  5.7400    5.7400            0      False    0         None          None
+  57  5.0813    5.0813            0      True     2         5          -0.18
+  67  6.0285    6.0285            0      False    0         None          None
+  72  3.9255    3.9255            3      True     2         5          -0.22
+  82  6.4247    6.4247            0      False    0         None          None
+population: 36/100 converged conformers 'folded'; 34 of them have every contact only 5-6 bonds apart
+select_ensemble K=10: 0.2 s; n_unique=100, symmetry matches=1
+PR members (conf ids, selection order): [4, 40, 57, 28, 27, 54, 22, 67, 26, 72]
+bench members (conformers.jsonl):        [4, 28, 34, 40, 53, 54, 57, 67, 72, 82]
+shared: [4, 28, 40, 54, 57, 67, 72]
+bench select() re-run here: [4, 28, 34, 40, 53, 54, 57, 67, 72, 82]
+PR members: folded flags [False, True, True, False, True, False, True, False, False, True]
+12.28 s 104984 KB

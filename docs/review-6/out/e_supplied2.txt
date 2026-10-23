@@ -1,0 +1,13 @@
+=== 3'. same nuclei, different electron count, non-planar (ethyl +1 / radical / -1) ===
+   record: charge +1, radicals 0, kind geometry
+   record: charge +0, radicals 1, kind geometry
+   record: charge -1, radicals 0, kind geometry
+ethyl cation, radical, anion: ACCEPTED  members=3  identity=[CH2+]C
+ethyl radical, cation, anion: REFUSED   [('OPEN_SHELL', '1 unpaired electron(s): this is a radical, and no --spin was given, so it would be computed with a RESTRICTED wavefuncti')]
+   (nitromethane charge-separated vs a nitro radical anion cannot share H counts; skipped)
+=== 4'. isotope labels with the atom order preserved ===
+CD3OH then CH3OH: ACCEPTED  members=2  identity=[2H]C([2H])([2H])O
+CH3OH then CD3OH: ACCEPTED  members=2  identity=CO
+=== 9'. diastereotopic methyls swapped by index ===
+   C3 label with 13C at atom 4: record 1 S, record 2 R
+record 2 = record 1 with the two diastereotopic methyls' indices swapped: ACCEPTED  members=2  identity=CC(C)[C@H](C)O

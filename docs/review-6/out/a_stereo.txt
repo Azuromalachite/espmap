@@ -1,0 +1,31 @@
+=== A. stereo elements the rule cannot see (should block under the flag) ===
+UNSAFE-PASS TCO-ol (E)-cyclooct-4-en-1-ol, C1 set  verdict=INFO   want=block open=[] | planar chirality of the trans ring alkene + C1: two diastereomers (axial/equatorial)
+UNSAFE-PASS trans-cyclooctene                      verdict=INFO   want=block open=[] | planar-chiral; enantiomers only
+UNSAFE-PASS Curran anilide, o-tBu                  verdict=INFO   want=block open=[] | Ar-N(amide) axis, a stable atropisomer class [I]; axis is not biaryl
+UNSAFE-PASS o-tBu anilide + stereocentre           verdict=INFO   want=block open=[] | axis + centre: diastereomers
+UNSAFE-PASS bridged biaryl, dibenzoxepine 1,11-Me2 verdict=INFO   want=block open=[] | biaryl axis inside a 7-ring: IsInRing() skips it [I barrier]
+UNSAFE-PASS 1,12-dimethylbenzo[c]phenanthrene      verdict=INFO   want=block open=[] | [4]helicene made stable by fjord methyls [I]; rule needs >= 5 rings
+ok          4-methylcyclohexylidene acetic acid    verdict=BLOCK  want=block open=[('Atom_Tetrahedral atom 1', 'unspecified'), ('Bond_Double bond 4', 'unspecified')] | axially chiral alkylidenecycloalkane (resolved 1909) [I]
+ok          4-Me-cyclohexylidene + centre          verdict=BLOCK  want=block open=[('Atom_Tetrahedral atom 7', 'unspecified'), ('Bond_Double bond 3', 'unspecified')] | axis + centre
+ok          P-stereogenic phosphine                verdict=BLOCK  want=block open=[('Atom_Tetrahedral atom 2', 'unspecified')] | P inversion ~30+ kcal/mol [I]
+ok          sulfoxide                              verdict=BLOCK  want=block open=[('Atom_Tetrahedral atom 1', 'unspecified')] | S stereocentre, stable
+ok          sulfonium                              verdict=BLOCK  want=block open=[('Atom_Tetrahedral atom 2', 'unspecified')] | stable S+ centre
+ok          Troger's base                          verdict=BLOCK  want=block open=[('Atom_Tetrahedral atom 8', 'unspecified')] | bridgehead N pair, chiral
+ok          cyclic allene 1,2-cyclononadiene       verdict=BLOCK  want=block open=[('cumulene at bonds [0, 1]', 'an axis or cis/trans no SMILES can fix')] | axially chiral cyclic allene
+=== B. elements that should NOT block ===
+ok          acyclic tertiary amine                 verdict=INFO   want=pass  open=[] | N inverts fast
+ok          2,2',6-trifluorobiphenyl               verdict=INFO   want=pass  open=[] | ortho score 3 of F only; F small [I]
+ok          2,2'-diiodo... control 2,2'-dimethylbiphenyl verdict=INFO   want=pass  open=[] | rotates
+ok          CHD label only                         verdict=INFO   want=pass  open=[] | isotope-only centre (spec says excluded)
+ok          CHD unspecified                        verdict=INFO   want=pass  open=[] | isotope-only centre unspecified
+=== C. TCO-ol: which diastereomer does the embedder make? ===
+30 ETKDG+MMFF conformers: dihedral C3-C4=C5-C6 > 0: 21, < 0: 9
+  verify_computed accepts all: True ; computed SMILES set: {'O[C@H]1CC/C=C/CCC1'}
+  lowest MMFF energy, + helicity 38.11, - helicity 36.59 kcal/mol
+  (from_smiles keeps the lowest of 20; its helicity is decided by which embeddings converge)
+  heavy-atom best RMSD between a + and a - conformer: 0.48 A
+=== D. 3D-header drawing with z noise: chirality read from noise? ===
+  z noise +-0.0: coords=drawing chiral tags on C1,C3=['CHI_UNSPECIFIED', 'CHI_UNSPECIFIED'] verdict=BLOCK codes=['STEREO_REQUIRED', 'UNSPECIFIED_TETRAHEDRAL']
+  z noise +-0.001: coords=drawing chiral tags on C1,C3=['CHI_UNSPECIFIED', 'CHI_UNSPECIFIED'] verdict=BLOCK codes=['STEREO_REQUIRED', 'UNSPECIFIED_TETRAHEDRAL']
+  z noise +-0.01: coords=drawing chiral tags on C1,C3=['CHI_UNSPECIFIED', 'CHI_UNSPECIFIED'] verdict=BLOCK codes=['STEREO_REQUIRED', 'UNSPECIFIED_TETRAHEDRAL']
+  z noise +-0.05: coords=drawing chiral tags on C1,C3=['CHI_UNSPECIFIED', 'CHI_TETRAHEDRAL_CW'] verdict=BLOCK codes=['STEREO_REQUIRED']

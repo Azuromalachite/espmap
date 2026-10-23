@@ -1,0 +1,11 @@
+v0.2.1 collect:
+768 tests collected in 1.88s
+34/768 tests collected (734 deselected) in 1.23s
+tests/conftest.py:0
+tests/record_tree.py:0
+tests/test_claims.py:0
+tests/test_fast.py:0
+tests/test_fixtures.py:0
+tests/test_r11_set.py:1
+tests/test_slow.py:0
+4

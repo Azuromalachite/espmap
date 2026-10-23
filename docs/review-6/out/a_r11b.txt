@@ -1,0 +1,25 @@
+=== from_file on the 2D-header drawing with wedge z (no SCF) ===
+draw_threonine_2Dheader_zwedge.mol
+  source: file 3D coordinates used as-is; 9 hydrogen(s) added
+  h_source: [None, None, None, None, None, None, None, None, 'generated_relaxed', 'generated_relaxed', 'generated_relaxed', 'generated_relaxed', 'generated_relaxed', 'generated_relaxed', 'generated_relaxed', 'generated_relaxed', 'generated_relaxed']
+  info keys: ['charge', 'declared_geometry', 'e_spread', 'forcefield', 'formula', 'h_source', 'mol', 'n_converged', 'n_embedded', 'n_found', 'n_radical', 'n_rot', 'record', 'seed', 'smiles', 'source']
+  shortest heavy-heavy distance 1.500 A; heavy bond lengths in file ~1.5 (a depiction)
+draw_chlorobenzene_2Dheader_z0.3.mol
+  source: file 3D coordinates used as-is; 5 hydrogen(s) added
+  h_source: [None, None, None, None, None, None, None, 'generated_relaxed', 'generated_relaxed', 'generated_relaxed', 'generated_relaxed', 'generated_relaxed']
+  info keys: ['charge', 'declared_geometry', 'e_spread', 'forcefield', 'formula', 'h_source', 'mol', 'n_converged', 'n_embedded', 'n_found', 'n_radical', 'n_rot', 'record', 'seed', 'smiles', 'source']
+  shortest heavy-heavy distance 1.500 A; heavy bond lengths in file ~1.5 (a depiction)
+=== record numbering when record 2 of 3 does not parse ===
+RDKit: ['pose_1', None, 'pose_3']
+  --record None: n_found=2 ['MULTIPLE_RECORDS']
+  --record 1: n_found=2 read pose_1
+  --record 2: n_found=2 read pose_3
+  --record 3: n_found=2 ['RECORD_OUT_OF_RANGE']
+two records, second unparseable, no --record: n_found=1 read pose_1 (no MULTIPLE_RECORDS)
+== CLI --check on the 2D-header z drawing
+          1 stereocentre drawn without a wedge or hash. The two enantiomers have mirror-image ESP: every value identical, the picture reflected. Atom index: [1]
+          fix: add wedge/hash bonds in the drawing, or accept that the map shows one arbitrary isomer
+  [note ] TAUTOMERS
+          6 tautomers reachable from the drawn form; the ESP is computed for exactly the one you drew
+          fix: confirm the drawn tautomer is the one you mean
+verdict: ACCEPTED

@@ -28,9 +28,12 @@ P4. The findings below are as of revision 2.
 consumers read its records but never decide its features. P4's ALIE record
 integration is deferred (`docs/p4-spec.md`).
 
-**Review 6** is scheduled for the start of the first v0.3 code PR:
-a whole-repo adversarial review, with its brief written
-then.
+**Review 6 is done** (2026-10-23, `docs/adversarial-review-6.md`), at the
+first v0.3 code PR (#73). Its HIGH finding and four MEDIUM ones (S1, S2, S4's
+Rg, S5, S6) were fixed in #73, counterexamples first. Deferred: S3 and S4's
+re-spread (to the ensemble spec's section 8 measurements), S7 and S8 (R11),
+S9 (ALIE) and the LOW findings. Its "Before `espmap.ensemble/1` is frozen"
+list feeds step 4.
 
 **Review 5 R11 (drawing vs geometry) is done** (2026-10-23). Two rules written
 first each failed on a counterexample found afterwards, so the order was

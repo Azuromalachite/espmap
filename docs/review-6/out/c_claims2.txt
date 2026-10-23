@@ -1,0 +1,18 @@
+chlorobenzene|def2-tzvp|exact|16t      dV_max +8.54e-03 dV_min -1.79e-03 dE -6.17e-05 Ha  t ratio 0.53
+decanoic_acid|def2-svp|exact|16t       dV_max +1.94e-03 dV_min -1.96e-04 dE -1.52e-04 Ha  t ratio 0.72
+decanoic_acid|def2-tzvp|exact|16t      dV_max +1.69e-02 dV_min -6.28e-04 dE -2.49e-04 Ha  t ratio 0.46
+BDSF|def2-svp|exact|16t                dV_max +1.59e-03 dV_min -2.23e-04 dE -1.68e-04 Ha  t ratio 0.78
+BDSF|def2-tzvp|exact|16t               dV_max +1.76e-02 dV_min +3.53e-04 dE -2.77e-04 Ha  t ratio 0.45
+Z3Z13-18OAc|def2-svp|exact|16t         dV_max +3.40e-05 dV_min -5.92e-05 dE -2.88e-04 Ha  t ratio 0.80
+Z3Z13-18OAc|def2-tzvp|exact|16t        dV_max +5.62e-03 dV_min -5.93e-04 dE -4.59e-04 Ha  t ratio 1.34
+bromobenzene nao def2-svp 141
+bromobenzene nao def2-tzvp 264
+master collect (fast + --runslow):
+1156 tests collected in 3.68s
+1156 tests collected in 2.34s
+61/1156 tests collected (1095 deselected) in 2.33s
+fatal: not a git repository: /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-review6/C:/Users/user/Documents/espmap/.git/worktrees/espmap-review6
+tar: This does not look like a tar archive
+tar: Exiting with failure status due to previous errors
+3575 esp_map.py
+3575 esp_map.py

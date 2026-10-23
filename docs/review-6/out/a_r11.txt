@@ -1,0 +1,42 @@
+=== 1. real planar molecules, reference geometries (A) ===
+  RDKit hybridisation of the central C: SP2
+real_tricyanomethanide                       kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 
+  RDKit hybridisation of the central N: SP2
+real_dicyanamide                             kind=geometry got=ambiguous              prefer=geometry  cost=1 (BLOCK) 
+real_disiloxane_heavy_only                   kind=geometry got=drawing                prefer=geometry  cost=2 (recorded discard) dev=0.000 sp3=['sp3 O1 bent 144 deg'] real_angles=0 (water_heavy_only is in the set at 104.5 deg)
+real_Cl2O (control, 110.9 deg)               kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=1 
+=== 2. real planar molecules from MMFF94s (a geometry any user could supply) ===
+real_squaric_acid [MMFF94s, dev 0.000]       kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 length_problems=[]
+real_tropolone [MMFF94s, dev 0.000]          kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 length_problems=[]
+real_vinamidinium [MMFF94s, dev 0.000]       kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 length_problems=[]
+real_allyl_anion [MMFF94s, dev 0.000]        kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 length_problems=[]
+acac_anion                                   MMFF94s geometry not flat (dev 0.903); not a flat-file case
+hexapentaene                                 MMFF94s geometry not flat (dev 0.659); not a flat-file case
+real_malonaldehyde_enol [MMFF94s, dev 0.000] kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 length_problems=[]
+real_glyoxal [MMFF94s, dev 0.000]            kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 length_problems=[]
+real_dicyanamide_mmff [MMFF94s, dev 0.000]   kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 length_problems=[]
+real_tricyanomethanide_mmff [MMFF94s, dev 0.000] kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 length_problems=[]
+=== 3. header handling: real C2F4 (z = 0, 'either' C=C) under file variants ===
+C2F4 as committed (control)                  kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 
+C2F4 CRLF line endings                       kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 
+C2F4 as one-record SDF                       kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 
+C2F4 one-record SDF, CRLF                    kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 
+C2F4 SDF with data fields                    kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 
+  dims: ['3D', ''] RDKit records: 1
+C2F4 SDF + trailing comment line             kind=geometry got=drawing                prefer=geometry  cost=2 (recorded discard) dev=0.000 sp3=[] real_angles=0 
+  blank-first dims: ['', '3D'] RDKit records: [False]
+  read_structure (no --record): [('BLOCK', 'UNPARSEABLE', 'RDKit read no valid molecule from /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-review6/docs/review-6/fx/r11/C2F4_sdf_blank_record.sdf', 're-export from the drawing program; check for R-groups or query atoms the exporter could not represent')] n_found 0
+  bad+good dims: ['3D', '3D'] RDKit: [False, True]
+  bad+good --record None: geometry title=real_C2F4 n_found 1
+  bad+good --record 1: geometry title=real_C2F4 n_found 1
+  bad+good --record 2: ('RECORD_OUT_OF_RANGE', '--record 2, but /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-review6/docs/review-6/fx/r11/C2F4_two_records_one_bad.sdf holds 1 record(s)') n_found 1
+  v3000 Is3D after RDKit: True dims: ['3D']
+C2F4 V3000                                   kind=geometry got=geometry               prefer=geometry  cost=0 (correct) dev=0.000 sp3=[] real_angles=0 
+  short-header dims: ['']
+C2F4 header line '  3D' (short)              kind=geometry got=drawing                prefer=geometry  cost=2 (recorded discard) dev=0.000 sp3=[] real_angles=0 
+=== 4. 2D header with non-zero z ===
+  RDKit Is3D: True dims ['2D']
+draw threonine, 2D header, wedge z +-0.8     kind=drawing  got=geometry               prefer=drawing   cost=3 (silent wrong geometry) dev=0.504 sp3=['sp3 C1 with 3 neighbours lies flat', 'sp3 C3 with 3 neighbours lies flat'] real_angles=0 
+draw chlorobenzene, 2D header, one z=0.11    kind=drawing  got=drawing                prefer=drawing   cost=0 (correct) dev=0.044 sp3=[] real_angles=0 
+draw chlorobenzene, 2D header, one z=0.3     kind=drawing  got=geometry               prefer=drawing   cost=3 (silent wrong geometry) dev=0.119 sp3=[] real_angles=0 
+real 2-butanol, 2D header, non-flat          kind=geometry got=geometry               prefer=drawing   cost=2 (overrules the 2D header) dev=1.877 sp3=['sp3 C0 with 4 neighbours lies flat', 'sp3 C1 with 4 neighbours lies flat', 'sp3 C3 with 4 neighbours lies flat', 'sp3 C4 with 4 neighbours lies flat'] real_angles=1 

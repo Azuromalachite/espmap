@@ -1,0 +1,31 @@
+== committed sets (pytest)
+........................................................................ [ 88%]
+.................................................................        [100%]
+561 passed, 8 xfailed in 8.51s
+== r11 held-out (scratchpad/r11_probe/extra) + committed, by run_probe.py
+esp_map from /mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-review6/esp_map.py
+
+== committed set: 105 cases  {'ok': 97, 'safe, not preferred': 8}
+  notpref draw_cyclobutane_1.45.mol                     got ambiguous  prefer drawing
+  notpref draw_hexane_squash_1.25_1.5.mol               got ambiguous  prefer drawing
+  notpref draw_thf_znoise_0.05_1.45.mol                 got ambiguous  prefer drawing
+  notpref real_13chd_noH.mol                            got ambiguous  prefer geometry
+  notpref real_cyclopropane_noH.mol                     got ambiguous  prefer geometry
+  notpref real_isoxazole.mol                            got ambiguous  prefer geometry
+  notpref real_isoxazole_noH.mol                        got ambiguous  prefer geometry
+  notpref real_ozone.mol                                got ambiguous  prefer geometry
+
+== held-out: 58 cases  {'ok': 57, 'safe, not preferred': 1}
+  notpref draw_indole_1.25.mol                          got ambiguous  prefer drawing
+== stereo held-out, no flag
+
+TOTAL {'UNSAFE': 17, 'ok': 34}
+== stereo held-out, --require-stereo
+
+TOTAL {'ok': 51}
+tests/test_r11_set.py
+222 passed, 8 xfailed in 2.83s
+tests/test_stereo_set.py
+339 passed in 2.97s
+106
+105

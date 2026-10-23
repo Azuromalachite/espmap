@@ -1,0 +1,59 @@
+/mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-pr73/esp_map.py:1500: RuntimeWarning: Mean of empty slice
+  Y = X - X.mean(axis=0)
+/home/austintw/.venvs/espmap/lib/python3.12/site-packages/numpy/_core/_methods.py:142: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+/mnt/c/Users/user/AppData/Local/Temp/claude/C--Users-user-Documents-espmap/fe5c9cfb-6f3c-4b9b-b67a-3ad1fd947a5d/scratchpad/espmap-pr73/esp_map.py:1501: RuntimeWarning: invalid value encountered in scalar divide
+  lam = np.sort(np.linalg.eigvalsh(Y.T @ Y / len(Y)))[::-1]
+=== 1. meso / chiral pair (tartaric acid) ===
+meso then (R,R): REFUSED   [('MEMBER_STEREO', "record 3 is not record 1's molecule: the stereochemistry in the coordinates differs (record 1 O=C(O)[C@@H](O)[")]
+=== 2. E/Z (pent-2-ene) ===
+E then Z: REFUSED   [('MEMBER_STEREO', "record 3 is not record 1's molecule: the stereochemistry in the coordinates differs (record 1 C/C=C/CC, record")]
+=== 3. same nuclei, different charge / electron count: allyl cation, radical, anion ===
+   record cation: formal charge 1, radicals 0
+   record radical: formal charge 0, radicals 1
+   record anion: formal charge -1, radicals 0
+allyl +1 / radical / -1: REFUSED   [('MEMBER_NOT_3D', 'record 2 is not a 3D geometry')]
+   NOTE: plan returns no charge; the members' own charges are [1, 0, -1]
+ethene then its 1,2-biradical: REFUSED   [('MEMBER_NOT_3D', 'record 2 is not a 3D geometry')]
+=== 4. isotope labels ===
+CD3OH then CH3OH: REFUSED   [('MEMBER_IDENTITY', "record 2 is not record 1's molecule: the connectivity perceived from the coordinates is not the approved struc")]
+CH3OH then CD3OH: REFUSED   [('MEMBER_IDENTITY', "record 1 is not record 1's molecule: the connectivity perceived from the coordinates is not the approved struc"), ('MEMBER_STEREO', 'record 2 is another stereoisomer (CO, record 1 C[OH3].[H])')]
+(R)-ethanol-1-d then (S): REFUSED   [('MEMBER_STEREO', "record 2 is not record 1's molecule: the stereochemistry in the coordinates differs (record 1 [2H][C@H](C)O, r")]
+=== 5. H counts that match, on other atoms (4-methylimidazole tautomers) ===
+4-Me vs 5-Me imidazole: REFUSED   [('MEMBER_IDENTITY', "record 3 is not record 1's molecule: the connectivity perceived from the coordinates is not the approved struc")]
+=== 6. a 2D drawing under a 3D header, with z noise and explicit H ===
+record 2 = depiction + z noise: REFUSED   [('MEMBER_IDENTITY', "record 2 is not record 1's molecule: the connectivity perceived from the coordinates is not the approved struc")]
+=== 7. atom maps that disagree between records ===
+maps 1,2,3 then 3,2,1: ACCEPTED  members=2  identity=CCO
+maps then duplicate maps: ACCEPTED  members=2  identity=CCO
+maps then no maps: ACCEPTED  members=2  identity=CCO
+duplicate maps as record 1 (gate sees it): REFUSED   [('DUPLICATE_ATOM_MAP', 'atom map(s) [5] used more than once')]
+=== 8. an unparseable record in the middle ===
+   RDKit reads: [True, False, True]
+3 records, record 2 unparseable: ACCEPTED  members=2  identity=CCCO
+=== 9. diastereotopic methyls swapped by index in one record ===
+   atom 4 is the pro-R methyl in record 1, pro-R in record 2
+record 2 swaps the two methyls' indices: ACCEPTED  members=2  identity=CC(C)[C@H](C)O
+=== 10. stereo elements RDKit does not perceive from 3D ===
+   allene axis signs over 30 embeddings of C[C@H](O)C=C=CC: +18 / -12
+allene (R,Ra) + (R,Sa): ACCEPTED  members=2  identity=CC=C=C[C@H](C)O
+   TCO helicity signs over 30 embeddings: +16 / -14
+TCO (R,Rp) + (R,Sp): ACCEPTED  members=2  identity=O[C@H]1CC/C=C/CCC1
+   biaryl axis signs over 30 embeddings: +17 / -13
+tetra-ortho biaryl (R,Ra) + (R,Sa): ACCEPTED  members=2  identity=Cc1cccc(C)c1-c1c(C)cccc1[C@H](C)O
+=== 11. GENERATED ensembles from a 3D file: is the file's configuration kept? ===
+   3D SDF: probe SMILES C[C@@H](O)[C@H](N)C(=O)O; stereo_left_open=[]
+generated K=10 from threonine 3D SDF: ACCEPTED  members=9  identity=C[C@@H](O)[C@H](N)C(=O)O
+   member configurations: {'C[C@@H](O)[C@H](N)C(=O)O': 9}
+   XYZ: probe SMILES C[C@@H](O)[C@H](N)C(=O)O; stereo_left_open=[]
+generated K=10 from threonine XYZ: ACCEPTED  members=9  identity=C[C@@H](O)[C@H](N)C(=O)O
+   member configurations: {'C[C@@H](O)[C@H](N)C(=O)O': 9}
+generated K=10 from a 3D allene (R,Ra) SDF: ACCEPTED  members=4  identity=CC=C=C[C@H](C)O
+   allene axis signs among members: [1, -1, -1, 1]
+=== 12. GENERATED from SMILES with an unperceived element: TCO ===
+generated K=10 O[C@H]1CC/C=C/CCC1: ACCEPTED  members=5  identity=O[C@H]1CC/C=C/CCC1
+   TCO helicity among members: [1, -1, 1, -1, -1]
+=== 13. tiny molecules ===
+generated K=3 [H][H]: CRASH     LinAlgError: 0-dimensional array given. Array must be at least two-dimensional
+generated K=3 O: ACCEPTED  members=1  identity=O
+generated K=3 C: ACCEPTED  members=1  identity=C

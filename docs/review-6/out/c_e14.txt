@@ -1,0 +1,3 @@
+pair 6-11 bonds 5 d 3.984 A, beyond Bondi sum by 0.584 A
+pair 7-12 bonds 5 d 3.987 A, beyond Bondi sum by 0.587 A
+pair 5-11 bonds 6 d 4.464 A, beyond Bondi sum by 1.064 A
