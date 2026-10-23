@@ -502,4 +502,4 @@ def test_alie_rks_and_uks_agree_on_a_closed_shell():
     pts = np.array([[0.0, 0.0, 3.06], [0.0, 2.9, -2.0], [1.5, 1.0, 1.0]])
     a = em.alie_at_points(mol, rks, pts)
     b = em.alie_at_points(mol, uks, pts)
-    assert np.all(a > 0) and np.allclose(a, b, atol=1e-6)
+    assert np.all(a > 0) and np.allclose(a, b, atol=1e-8)          # p4-spec 10.2
