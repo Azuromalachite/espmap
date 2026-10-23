@@ -234,7 +234,13 @@ built from the same kind of literature but not shared until ALIE is pushed.
 
 1. **One-orbital identity:** for any system with a single occupied orbital
    (H₂ or He in HF), Ī(r) = −ε₁ at every vertex, to 1e-10, in any basis.
-   This is exact, and catches a wrong occupation weight or a missing |·|.
+   This is exact, and catches a wrong sign on ε. It does **not** catch a
+   wrong occupation weight: with one orbital, or equal occupations, a
+   constant weight cancels in the ratio (review 6 S18). The selftest's
+   open-shell check does: the OH radical (UKS), whose α and β orbitals
+   differ, against the definition evaluated directly per spin, at 40 points
+   in chunks of 16, so a dropped β channel, β given α's energies or a
+   skipped chunk fails.
 2. **RKS vs UKS:** a closed-shell molecule computed as UKS with spin 0 gives
    the same Ī as RKS, to 1e-8.
 3. **Positivity:** Ī > 0 at every vertex of a bound system, and an unbound
