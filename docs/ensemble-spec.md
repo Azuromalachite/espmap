@@ -138,7 +138,11 @@ Per member, recorded:
 ## 4. The ensemble record (`espmap.ensemble/1`)
 
 The schema is `docs/ensemble-schema.json`, reviewed by a consumer (Arrowfield,
-against the Atlas's `spa.espmap_ensemble/0`) before the runner was written.
+against the Atlas's `spa.espmap_ensemble/0`) before the runner was written, and
+**frozen with v0.3.0**: a change is `espmap.ensemble/2`, never an edit in place.
+Its status fields say what is measured and what is not: `folded_rule` and the
+selection's dedup threshold are measured (§8.2); the convergence tolerance is
+provisional.
 Members are labelled `conf_00`, `conf_01`, ... in selection order, zero-based,
 so files already written under the Atlas's index stay valid. The Atlas's
 `protocol` string is its own directory label and is not this record's

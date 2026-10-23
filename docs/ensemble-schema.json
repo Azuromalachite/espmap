@@ -1,8 +1,8 @@
 {
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://github.com/Azuromalachite/espmap/docs/ensemble-schema.json",
- "title": "espmap.ensemble/1 (DRAFT for review, step 4 of docs/ensemble-spec.md)",
- "description": "One conformer ensemble of one molecule, every member an ordinary espmap.record/1 written beside this file and listed with its sha256, so an archive can check each member without trusting this record. Field names follow the Atlas's spa.espmap_ensemble/0 index where the two describe the same thing (marked 'Atlas:'). Additions from review 6's 'before espmap.ensemble/1 is frozen' list are marked 'R6:'. NOT the Atlas's 'protocol': there it is a string, the consumer's own directory label (e.g. b3lyp_def2-svp_gas_espmap-v0.2.1), derived from analysis and espmap.version and never stored here. Here 'protocol' is how the members were chosen. Do not map one onto the other.",
+ "title": "espmap.ensemble/1",
+ "description": "Frozen with espmap v0.3.0: any change to this schema is a new version (espmap.ensemble/2), never an edit in place. One conformer ensemble of one molecule, every member an ordinary espmap.record/1 written beside this file and listed with its sha256, so an archive can check each member without trusting this record. Field names follow the Atlas's spa.espmap_ensemble/0 index where the two describe the same thing (marked 'Atlas:'). Additions from review 6's 'before espmap.ensemble/1 is frozen' list are marked 'R6:'. NOT the Atlas's 'protocol': there it is a string, the consumer's own directory label (e.g. b3lyp_def2-svp_gas_espmap-v0.2.1), derived from analysis and espmap.version and never stored here. Here 'protocol' is how the members were chosen. Do not map one onto the other.",
  "type": "object",
  "additionalProperties": false,
  "required": [
@@ -583,7 +583,7 @@
   },
   "convergence": {
    "type": "object",
-   "description": "spec section 5; shape settled with the runner"
+   "description": "spec section 5. conv_tol_kcal is PROVISIONAL (1 kcal/mol, not yet measured) and the record says so in status; converged is null when there are too few members to judge"
   },
   "kish_n": {
    "type": [

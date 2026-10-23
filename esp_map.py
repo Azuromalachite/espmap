@@ -2304,7 +2304,10 @@ def plan_ensemble(smiles=None, path=None, ensemble=None, charge=None, spin=0,
 
 
 ENSEMBLE_SCHEMA = "espmap.ensemble/1"
-# Provisional until the spec's section 8 measures them; the record says so.
+# CONV_TOL_KCAL is the one ensemble constant still PROVISIONAL: section 5's
+# convergence tolerance has not been measured, and the record says so
+# (convergence.status). The thresholds that decide membership are measured
+# (DEDUP_RMSD, CONTACT_MIN_BONDS: section 8.2).
 CONV_TOL_KCAL = 1.0
 BOOTSTRAP_N = 1000
 BOLTZMANN_T = 298.15
@@ -2729,7 +2732,8 @@ def ensemble_main(a, argv):
     pr = plan["protocol"]
     print(f"ensemble of {label}: {pr['k_obtained']} member(s) "
           f"({pr['source']}{', ' + str(pr['k_requested']) + ' requested' if pr['source'] == 'generated' else ''}), "
-          f"{plan['folded_count']} folded under the provisional contact rule")
+          f"{plan['folded_count']} folded (heavy-atom contact >= {CONTACT_MIN_BONDS} bonds "
+          f"apart, Bondi + {CONTACT_SLACK} A; measured, ensemble-spec 8.2)")
     if a.check:
         return 0
     rec = run_ensemble(plan, a.ensemble_dir, member_argv(argv), subject=a.subject)
