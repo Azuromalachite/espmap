@@ -428,6 +428,19 @@ def _projected_kind(mol, X):
         return np.linalg.svd(Y - Y.mean(axis=0))[2][-1]
     normals = [normal(X)] + [normal(np.delete(X, k, axis=0)) for k in range(len(X))
                              if len(X) > 3]
+    # Probe round 5: two or three lifted atoms on a small tilted drawing move
+    # every fitted plane. In a small file, try the plane through every triple
+    # of atoms: three atoms left on the page define it exactly. Every bond
+    # must still project evenly, so trying more planes cannot make a real
+    # skeleton look drawn (its C-N or C-O bonds are shorter than any drawing
+    # length, and projection only shortens). Larger files need none of this:
+    # a few lifted atoms barely move their fit.
+    if len(X) <= PROJECTED_TRIPLES_MAX:
+        from itertools import combinations
+        T = np.array(list(combinations(range(len(X)), 3)))
+        N = np.cross(X[T[:, 1]] - X[T[:, 0]], X[T[:, 2]] - X[T[:, 0]])
+        size = np.linalg.norm(N, axis=1)
+        normals += list(N[size > 1e-6] / size[size > 1e-6, None])
     if not (even(np.linalg.norm(D[:, :2], axis=1))
             or any(even(np.sqrt(np.maximum((D ** 2).sum(1) - (D @ n) ** 2, 0.0))) for n in normals)):
         return None
@@ -439,6 +452,10 @@ def _projected_kind(mol, X):
 # writes them equal to the last decimal; real skeletons differ by 4 % or more
 # (C-C 1.53 vs C-N 1.47) before projection shortens them unevenly.
 PROJECTED_TOL = 0.01
+# Up to this many atoms, _projected_kind tries the plane through every atom
+# triple (2024 planes at 24 atoms, milliseconds); above it a few lifted atoms
+# barely move the fitted plane (a 160-atom drawing with two lifts is caught).
+PROJECTED_TRIPLES_MAX = 24
 # A file is flat when every atom lies within this of its best-fit plane (A).
 # A real non-planar molecule leaves it by far more (a CH2's hydrogens by
 # ~0.9, ammonia's N by ~0.3); a converter's z noise stays well inside it.
