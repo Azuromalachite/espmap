@@ -1,0 +1,1775 @@
+{
+ "about": "Build the --require-stereo hostile input set: structures that a rule\nrequiring fully specified stereochemistry must sort into \"pass\" (every real\nstereo element fixed, or none) and \"block\" (a real stereo element whose\nconfiguration the input does not fix), each with what the gate should do.",
+ "severity": {
+  "silent arbitrary isomer": 3,
+  "BLOCK": 1,
+  "correct": 0
+ },
+ "cases": [
+  {
+   "name": "smi_benzene",
+   "route": "smiles",
+   "input": "c1ccccc1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "no stereo element"
+  },
+  {
+   "name": "smi_ethanol",
+   "route": "smiles",
+   "input": "CCO",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "no stereo element"
+  },
+  {
+   "name": "smi_3pentanol",
+   "route": "smiles",
+   "input": "CCC(O)CC",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "two identical ethyls: not a stereocentre"
+  },
+  {
+   "name": "smi_isobutylene",
+   "route": "smiles",
+   "input": "CC(C)=C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "two identical methyls on one end: no E/Z"
+  },
+  {
+   "name": "smi_propene",
+   "route": "smiles",
+   "input": "CC=C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "a terminal =CH2: no E/Z"
+  },
+  {
+   "name": "smi_tetramethylethylene",
+   "route": "smiles",
+   "input": "CC(C)=C(C)C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "identical pairs on both ends: no E/Z"
+  },
+  {
+   "name": "smi_cyclohexene",
+   "route": "smiles",
+   "input": "C1CCC=CC1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "a double bond in a six-ring is always cis"
+  },
+  {
+   "name": "smi_cycloheptene",
+   "route": "smiles",
+   "input": "C1CCCC=CC1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "a seven-ring double bond is cis in practice"
+  },
+  {
+   "name": "smi_butadiene",
+   "route": "smiles",
+   "input": "C=CC=C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "s-cis/s-trans are conformers, not stereoisomers"
+  },
+  {
+   "name": "smi_nmethylacetamide",
+   "route": "smiles",
+   "input": "CNC(C)=O",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "amide rotamers are conformers, not stereoisomers"
+  },
+  {
+   "name": "smi_triethylamine_like",
+   "route": "smiles",
+   "input": "CCN(C)CCC",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "a tertiary amine inverts in microseconds: not a stereocentre"
+  },
+  {
+   "name": "smi_cyclohexanone_4tbu_sym",
+   "route": "smiles",
+   "input": "CC(C)(C)C1CCC(=O)CC1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "C4 sees two identical ring arms: no stereo"
+  },
+  {
+   "name": "smi_stereo_mark_on_nothing",
+   "route": "smiles",
+   "input": "C[C@H](C)O",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "an @ on an atom with two methyls marks nothing real"
+  },
+  {
+   "name": "smi_ala_S",
+   "route": "smiles",
+   "input": "C[C@H](N)C(=O)O",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "one centre, specified"
+  },
+  {
+   "name": "smi_ala_unspec",
+   "route": "smiles",
+   "input": "CC(N)C(=O)O",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "one centre unspecified; the enantiomers' ESP is mirrored, but the flag promises a fixed isomer"
+  },
+  {
+   "name": "smi_ala_explicitH",
+   "route": "smiles",
+   "input": "[H][C@](C)(N)C(=O)O",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "specified with an explicit H in the SMILES"
+  },
+  {
+   "name": "smi_threonine_full",
+   "route": "smiles",
+   "input": "C[C@@H](O)[C@H](N)C(=O)O",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "two centres, both specified"
+  },
+  {
+   "name": "smi_threonine_half",
+   "route": "smiles",
+   "input": "C[C@@H](O)C(N)C(=O)O",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "one of two centres specified: diastereomers differ"
+  },
+  {
+   "name": "smi_threonine_none",
+   "route": "smiles",
+   "input": "CC(O)C(N)C(=O)O",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "two centres unspecified: four stereoisomers, two diastereomer pairs"
+  },
+  {
+   "name": "smi_tartaric_meso",
+   "route": "smiles",
+   "input": "O[C@@H](C(=O)O)[C@H](O)C(=O)O",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "meso tartaric acid: both centres specified"
+  },
+  {
+   "name": "smi_tartaric_unspec",
+   "route": "smiles",
+   "input": "OC(C(=O)O)C(O)C(=O)O",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "meso or (R,R)/(S,S): different compounds"
+  },
+  {
+   "name": "smi_trihydroxyglutaric_C3_unspec",
+   "route": "smiles",
+   "input": "O[C@@H](C(=O)O)C(O)[C@H](O)C(=O)O",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "C2 and C4 fixed meso-like; C3 is pseudo-asymmetric (r/s) and unspecified"
+  },
+  {
+   "name": "smi_trihydroxyglutaric_full",
+   "route": "smiles",
+   "input": "O[C@@H](C(=O)O)[C@@H](O)[C@H](O)C(=O)O",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "every centre specified, C3 included"
+  },
+  {
+   "name": "smi_cholesterol_full",
+   "route": "smiles",
+   "input": "C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "eight centres, all specified"
+  },
+  {
+   "name": "smi_cholesterol_none",
+   "route": "smiles",
+   "input": "CC(CCCC(C)C)C1CCC2C1(CCC3C2CC=C4C3(CCC(C4)O)C)C",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "eight centres unspecified: 256 stereoisomers"
+  },
+  {
+   "name": "smi_glucose_open_partial",
+   "route": "smiles",
+   "input": "OC[C@@H](O)[C@@H](O)C(O)[C@H](O)C=O",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "one of four centres left unspecified"
+  },
+  {
+   "name": "smi_14dimethylcyclohexane_unspec",
+   "route": "smiles",
+   "input": "CC1CCC(C)CC1",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "cis and trans are different compounds, though neither carbon is a CIP centre"
+  },
+  {
+   "name": "smi_14dimethylcyclohexane_trans",
+   "route": "smiles",
+   "input": "C[C@H]1CC[C@@H](C)CC1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "ring stereo specified"
+  },
+  {
+   "name": "smi_12dimethylcyclohexane_cis",
+   "route": "smiles",
+   "input": "C[C@@H]1CCCC[C@@H]1C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "cis, meso: specified"
+  },
+  {
+   "name": "smi_decalin_unspec",
+   "route": "smiles",
+   "input": "C1CCC2CCCCC2C1",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "cis- or trans-decalin"
+  },
+  {
+   "name": "smi_decalin_trans",
+   "route": "smiles",
+   "input": "C1CC[C@H]2CCCC[C@@H]2C1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "ring junction specified"
+  },
+  {
+   "name": "smi_sulfoxide_unspec",
+   "route": "smiles",
+   "input": "CS(=O)CC",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "a sulfoxide S is a configurationally stable stereocentre"
+  },
+  {
+   "name": "smi_sulfoxide_spec",
+   "route": "smiles",
+   "input": "C[S@](=O)CC",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "sulfoxide specified"
+  },
+  {
+   "name": "smi_phosphine_unspec",
+   "route": "smiles",
+   "input": "CP(CC)c1ccccc1",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "a phosphine P(III) inverts only above ~30 kcal/mol: stable"
+  },
+  {
+   "name": "smi_phosphine_spec",
+   "route": "smiles",
+   "input": "C[P@](CC)c1ccccc1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "phosphine specified"
+  },
+  {
+   "name": "smi_ammonium_unspec",
+   "route": "smiles",
+   "input": "C[N+](CC)(CCC)CCCC",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "a quaternary N with four different groups cannot invert"
+  },
+  {
+   "name": "smi_ammonium_spec",
+   "route": "smiles",
+   "input": "C[N@+](CC)(CCC)CCCC",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "quaternary N specified"
+  },
+  {
+   "name": "smi_troger_unspec",
+   "route": "smiles",
+   "input": "Cc1ccc2c(c1)CN1Cc3cc(C)ccc3N(C1)C2",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "Troeger's base: bridgehead N cannot invert"
+  },
+  {
+   "name": "smi_aziridine_N",
+   "route": "smiles",
+   "input": "CN1CC1(C)C",
+   "kind": "either",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": null,
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "the N is the only candidate; an N-alkyl aziridine inverts at roughly 17-19 kcal/mol, slowly but at room temperature: whether it counts is a judgement call"
+  },
+  {
+   "name": "smi_aziridine_C_unspec",
+   "route": "smiles",
+   "input": "CN1CC1C",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "the ring carbon is a real stereocentre, unspecified"
+  },
+  {
+   "name": "smi_2butene_unspec",
+   "route": "smiles",
+   "input": "CC=CC",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "E and Z are different compounds"
+  },
+  {
+   "name": "smi_2butene_E",
+   "route": "smiles",
+   "input": "C/C=C/C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "E specified"
+  },
+  {
+   "name": "smi_2butene_Z",
+   "route": "smiles",
+   "input": "C/C=C\\C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "Z specified"
+  },
+  {
+   "name": "smi_hexadiene_half",
+   "route": "smiles",
+   "input": "C/C=C/C=CC",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "one of two E/Z bonds specified"
+  },
+  {
+   "name": "smi_hexadiene_full",
+   "route": "smiles",
+   "input": "C/C=C/C=C/C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "both specified"
+  },
+  {
+   "name": "smi_cyclooctene_unspec",
+   "route": "smiles",
+   "input": "C1CCCC=CCC1",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "an eight-ring double bond can be E: trans-cyclooctene is isolable"
+  },
+  {
+   "name": "smi_cyclooctene_Z",
+   "route": "smiles",
+   "input": "C1CCC/C=C\\CC1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "cis-cyclooctene specified"
+  },
+  {
+   "name": "smi_cyclodecene_unspec",
+   "route": "smiles",
+   "input": "C1CCCCC=CCCC1",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "a ten-ring double bond: E and Z both stable"
+  },
+  {
+   "name": "smi_oxime_unspec",
+   "route": "smiles",
+   "input": "CC(=NO)CC",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "oxime E/Z isomers are separable"
+  },
+  {
+   "name": "smi_oxime_E",
+   "route": "smiles",
+   "input": "CC/C(C)=N/O",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "oxime specified"
+  },
+  {
+   "name": "smi_nmethylimine_unspec",
+   "route": "smiles",
+   "input": "CC(=NC)CC",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "an N-alkyl ketimine has E/Z isomers"
+  },
+  {
+   "name": "smi_azobenzene_unspec",
+   "route": "smiles",
+   "input": "c1ccc(cc1)N=Nc1ccccc1",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "cis- and trans-azobenzene"
+  },
+  {
+   "name": "smi_azobenzene_E",
+   "route": "smiles",
+   "input": "c1ccc(cc1)/N=N/c1ccccc1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "trans-azobenzene specified"
+  },
+  {
+   "name": "smi_NH_imine",
+   "route": "smiles",
+   "input": "CC(=N)CC",
+   "kind": "either",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": null,
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "an N-H imine's E/Z interconvert quickly (tautomerism): whether it counts is a judgement call"
+  },
+  {
+   "name": "smi_enolate_unspec",
+   "route": "smiles",
+   "input": "CC=C([O-])CC",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "E and Z enolates are different species"
+  },
+  {
+   "name": "smi_enolate_Z",
+   "route": "smiles",
+   "input": "C/C=C(/[O-])CC",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "enolate specified"
+  },
+  {
+   "name": "smi_allene_unspec",
+   "route": "smiles",
+   "input": "CC=C=CC",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "1,3-dimethylallene is axially chiral: two enantiomers"
+  },
+  {
+   "name": "smi_allene_achiral",
+   "route": "smiles",
+   "input": "CC(C)=C=CC",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "two identical methyls on one end: no axial chirality"
+  },
+  {
+   "name": "smi_butatriene_unspec",
+   "route": "smiles",
+   "input": "CC=C=C=CC",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "an even cumulene has cis/trans isomers"
+  },
+  {
+   "name": "smi_binol",
+   "route": "smiles",
+   "input": "Oc1ccc2ccccc2c1-c1c(O)ccc2ccccc12",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "BINOL's atropisomers are configurationally stable (barrier ~37 kcal/mol); SMILES cannot fix them"
+  },
+  {
+   "name": "smi_biphenyl_ortho1",
+   "route": "smiles",
+   "input": "Cc1ccccc1-c1ccccc1",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "one ortho methyl: rotation is free at room temperature"
+  },
+  {
+   "name": "smi_nitro_biphenyl",
+   "route": "smiles",
+   "input": "Cc1cccc([N+](=O)[O-])c1-c1c(C)cccc1[N+](=O)[O-]",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "6,6'-dimethyl-2,2'-dinitrobiphenyl: the classic resolved atropisomer; SMILES cannot fix it"
+  },
+  {
+   "name": "smi_tetramethylbiphenyl",
+   "route": "smiles",
+   "input": "Cc1cccc(C)c1-c1c(C)cccc1C",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "four ortho methyls, but each ring is symmetric: no atropisomers"
+  },
+  {
+   "name": "smi_helicene6",
+   "route": "smiles",
+   "input": "c1ccc2c(c1)ccc1ccc3ccc4ccc5ccccc5c4c3c12",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "[6]helicene: P and M helices, barrier ~36 kcal/mol; SMILES cannot fix the helix"
+  },
+  {
+   "name": "smi_ethylidene_cyclohexane",
+   "route": "smiles",
+   "input": "CC=C1CCC(C)CC1",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "1-ethylidene-4-methylcyclohexane is axially chiral, with no stereocentre and no E/Z"
+  },
+  {
+   "name": "smi_camphor_unspec",
+   "route": "smiles",
+   "input": "CC1(C)C2CCC1(C)C(=O)C2",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "camphor's two bridgeheads: (+) and (-) camphor"
+  },
+  {
+   "name": "smi_camphor_spec",
+   "route": "smiles",
+   "input": "C[C@@]12CC[C@@H](C1(C)C)CC2=O",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "(1R,4R)-camphor specified"
+  },
+  {
+   "name": "smi_spiro_unspec",
+   "route": "smiles",
+   "input": "CC1CC2(C1)CC(C)C2",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "SMILES",
+   "why": "2,6-dimethylspiro[3.3]heptane is axially chiral: two enantiomers"
+  },
+  {
+   "name": "smi_isotope_unspec",
+   "route": "smiles",
+   "input": "CC([2H])O",
+   "kind": "either",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "a centre made only by an isotope: the ESP cannot see it, espmap ignores isotopes"
+  },
+  {
+   "name": "smi_isotope_spec",
+   "route": "smiles",
+   "input": "C[C@H]([2H])O",
+   "kind": "either",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "SMILES",
+   "why": "isotopic centre specified"
+  },
+  {
+   "name": "draw_ala_wedged",
+   "route": "file",
+   "input": "draw_ala_wedged.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O",
+   "why": "wedges fix the centre"
+  },
+  {
+   "name": "draw_ala_plain",
+   "route": "file",
+   "input": "draw_ala_plain.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O, stereo stripped",
+   "why": "no wedge: the centre is not fixed"
+  },
+  {
+   "name": "draw_threonine_wedged",
+   "route": "file",
+   "input": "draw_threonine_wedged.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit 2D depiction of C[C@@H](O)[C@H](N)C(=O)O",
+   "why": "both centres wedged"
+  },
+  {
+   "name": "draw_threonine_plain",
+   "route": "file",
+   "input": "draw_threonine_plain.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@@H](O)[C@H](N)C(=O)O, stereo stripped",
+   "why": "no wedges on two centres"
+  },
+  {
+   "name": "draw_2butene_E",
+   "route": "file",
+   "input": "draw_2butene_E.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit 2D depiction of C/C=C/C",
+   "why": "a 2D double bond is drawn E or Z: the drawing fixes it"
+  },
+  {
+   "name": "draw_2butene_either",
+   "route": "file",
+   "input": "draw_2butene_either.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C/C=C/C",
+   "why": "a crossed ('either') double bond says E/Z is unknown"
+  },
+  {
+   "name": "draw_2butene_stripped",
+   "route": "file",
+   "input": "draw_2butene_stripped.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of CC=CC, stereo stripped",
+   "why": "drawn with no E/Z: RDKit writes the bond as 'either'"
+  },
+  {
+   "name": "draw_ala_wavy",
+   "route": "file",
+   "input": "draw_ala_wavy.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O, stereo stripped",
+   "why": "a wavy bond at the centre says its configuration is unknown"
+  },
+  {
+   "name": "draw_sulfoxide_plain",
+   "route": "file",
+   "input": "draw_sulfoxide_plain.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[S@](=O)CC, stereo stripped",
+   "why": "a sulfoxide drawn without a wedge"
+  },
+  {
+   "name": "draw_cyclooctene_Z",
+   "route": "file",
+   "input": "draw_cyclooctene_Z.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit 2D depiction of C1CCC/C=C\\CC1",
+   "why": "an eight-ring double bond drawn cis"
+  },
+  {
+   "name": "draw_14dmch_plain",
+   "route": "file",
+   "input": "draw_14dmch_plain.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H]1CC[C@@H](C)CC1, stereo stripped",
+   "why": "ring stereo drawn without wedges"
+  },
+  {
+   "name": "draw3d_ala_plain",
+   "route": "file",
+   "input": "draw3d_ala_plain.mol",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O, stereo stripped, 3D header, z = 0",
+   "why": "a drawing under a 3D header with every z = 0 and no wedges: the flat centre fixes nothing"
+  },
+  {
+   "name": "draw_cyclohexene_crossed",
+   "route": "file",
+   "input": "draw_cyclohexene_crossed.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit 2D depiction of C1CCC=CC1",
+   "why": "a crossed bond in a six-ring: no E/Z exists, so the 'either' mark says nothing"
+  },
+  {
+   "name": "draw_ethanol_wavy",
+   "route": "file",
+   "input": "draw_ethanol_wavy.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit 2D depiction of CCO",
+   "why": "a wavy bond from a CH2: no stereocentre there"
+  },
+  {
+   "name": "draw_ala_wedged_H",
+   "route": "file",
+   "input": "draw_ala_wedged_H.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit 2D depiction of C[C@H](N)C(=O)O",
+   "why": "explicit hydrogens drawn, the wedge on the C-H bond"
+  },
+  {
+   "name": "draw3d_crotonaldehyde_E",
+   "route": "file",
+   "input": "draw3d_crotonaldehyde_E.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit 2D depiction of C/C=C/C=O, 3D header, z = 0",
+   "why": "a drawing under a 3D header: the drawn double bond still reads E. Two element pairs, so the R11 rule calls it a drawing (2-butene alone is undecidable there)"
+  },
+  {
+   "name": "geo_ala_mol",
+   "route": "file",
+   "input": "geo_ala_mol.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C[C@H](N)C(=O)O, as .mol",
+   "why": "3D coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_threonine_mol",
+   "route": "file",
+   "input": "geo_threonine_mol.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C[C@@H](O)[C@H](N)C(=O)O, as .mol",
+   "why": "3D coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_2butene_E_mol",
+   "route": "file",
+   "input": "geo_2butene_E_mol.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C/C=C/C, as .mol",
+   "why": "3D coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_sulfoxide_mol",
+   "route": "file",
+   "input": "geo_sulfoxide_mol.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C[S@](=O)CC, as .mol",
+   "why": "3D coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_14dmch_trans_mol",
+   "route": "file",
+   "input": "geo_14dmch_trans_mol.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C[C@H]1CC[C@@H](C)CC1, as .mol",
+   "why": "3D coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_cyclooctene_Z_mol",
+   "route": "file",
+   "input": "geo_cyclooctene_Z_mol.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C1CCC/C=C\\CC1, as .mol",
+   "why": "3D coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_ala_xyz",
+   "route": "file",
+   "input": "geo_ala_xyz.xyz",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C[C@H](N)C(=O)O, as .xyz",
+   "why": "an XYZ file's coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_ala_pdb",
+   "route": "file",
+   "input": "geo_ala_pdb.pdb",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C[C@H](N)C(=O)O, as .pdb",
+   "why": "a PDB file's coordinates fix every stereo element"
+  },
+  {
+   "name": "atoms_ala",
+   "route": "atoms",
+   "input": "atoms_ala.atoms",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "--atoms string from ETKDG + MMFF94s of C[C@H](N)C(=O)O",
+   "why": "--atoms coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_2butene_E_xyz",
+   "route": "file",
+   "input": "geo_2butene_E_xyz.xyz",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C/C=C/C, as .xyz",
+   "why": "an XYZ file's coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_2butene_E_pdb",
+   "route": "file",
+   "input": "geo_2butene_E_pdb.pdb",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C/C=C/C, as .pdb",
+   "why": "a PDB file's coordinates fix every stereo element"
+  },
+  {
+   "name": "atoms_2butene_E",
+   "route": "atoms",
+   "input": "atoms_2butene_E.atoms",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "--atoms string from ETKDG + MMFF94s of C/C=C/C",
+   "why": "--atoms coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_12dmch_trans_xyz",
+   "route": "file",
+   "input": "geo_12dmch_trans_xyz.xyz",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C[C@@H]1CCCC[C@H]1C, as .xyz",
+   "why": "an XYZ file's coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_12dmch_trans_pdb",
+   "route": "file",
+   "input": "geo_12dmch_trans_pdb.pdb",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C[C@@H]1CCCC[C@H]1C, as .pdb",
+   "why": "a PDB file's coordinates fix every stereo element"
+  },
+  {
+   "name": "atoms_12dmch_trans",
+   "route": "atoms",
+   "input": "atoms_12dmch_trans.atoms",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "--atoms string from ETKDG + MMFF94s of C[C@@H]1CCCC[C@H]1C",
+   "why": "--atoms coordinates fix every stereo element"
+  },
+  {
+   "name": "geo_cholesterol_sdf",
+   "route": "file",
+   "input": "geo_cholesterol_sdf.sdf",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C, as .sdf",
+   "why": "eight centres fixed by 3D coordinates"
+  },
+  {
+   "name": "geo_allene_mol",
+   "route": "file",
+   "input": "geo_allene_mol.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of CC=C=CC, as .mol",
+   "why": "a 3D allene: the coordinates fix the axis, which no SMILES can"
+  },
+  {
+   "name": "geo_binol_mol",
+   "route": "file",
+   "input": "geo_binol_mol.mol",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "RDKit ETKDG + MMFF94s of Oc1ccc2ccccc2c1-c1c(O)ccc2ccccc12, as .mol",
+   "why": "a 3D BINOL: the coordinates fix the atropisomer"
+  },
+  {
+   "name": "sdf_record1_geometry",
+   "route": "file",
+   "input": "two_records.sdf",
+   "kind": "specified",
+   "allowed": [
+    "pass",
+    "block"
+   ],
+   "prefer": "pass",
+   "outcomes": {
+    "pass": "correct",
+    "block": "BLOCK"
+   },
+   "source": "record 1: ETKDG + MMFF94s alanine; record 2: a plain 2D drawing",
+   "why": "--record 1 picks the 3D geometry, which fixes the centre",
+   "record": 1
+  },
+  {
+   "name": "sdf_record2_drawing",
+   "route": "file",
+   "input": "two_records.sdf",
+   "kind": "unspecified",
+   "allowed": [
+    "block"
+   ],
+   "prefer": "block",
+   "outcomes": {
+    "block": "correct",
+    "pass": "silent arbitrary isomer"
+   },
+   "source": "record 1: ETKDG + MMFF94s alanine; record 2: a plain 2D drawing",
+   "why": "--record 2 picks the drawing, whose centre has no wedge",
+   "record": 2
+  }
+ ]
+}
