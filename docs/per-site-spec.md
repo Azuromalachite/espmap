@@ -3,7 +3,9 @@
 Status: **revision 4. P0, P2 (#24), P1 (#27) and caller-defined sites (#28)
 are merged; §6 now describes the record as written, and
 `docs/record-schema.json` is its key tree, checked against a real record in
-both directions (review 4 N5). P3's fixture records are in review (§8).** This is the
+both directions (review 4 N5). P3's six fixture records are in
+`fixtures/records/` (#44), released as v0.2.0 on 2026-10-23; P4 is next
+(§8).** This is the
 contract that espmap's `--json` will grow into and that Arrowfield's v0.0
 fixtures are written against. It extends item 1 of `docs/roadmap-review.md`
 ("extend `--json` with shape descriptors") from whole-molecule numbers to
