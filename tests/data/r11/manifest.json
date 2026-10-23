@@ -2204,6 +2204,125 @@
    "why": "N(SiH3)3 is planar at N in reality: a flat N between heavy atoms is not a drawing"
   },
   {
+   "file": "draw_methylpropanoate_atom3_up_0.35_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 3 lifted 0.35 A out of the plane",
+   "why": "an edited drawing: not flat any more, but every bond projects to one drawing length"
+  },
+  {
+   "file": "draw_methylpropanoate_atom3_up_0.8_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 3 lifted 0.8 A out of the plane",
+   "why": "an edited drawing: not flat any more, but every bond projects to one drawing length"
+  },
+  {
+   "file": "draw_chlorobenzene_atom0_up_0.5_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 0 lifted 0.5 A out of the plane",
+   "why": "an edited drawing: not flat any more, but every bond projects to one drawing length"
+  },
+  {
+   "file": "draw_aminopropanol_atom1_up_1.0_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, atom 1 lifted 1.0 A out of the plane",
+   "why": "an edited drawing: not flat any more, but every bond projects to one drawing length"
+  },
+  {
+   "file": "real_piperidine_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, not flattened",
+   "why": "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A"
+  },
+  {
+   "file": "real_diethylamine_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, not flattened",
+   "why": "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A"
+  },
+  {
+   "file": "real_tbutylamine_noH_3d.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, not flattened",
+   "why": "a real non-flat skeleton whose C-C and C-N lengths sit near 1.5 A"
+  },
+  {
    "file": "draw2d_threonine_wedge_z_1.5.mol",
    "kind": "drawing",
    "allowed": [
