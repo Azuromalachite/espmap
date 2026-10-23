@@ -1599,9 +1599,19 @@ def verify_mapping(spec, probe, reference=False, tol=1e-3):
 # docs/ensemble-spec.md sections 1-3, written against tests/data/ensemble.
 # Everything here runs BEFORE any SCF: an ensemble that mixes molecules,
 # tautomers or stereoisomers is refused here, not averaged later.
-CONTACT_MIN_BONDS = 5          # a 1,5 pair of a gauche kink is 4 bonds apart
+# Measured in docs/ensemble-spec.md section 8.2 (bench/ensemble_rdkit.jsonl,
+# bench/ensemble_dft.jsonl). Contacts at 5 bonds are the g+g- and cis-alkene
+# neighbourhoods (53 of 58 contacts over 100 C18 conformers); every 5-bond-only
+# conformer computed had genus 0, and >= 7 bonds missed conformer 70 (genus 2).
+# Over 17 conformers with a measured genus, >= 6 bonds misses no folded one.
+CONTACT_MIN_BONDS = 6          # heavy-atom pairs at least this many bonds apart
 CONTACT_SLACK = 0.5            # A over the Bondi sum
-DEDUP_RMSD = 0.5               # A, heavy atoms; provisional until section 8
+# 0.5 A merged real conformers from n-pentane on, and every merged pair
+# differed in a site mean by 0.48-0.86 kcal/mol, beyond the 0.15 grid row;
+# 0.35 A lost no backbone-torsion class in the chains measured.
+DEDUP_RMSD = 0.35              # A, heavy atoms
+CONTACT_RULE_STATUS = "measured: docs/ensemble-spec.md 8.2"
+DEDUP_STATUS = "measured: docs/ensemble-spec.md 8.2"
 N_EMBED = 100
 SELECTION_RULES = ("rg_spread",)
 

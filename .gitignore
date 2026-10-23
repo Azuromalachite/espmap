@@ -9,3 +9,4 @@ venv/
 *.png
 !docs/*.png
 *.cube
+bench/ensemble_dft_work/
