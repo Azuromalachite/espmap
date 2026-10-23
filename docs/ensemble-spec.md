@@ -306,6 +306,22 @@ descriptive numbers are reported, that side's conformational uncertainty is
 comparison carries `CONFORMERS_NOT_SAMPLED`. Refusing such a comparison
 belongs to a teaching layer, not to the measurement.
 
+Two more gates on `resolved` (review 7), each an invariant of the code, each
+stated in `not_resolvable` when it applies:
+- **A site must have a value on every member under both rules** (R7-4). A
+  folded member can bury a site. Dropping it would shrink n silently, so
+  such a site is `evaluable: false`, `not_evaluable` names the side,
+  conformer and rule, and its numbers are reported unresolved.
+- **An ensemble side's convergence must be true** (R7-5). `false`, or `null`
+  (not judgeable, as with K = 2), reports the numbers unresolved: "ensemble
+  convergence not established".
+
+Before anything is compared, both files are validated (R7-8). An unknown
+schema, a foreign file or a missing field is `COMPARE_SCHEMA_UNSUPPORTED`.
+A member whose sha256, analysis_key or geometry differs from what its parent
+lists is `COMPARE_MEMBER_CHANGED` or `COMPARE_MEMBER_MISMATCH`.
+`docs/compare-schema.json` is the record's JSON Schema.
+
 ## 7. Hostile cases, written first
 
 These 29 cases become `tests/data/ensemble/` with a manifest (allowed outcomes, the
