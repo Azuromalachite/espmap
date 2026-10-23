@@ -1,0 +1,200 @@
+{
+ "head": "",
+ "espmap_version": "0.2.1",
+ "cases": {
+  "E1": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 0.1,
+   "k": [
+    10,
+    1
+   ],
+   "excluded": 0,
+   "folded": 0,
+   "relabelled": 0,
+   "converged": null,
+   "not_converged": 0,
+   "not_judgeable": 36,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": null,
+    "unbiased": true
+   }
+  },
+  "E2": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 0.3,
+   "k": [
+    10,
+    2
+   ],
+   "excluded": 0,
+   "folded": 0,
+   "relabelled": 0,
+   "converged": null,
+   "not_converged": 0,
+   "not_judgeable": 48,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": null,
+    "unbiased": true
+   }
+  },
+  "E3": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 2.4,
+   "k": [
+    10,
+    10
+   ],
+   "excluded": 0,
+   "folded": 1,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 59,
+   "not_judgeable": 12,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": false,
+    "unbiased": true
+   }
+  },
+  "E4": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 6.9,
+   "k": [
+    10,
+    10
+   ],
+   "excluded": 0,
+   "folded": 2,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 7,
+   "not_judgeable": 14,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": false,
+    "unbiased": true
+   }
+  },
+  "E5": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 6.8,
+   "k": [
+    10,
+    8
+   ],
+   "excluded": 2,
+   "folded": 0,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 2,
+   "not_judgeable": 14,
+   "kish_n": null,
+   "validity": {
+    "members": false,
+    "convergence": false,
+    "unbiased": false
+   }
+  },
+  "E6": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 0.1,
+   "k": [
+    10,
+    2
+   ],
+   "excluded": 0,
+   "folded": 0,
+   "relabelled": 0,
+   "converged": null,
+   "not_converged": 0,
+   "not_judgeable": 36,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": null,
+    "unbiased": true
+   }
+  },
+  "E7": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 0.4,
+   "k": [
+    20,
+    20
+   ],
+   "excluded": 0,
+   "folded": 0,
+   "relabelled": 8,
+   "converged": true,
+   "not_converged": 0,
+   "not_judgeable": 5,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": true,
+    "unbiased": true
+   }
+  },
+  "E10": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 6.7
+  },
+  "E11": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 0.4,
+   "k": [
+    6,
+    6
+   ],
+   "excluded": 0,
+   "folded": 0,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 2,
+   "not_judgeable": 6,
+   "kish_n": 2.2339831798315988,
+   "validity": {
+    "members": true,
+    "convergence": false,
+    "unbiased": true
+   }
+  },
+  "E19": {
+   "verdict": "PASS",
+   "member_runs": 0,
+   "wall_s": 0.9,
+   "k": [
+    10,
+    5
+   ],
+   "excluded": 0,
+   "folded": 0,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 10,
+   "not_judgeable": 2,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": false,
+    "unbiased": true
+   }
+  }
+ }
+}
