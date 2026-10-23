@@ -1,13 +1,24 @@
 # Ensembles and comparison records: specification
 
-Status: **revision 2, draft for review** (revision 1 reviewed by Arrowfield as
-the record's main consumer: stereo, identity, the resolved formula and nine
-smaller points). Nothing here is implemented. This
-is the theme of v0.3 (the user's decision of 2026-10-23): conformer ensembles
-as first-class records, and paired site comparisons between records, each
-with its uncertainty stated. The hostile cases in §7 are written **before**
-any code, as R11 and `--require-stereo` were, and become a committed set
-before the first implementation PR.
+Status (v0.3.0 candidate, after review 7):
+- **`espmap.ensemble/1` is implemented** (`--ensemble`, `run_ensemble`,
+  `assemble_ensemble`) and its schema, `docs/ensemble-schema.json`, is
+  frozen with v0.3.0.
+- **`espmap.compare/1`** (`espmap compare`, `docs/compare-schema.json`) is a
+  release candidate for v0.3.0.
+- **Every generic threshold is provisional unless it names a measurement**:
+  the convergence tolerance (`CONV_TOL_KCAL`, 1 kcal/mol) and the comparison
+  rule (`espmap-0.3-provisional`, k = 2, s_min = 0.9) are not measured; the
+  folded rule and the deduplication RMSD are (§8.2).
+
+History: revision 2 of this document was a draft reviewed by Arrowfield as
+the record's main consumer (stereo, identity, the resolved formula and nine
+smaller points) before any code. This is the theme of v0.3 (the user's
+decision of 2026-10-23): conformer ensembles as first-class records, and
+paired site comparisons between records, each with its uncertainty stated.
+The hostile cases in §7 were written **before** any code, as R11 and
+`--require-stereo` were, and were committed before the first implementation
+PR. Reviews 6 and 7 added their own counterexamples the same way.
 
 ## Boundary
 
@@ -151,7 +162,8 @@ so files already written under the Atlas's index stay valid. The Atlas's
 ```
 schema: espmap.ensemble/1
 subject: opaque caller label from --subject, copied verbatim, never read
-ensemble_key: hash of (member analysis_key, protocol)
+ensemble_key: hash of (schema, identity, analysis_key, protocol, ordered
+              member ids, excluded conformers) (review 7 R7-2)
 analysis_key: the members' shared key (all members must share it)
 protocol: {source: generated|supplied, n_embed, seed, dedup_rmsd,
            selection: {rule, k, ...}, weighting: none|dft, temperature_K?}

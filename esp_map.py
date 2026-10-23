@@ -161,7 +161,7 @@ import numpy as np
 
 # the one place the version is written: pyproject.toml reads it from here
 # (review 5 R18), and provenance.espmap_version is this module's own
-__version__ = "0.2.1"
+__version__ = "0.3.0.dev0"
 
 BOHR = 0.52917721092
 HA2KCAL = 627.5095
@@ -2310,6 +2310,10 @@ ENSEMBLE_SCHEMA = "espmap.ensemble/1"
 # (DEDUP_RMSD, CONTACT_MIN_BONDS: section 8.2).
 CONV_TOL_KCAL = 1.0
 BOOTSTRAP_N = 1000
+# what --weight dft weights are, in the record (review 7 R7-3)
+WEIGHTS_ARE = ("Boltzmann factors of the SCF electronic energies of the retained, "
+               "deduplicated optimised minima at temperature_K: not a thermodynamic "
+               "population (no zero-point, thermal or entropic terms, no unsampled minima)")
 BOLTZMANN_T = 298.15
 KB_KCAL = 0.0019872043
 
@@ -2339,6 +2343,46 @@ def write_member_sdf(path, mol, conf_id, origin):
     w = Chem.SDWriter(str(path))
     w.write(m, confId=conf_id)
     w.close()
+
+
+def ensemble_identity(plan):
+    """The molecule an ensemble is of, as the record states it. One function,
+    so the record, the run manifest and ensemble_key cannot disagree."""
+    ident = plan["identity"]
+    return dict(smiles=ident["smiles"], inchikey=ident["inchikey"],
+                charge=ident["charge"], n_radical=ident["n_radical"],
+                atom_maps=ident.get("atom_maps", []),
+                configuration=ident.get("configuration", {}),
+                isotopes="must_match", isotope_labels=ident.get("isotope_labels", []))
+
+
+RUN_MANIFEST = "run_manifest.json"
+
+
+def _check_run_manifest(out, manifest):
+    """Review 7 R7-1: resume authenticated the geometry, not the calculation.
+    A rerun under another basis or solvent in the same directory kept every
+    member, and a deterministic failure under one protocol suppressed the run
+    under another. The directory now holds the manifest of the run that made
+    it, and a rerun that asks for anything else is refused: recomputing into
+    the same namespace would leave two protocols' files under one name."""
+    import json
+    path = out / RUN_MANIFEST
+    if path.exists():
+        old = json.loads(path.read_text(encoding="utf-8"))
+        if old != manifest:
+            diff = sorted(k for k in set(old) | set(manifest) if old.get(k) != manifest.get(k))
+            raise EnsembleRefused([_ensemble_block(
+                "ENSEMBLE_RESUME_PROTOCOL_MISMATCH",
+                f"{out} was computed with another {', '.join(diff)}",
+                "use a new output directory for another protocol, molecule or member set")])
+        return
+    if any((out / "conformers").glob("*.json")) or (out / "run_log.jsonl").exists():
+        raise EnsembleRefused([_ensemble_block(
+            "ENSEMBLE_RESUME_PROTOCOL_MISMATCH",
+            f"{out} holds member runs but no {RUN_MANIFEST}, so what computed them is unknown",
+            "use a new output directory")])
+    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _member_complete(json_path, npz_path, sha1):
@@ -2416,6 +2460,18 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     conf_dir = out / "conformers"
     conf_dir.mkdir(parents=True, exist_ok=True)
     log_path = out / "run_log.jsonl"
+    from rdkit import Chem
+    inputs = []
+    for i, m in enumerate(plan["members"]):
+        # the SDF is the member's input, and it keeps 4 decimals: the record
+        # will carry the geometry as written, so the expected sha1 is read back
+        sdf = conf_dir / f"{member_label(i)}.sdf"
+        write_member_sdf(sdf, m["_mol"], m["_cid"], m.get("geometry_origin"))
+        inputs.append(spec_sha1(_mol_to_spec(Chem.MolFromMolFile(str(sdf), removeHs=False))))
+    _check_run_manifest(out, dict(schema="espmap.ensemble_run/1",
+                                  identity=ensemble_identity(plan),
+                                  member_args=[str(x) for x in member_args],
+                                  member_inputs=inputs))
     history = {}
     if log_path.exists():
         for line in log_path.read_text(encoding="utf-8").splitlines():
@@ -2425,11 +2481,7 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     for i, m in enumerate(plan["members"]):
         label = member_label(i)
         sdf, js, nz = conf_dir / f"{label}.sdf", conf_dir / f"{label}.json", out / f"{label}.npz"
-        # the SDF is the member's input, and it keeps 4 decimals: the record
-        # will carry the geometry as written, so the expected sha1 is read back
-        write_member_sdf(sdf, m["_mol"], m["_cid"], m.get("geometry_origin"))
-        from rdkit import Chem
-        sha1 = spec_sha1(_mol_to_spec(Chem.MolFromMolFile(str(sdf), removeHs=False)))
+        sha1 = inputs[i]
         if _member_complete(js, nz, sha1):
             log(f"{label}: done earlier, kept")
             done.append((i, label))
@@ -2463,6 +2515,44 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     rec = assemble_ensemble(plan, out, done, failed, history)
     (out / "ensemble.json").write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
     return rec
+
+
+def _optimised_mol(m, rec):
+    """Plan member m's molecule (bonds, maps, hydrogens) carrying the final
+    coordinates of its optimised record, or None when the record's atoms are
+    not m's atoms in m's order."""
+    from rdkit import Chem
+    from rdkit.Geometry import Point3D
+    g = rec.get("geometry", {})
+    mc = Chem.Mol(m["_mol"], confId=m["_cid"]) if m["_cid"] != -1 else Chem.Mol(m["_mol"])
+    if g.get("symbols") != [a.GetSymbol() for a in mc.GetAtoms()] or not g.get("xyz_angstrom"):
+        return None
+    conf = mc.GetConformer()
+    for i, (x, y, z) in enumerate(g["xyz_angstrom"]):
+        conf.SetAtomPosition(i, Point3D(x, y, z))
+    return mc
+
+
+def _same_minimum(a, b, dedup_rmsd=DEDUP_RMSD, max_matches=SYMMETRY_MATCH_CAP):
+    """Symmetry-aware heavy-atom RMSD of two final geometries of one molecule
+    (mirror image included for an achiral one, as select_ensemble does), and
+    whether it is below dedup_rmsd."""
+    from rdkit import Chem
+    from rdkit.Chem import rdMolAlign
+    ha, hb = Chem.RemoveHs(a), Chem.RemoveHs(b)
+    matches = ha.GetSubstructMatches(ha, uniquify=False, useChirality=False,
+                                     maxMatches=max_matches)
+    maps = [list(zip(mt, range(ha.GetNumAtoms()))) for mt in matches]
+    probes = [ha]
+    if _is_achiral(a):
+        mirror = Chem.Mol(ha)
+        c = mirror.GetConformer()
+        for i in range(mirror.GetNumAtoms()):
+            p = c.GetAtomPosition(i)
+            c.SetAtomPosition(i, (p.x, p.y, -p.z))
+        probes.append(mirror)
+    r = min(rdMolAlign.GetBestRMS(Chem.Mol(p), hb, map=maps) for p in probes)
+    return float(r), bool(r < dedup_rmsd)
 
 
 def _stats(values):
@@ -2560,7 +2650,62 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                                  folded=m["folded"], rg_angstrom=m["rg"], **attempts(label)))
             continue
         kept.append((i, label, rec, js))
-    rg_by = {i: plan["members"][i]["rg"] for i, *_ in kept}
+    # Review 7 R7-3: with --optimize, the ESP and the energy are the final
+    # geometry's but Rg, extent, asphericity, contacts, folded and the
+    # configuration were the start's, and starts that reached one minimum
+    # were each weighted. Shape and configuration are now read from the
+    # record's final coordinates; a member whose optimisation changed the
+    # configuration is excluded; and of the starts that reach one minimum
+    # (symmetric heavy-atom RMSD below DEDUP_RMSD) the first in selection
+    # order is kept, the rest excluded with duplicate_minimum_of.
+    from rdkit import Chem
+    shape, final_mol, retained = {}, {}, []
+    ref_conf = plan["identity"].get("configuration", {})
+    for i, label, rec, js in kept:
+        m = plan["members"][i]
+        if not rec["settings"].get("optimize"):
+            shape[i] = dict(rg=m["rg"], extent=m["extent"], asphericity=m["asphericity"],
+                            contacts=m["contacts"], folded=m["folded"],
+                            configuration=m.get("configuration", {}), shape_from="input")
+            retained.append((i, label, rec, js))
+            continue
+        mc = _optimised_mol(m, rec)
+        if mc is None:
+            excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
+                                 source_record=m.get("record"), code="MEMBER_GEOMETRY_UNREADABLE",
+                                 reason="optimised record's atoms are not the member's atoms in "
+                                        "its order, so its final shape cannot be read",
+                                 folded=None, rg_angstrom=None, **attempts(label)))
+            continue
+        d = shape_descriptors(mc)
+        shape[i] = dict(d, configuration=configuration_signs(Chem.RemoveHs(mc)),
+                        shape_from="optimised")
+        if shape[i]["configuration"] != ref_conf:
+            excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
+                                 source_record=m.get("record"), code="MEMBER_CONFIGURATION_CHANGED",
+                                 reason=f"optimisation changed the configuration to "
+                                        f"{shape[i]['configuration']}, not {ref_conf}",
+                                 folded=d["folded"], rg_angstrom=d["rg"], **attempts(label)))
+            continue
+        twin = None
+        for j, other, *_ in retained:
+            if j in final_mol:
+                rms, same = _same_minimum(mc, final_mol[j])
+                if same:
+                    twin = (other, rms)
+                    break
+        if twin:
+            excluded.append(dict(conformer=label, embed_conf_id=m.get("embed_conf_id"),
+                                 source_record=m.get("record"), code="MEMBER_DUPLICATE_MINIMUM",
+                                 reason=f"optimised to the same minimum as {twin[0]} (heavy-atom "
+                                        f"RMSD {twin[1]:.3f} A < {DEDUP_RMSD} A); counted once",
+                                 duplicate_minimum_of=twin[0],
+                                 folded=d["folded"], rg_angstrom=d["rg"], **attempts(label)))
+            continue
+        final_mol[i] = mc
+        retained.append((i, label, rec, js))
+    kept = retained
+    rg_by = {i: shape[i]["rg"] for i, *_ in kept}
     ext_i = max(rg_by, key=lambda i: rg_by[i] if rg_by[i] is not None else -1) if rg_by else None
     genus_ref = next((r["results"]["surface"].get("genus") for i, _, r, _ in kept if i == ext_i), None)
     weights = None
@@ -2573,6 +2718,7 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
         genus = rec["results"]["surface"].get("genus")
         g_ex = genus - genus_ref if genus is not None and genus_ref is not None else None
         npz = out / f"{label}.npz"
+        sh = shape[i]
         members.append(dict(
             conformer=label, member_id=rec["geometry"]["sha1"],
             embed_conf_id=m.get("embed_conf_id"), source_record=m.get("record"),
@@ -2583,10 +2729,11 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
             geometry_sha1=rec["geometry"]["sha1"],
             mmff_dE_kcal=(m["mmff_energy"] - min(x["mmff_energy"] for x in plan["members"])
                           if m.get("mmff_energy") is not None else None),
-            rg_angstrom=m["rg"], extent_angstrom=m["extent"], asphericity=m["asphericity"],
-            contacts=m["contacts"], folded=m["folded"], genus=genus, genus_excess=g_ex,
-            folded_genus_disagree=bool(g_ex is not None and m["folded"] != (g_ex > 0)),
-            configuration=m.get("configuration", {}),
+            rg_angstrom=sh["rg"], extent_angstrom=sh["extent"], asphericity=sh["asphericity"],
+            contacts=sh["contacts"], folded=sh["folded"], shape_from=sh["shape_from"],
+            genus=genus, genus_excess=g_ex,
+            folded_genus_disagree=bool(g_ex is not None and sh["folded"] != (g_ex > 0)),
+            configuration=sh["configuration"],
             relabelled=m.get("relabelled", []),
             optimized=bool(rec["settings"].get("optimize")),
             scf_energy_Ha=rec["results"].get("e_tot_Ha"),
@@ -2650,25 +2797,30 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
             n_symmetry_matches=sel.get("n_symmetry_matches"),
             symmetry_match_cap=SYMMETRY_MATCH_CAP if "SYMMETRY_MATCH_CAP" in globals() else None),
         weighting=plan.get("weight", "none"),
+        weights_are=(WEIGHTS_ARE if plan.get("weight") == "dft" else None),
         temperature_K=BOLTZMANN_T if plan.get("weight") == "dft" else None)
     akey = first["analysis_key"] if first else None
     timing_free = {k: v for k, v in protocol.items() if k != "input_file"}
     prov = (first or {}).get("provenance", {})
+    identity = ensemble_identity(plan)
+    # a start that reached a kept minimum is represented by it: not a failure
+    failures = [e for e in excluded if e.get("code") != "MEMBER_DUPLICATE_MINIMUM"]
+    # Review 7 R7-2: (analysis_key, protocol) alone collided across molecules
+    # and across supplied conformer sets of one molecule. The key now names
+    # what exists: the molecule, the protocol, and the ordered members.
+    ensemble_key = _sha1(json.dumps(dict(
+        schema=ENSEMBLE_SCHEMA, identity=identity, analysis_key=akey, protocol=timing_free,
+        members=[[mm["conformer"], mm["member_id"]] for mm in members],
+        excluded=[e["conformer"] for e in excluded]), sort_keys=True))
     return dict(
         schema=ENSEMBLE_SCHEMA, subject=plan.get("subject"),
-        ensemble_key=_sha1(json.dumps(dict(analysis_key=akey, protocol=timing_free),
-                                      sort_keys=True)),
+        ensemble_key=ensemble_key,
         analysis_key=akey, analysis=first["key_fields"]["analysis"] if first else None,
         espmap=dict(version=prov.get("espmap_version", __version__),
                     commit=(prov.get("code") if re.fullmatch(r"[0-9a-f]{7,40}", str(prov.get("code")))
                             else None),
                     code=prov.get("code"), rdkit=prov.get("rdkit"), pyscf=prov.get("pyscf")),
-        identity=dict(smiles=plan["identity"]["smiles"], inchikey=plan["identity"]["inchikey"],
-                      charge=plan["identity"]["charge"], n_radical=plan["identity"]["n_radical"],
-                      atom_maps=plan["identity"].get("atom_maps", []),
-                      configuration=plan["identity"].get("configuration", {}),
-                      isotopes="must_match",
-                      isotope_labels=plan["identity"].get("isotope_labels", [])),
+        identity=identity,
         protocol=protocol, k_requested=sel["k_requested"], k_obtained=len(members),
         folded_rule=dict(min_bonds=CONTACT_MIN_BONDS, slack_A=CONTACT_SLACK,
                          radii="Bondi; Mantina 2009 for B",
@@ -2680,11 +2832,11 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                          not_judgeable=not_judgeable, per_site=conv),
         kish_n=(float(1 / np.sum(weights ** 2)) if weights is not None else None),
         results=results, sites=sites,
-        validity=dict(members=bool(members) and not excluded,
+        validity=dict(members=bool(members) and not failures,
                       # null when not judgeable (fewer than 3 usable values, or no
                       # site table): not measured is not failed
                       convergence=converged,
-                      unbiased=not any(e["folded"] for e in excluded)))
+                      unbiased=not any(e["folded"] for e in failures)))
 
 
 # flags the ensemble command sets per member, never passed through
@@ -4131,7 +4283,7 @@ def provenance():
                 threads=int(lib.num_threads()), blas=blas)
 
 
-def analysis_fields(xc, basis, solvent, iso, spacing, density_fit, geometry_method,
+def analysis_fields(xc, basis, solvent, iso, spacing, margin, density_fit, geometry_method,
                     reaction_field=False):
     """What makes two records' NUMBERS comparable (spec section 5). Colour
     settings are deliberately absent: review 3's single compare_key would
@@ -4144,11 +4296,17 @@ def analysis_fields(xc, basis, solvent, iso, spacing, density_fit, geometry_meth
 
     geometry_method (see geometry_method()) is how the coordinates were
     made. Review 4 N2: it was absent, yet on small anions it is the largest
-    measured axis (MMFF vs DFT up to 6.5 kcal/mol, above the basis row)."""
+    measured axis (MMFF vs DFT up to 6.5 kcal/mol, above the basis row).
+
+    margin is the box margin, which places the grid lattice. Review 7 R7-6:
+    it was absent, and at 0.26 bohr margins 5.0 / 5.13 / 5.20 moved butanol's
+    V_min by 0.13 and a chlorobenzene site mean by 0.20 kcal/mol under one
+    key. Every key changed with it: v0.3 records do not compare with v0.2."""
     solv = None if solvent is None or solvent.lower() == "vacuum" else solvent.lower()
     return dict(xc=xc_key(xc), basis=basis_key(basis), solvent=solv,
                 solvent_esp=SOLVENT_ESP[bool(reaction_field)] if solv else None,
-                spacing_bohr=float(spacing), density_fit=bool(density_fit),
+                spacing_bohr=float(spacing), margin_bohr=float(margin),
+                density_fit=bool(density_fit),
                 geometry_method=geometry_method,
                 surface_definition=surface_definition(iso))
 
@@ -5281,7 +5439,7 @@ def main():
         # refused above); unreadable file text does not mask a valid flag
         declared=next((x for x in ((gi or {}).get("declared_geometry"), a.geometry_origin)
                        if x and declared_geometry_method(x)), None))
-    a_fields = analysis_fields(a.xc, a.basis, a.solvent, a.iso, a.spacing,
+    a_fields = analysis_fields(a.xc, a.basis, a.solvent, a.iso, a.spacing, a.margin,
                                a.density_fit, g_method, reaction_field=rf_added)
     r_fields = render_fields(cmap_name, kind, vlim, a.elev, a.azim, a.size, a.ambient)
     symbols = [mol.atom_symbol(i) for i in range(mol.natm)]
