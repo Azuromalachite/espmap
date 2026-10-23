@@ -371,7 +371,7 @@ def coordinate_kind(mol, fmt, tol=0.03):
         # one pair: a symmetric molecule could look the same, unless the
         # length fits none of the bonds drawn (benzene, CO2 at 1.5 A; nitrate's
         # N-O single bond fits 1.5 A, so it stays undecided)
-        if len(flat_length_problems(mol, lengths)) == len(lengths):
+        if len(flat_length_problems(mol, lengths, aromatic_cc=True)) == len(lengths):
             return "drawing"
         return "ambiguous"
     if not flat_length_problems(mol, lengths):
@@ -398,12 +398,12 @@ DRAWING_BOND_LENGTHS = (1.5, 1.54, 0.825)
 # +11.3, falls outside and is refused rather than computed. A chlorobenzene
 # drawing at 1.4 A has C-Cl -21 %.
 PLAUSIBLE_TOL = 0.10
-# A bond to an sp3 carbon, a localised C=C or an aromatic C-C has no Kekule
-# ambiguity, and real ones sit within 4 % of the reference (C-C 1.50-1.54,
-# C-O 1.43, C-N 1.47, C-F up to 1.38, C-Cl 1.78; C=C 1.33, the enolate's
-# 1.37 +3.6 %; aromatic C-C worst +2.3 %, furan). A squashed hexane drawn at
-# 1.5 A has C-C +5.3 %; cyclopentadiene drawn at 1.45 A has C=C +9.6 %;
-# benzene drawn at 1.5 A has C-C +7.3 %.
+# A bond to an sp3 carbon or a localised C=C has no Kekule ambiguity, and
+# real ones sit within 4 % of the reference (C-C 1.50-1.54, C-O 1.43, C-N
+# 1.47, C-F up to 1.38, C-Cl 1.78; C=C 1.33, the enolate's 1.37 +3.6 %). A
+# squashed hexane drawn at 1.5 A has C-C +5.3 %; cyclopentadiene drawn at
+# 1.45 A has C=C +9.6 %. Aromatic C-C joins only in the one-pair test (all
+# carbon; worst real +2.3 %, furan; benzene drawn at 1.5 A is +7.3 %).
 TIGHT_BOND_TOL = 0.05
 # single, aromatic, double, triple: fraction of the single-bond length
 _ORDER_FACTOR = {1.0: 1.0, 1.5: 0.92, 2.0: 0.87, 3.0: 0.79}
@@ -429,10 +429,15 @@ def bond_reference_length(bond):
     return r * _ORDER_FACTOR.get(bond.GetBondTypeAsDouble(), 1.0)
 
 
-def flat_length_problems(mol, lengths, factor=1.0):
+def flat_length_problems(mol, lengths, factor=1.0, aromatic_cc=False):
     """Bonds of a flat file further from their reference length than a real
     bond goes (TIGHT_BOND_TOL for a bond to an sp3 carbon or a C=C, else
-    PLAUSIBLE_TOL, each times factor); empty if every bond could be real."""
+    PLAUSIBLE_TOL, each times factor); empty if every bond could be real.
+
+    aromatic_cc puts aromatic C-C in the tight class too. Only the one-pair
+    test asks for it, where the file is all carbon: in a heteroaromatic
+    lactam RDKit's aromatic C-C is localised (uracil's C4-C5 1.477 A, +5.6 %,
+    and C5=C6 1.335 A), and a 5 % class refused real uracil and cytosine."""
     from rdkit import Chem
     sp3 = Chem.HybridizationType.SP3
     out = []
@@ -440,7 +445,7 @@ def flat_length_problems(mol, lengths, factor=1.0):
         ref = bond_reference_length(b)
         ends = (b.GetBeginAtom(), b.GetEndAtom())
         tight = (any(a.GetSymbol() == "C" and a.GetHybridization() == sp3 for a in ends)
-                 or (b.GetBondTypeAsDouble() in (1.5, 2.0)
+                 or (b.GetBondTypeAsDouble() in ((1.5, 2.0) if aromatic_cc else (2.0,))
                      and ends[0].GetSymbol() == ends[1].GetSymbol() == "C"))
         tol = (TIGHT_BOND_TOL if tight else PLAUSIBLE_TOL) * factor
         if abs(L / ref - 1) > tol:

@@ -174,8 +174,7 @@ its bonds and angles:
   be that long);
 - otherwise it is kept as a geometry if every bond is near its
   covalent-radius length for its bond order: within 5 % for a bond to an
-  sp³ carbon, a C=C or an aromatic C–C, 10 % otherwise (C₆F₆, BF₃, the DFT
-  nitrite);
+  sp³ carbon or a C=C, 10 % otherwise (C₆F₆, BF₃, the DFT nitrite, uracil);
 - anything else is a drawing if its bonds are uniform across two or more
   element pairs and some bond is well outside its tolerance (1.3 times),
   and is refused otherwise. A flat sp³ four-membered ring is refused too.

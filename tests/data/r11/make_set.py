@@ -218,8 +218,13 @@ for smi, nm, xy in SMALL:
            REAL, "geometry", "geometry", "built at a typical literature bond length (rounded)",
            "a real small molecule; one atom, a diatomic or a symmetric triatomic is planar")
 # --- H. single-pair species at a drawing length --------------------------------
+# draw_CO2_1.5 preferred "ambiguous" until the user corrected it: the graph
+# asserts C=O, and no real C=O is near 1.5 A, so the length is evidence of a
+# drawing. Nitrate's Kekule N-O single bond can be 1.5 A, so it stays ambiguous.
 _write("draw_CO2_1.5", _built("O=C=O", [(-1.5, 0), (0, 0), (1.5, 0)]), True, DRAW,
-       "ambiguous", "drawing", "built at 1.5 A", "one pair at a drawing length: undecidable")
+       "drawing", "drawing", "built at 1.5 A",
+       "one pair at a drawing length, but C=O at 1.5 A is +21 % from its reference "
+       "(real CO2 1.16 A): no real CO2 has it")
 _write("draw_nitrate_1.5", _built("[O-][N+](=O)[O-]",
        [_polar(1.5, 90), (0, 0), _polar(1.5, 210), _polar(1.5, 330)]), True, DRAW, "ambiguous",
        "drawing", "built at 1.5 A", "one pair at a drawing length: undecidable")

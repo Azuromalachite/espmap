@@ -23,9 +23,6 @@ _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases
 # unsafe and these not preferred, every one a BLOCK:
 UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
-    # C=O at 1.5 A is +21 % from its reference, which no real CO2 has, so the
-    # rule calls it a drawing; the set's change of preference is pending
-    "draw_CO2_1.5.mol",
     # Kekule O=O at 1.278 A is 11 % from its reference: outside PLAUSIBLE_TOL
     "real_ozone.mol",
     # aromatic N-O is 10.0 % long against the covalent-radius reference; only
@@ -131,6 +128,18 @@ def test_a_real_flat_ring_with_a_lone_ch2_is_kept(tmp_path, name, smiles):
     """A flat ring puckers only with a bond between two sp3 ring atoms."""
     for tilt in (0, 35):
         assert _verdict(_flat_file(tmp_path, "r", smiles, real=True, tilt=tilt)) == "geometry", name
+
+
+@pytest.mark.parametrize("name, smiles", [
+    ("uracil", "O=c1cc[nH]c(=O)[nH]1"), ("cytosine", "Nc1cc[nH]c(=O)n1"),
+    ("adenine", "Nc1ncnc2[nH]cnc12"), ("guanine", "Nc1nc2[nH]cnc2c(=O)[nH]1"),
+])
+def test_a_real_flat_nucleobase_is_kept(tmp_path, name, smiles):
+    """RDKit calls a lactam ring's localised C-C aromatic (uracil C4-C5
+    1.477 A, +5.6 %); a 5 % aromatic C-C class refused real uracil and
+    cytosine (re-probe of #60 at 92492ed)."""
+    for tilt in (0, 35):
+        assert _verdict(_flat_file(tmp_path, "b", smiles, real=True, tilt=tilt)) == "geometry", name
 
 
 def test_a_nearly_flat_real_ring_is_refused_not_discarded(tmp_path):
