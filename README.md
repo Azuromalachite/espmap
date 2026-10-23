@@ -203,6 +203,17 @@ pipeline would otherwise compute a flawless map of a molecule you did not mean.
 | **Warned** | undrawn E/Z geometry; two or more unwedged stereocentres; untested elements |
 | **Noted** | one unspecified stereocentre; reachable tautomers; net charge; isotopes |
 
+With `--require-stereo`, every stereo element the input leaves open is
+**rejected** instead (`STEREO_REQUIRED`):
+- a stereocentre (C, or a stable S, P or N centre) or a cis/trans ring pair without `@`/`@@` or a wedge;
+- a double bond, a C=N or an N=N in a chain or a ring of eight or more without `/`/`\` or a drawn geometry;
+- anything a drawing marks "either" (a crossed double bond, a wavy single bond);
+- a stereogenic allene or cumulene, a hindered biaryl axis or a helicene of five rings or more, which no SMILES can fix.
+
+A real 3D geometry (MOL/SDF with z, XYZ, PDB, `--atoms`) fixes every element and always passes. A centre that
+exists only because of an isotope label is ignored, as the ESP cannot see it. The rule was written against
+106 cases built first (`tests/data/stereo`).
+
 Each finding names what to change *in the structure*, not in the code. A salt
 is rejected rather than averaged: forcing sodium acetate through reaches
 **+113 kcal/mol** against **+61** for acetic acid's own proton — the
