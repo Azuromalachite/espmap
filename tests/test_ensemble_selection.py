@@ -119,7 +119,7 @@ def test_the_embedder_returns_every_converged_conformer():
 
 @pytest.mark.parametrize("smiles, k, obtained", [
     ("c1ccccc1", 10, 1),       # E1: rigid
-    ("C1CCCCC1", 10, 1),       # E2: the chair (a twist-boat only if distinct)
+    ("C1CCCCC1", 10, 2),       # E2: the chair and a twist-boat, distinct at 0.35 A
     ("CCCC", 10, 2),           # E6: anti and gauche; gauche- is gauche+'s mirror
 ])
 def test_selection_never_pads(smiles, k, obtained):
@@ -382,11 +382,20 @@ def test_a_generated_member_that_fails_identity_is_refused(monkeypatch):
 
 
 def test_the_contact_rule_is_the_spec_s_numbers():
-    """S14 (M7, M8): docs/ensemble-spec.md section 3 states >= 5 bonds apart and
-    Bondi + 0.5 A; a test that reads the module's constants checks nothing."""
-    assert (em.CONTACT_MIN_BONDS, em.CONTACT_SLACK) == (5, 0.5)
-    # and on a geometry: pentan-1-ol's C1...O pair is 5 bonds apart
-    m = Chem.AddHs(Chem.MolFromSmiles("CCCCCO"))
+    """S14 (M7, M8): docs/ensemble-spec.md section 3 states >= 6 bonds apart and
+    Bondi + 0.5 A (measured, section 8.2); a test that reads the module's
+    constants checks nothing."""
+    assert (em.CONTACT_MIN_BONDS, em.CONTACT_SLACK) == (6, 0.5)
+    # a 5-bond pair is never a contact, however close: pentan-1-ol's C1...O
+    m5 = Chem.AddHs(Chem.MolFromSmiles("CCCCCO"))
+    em._embed_and_minimise(m5, 1, 1)
+    c5 = m5.GetConformer()
+    o5 = next(a.GetIdx() for a in m5.GetAtoms() if a.GetSymbol() == "O")
+    p5 = c5.GetPositions()
+    c5.SetAtomPosition(0, (p5[o5] + (p5[0] - p5[o5]) / np.linalg.norm(p5[0] - p5[o5]) * 3.0).tolist())
+    assert (0, o5) not in {(i, j) for i, j, *_ in em.intramolecular_contacts(m5)}
+    # and on a geometry: hexan-1-ol's C1...O pair is 6 bonds apart
+    m = Chem.AddHs(Chem.MolFromSmiles("CCCCCCO"))
     em._embed_and_minimise(m, 1, 1)
     conf = m.GetConformer()
     o = next(a.GetIdx() for a in m.GetAtoms() if a.GetSymbol() == "O")

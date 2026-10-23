@@ -79,7 +79,7 @@ fixture test).
 1. **Embed and minimise** `n_embed` conformers (default 100; the protocol
    records it) with ETKDGv3 + MMFF94s, as today.
 2. **Deduplicate** by symmetry-aware heavy-atom RMSD (`rdMolAlign.GetBestRMS`)
-   below `dedup_rmsd` (default 0.5 Å, to be measured, §6), keeping the lower
+   below `dedup_rmsd` (default 0.35 Å, measured in §8.2), keeping the lower
    MMFF energy. Methyl and hydroxyl rotors don't make a new conformer.
 3. **Choose K for DFT** by a declared rule. The default is the one already
    validated in `bench/conformers.py`: the lowest-MMFF conformer, plus K−1
@@ -114,14 +114,17 @@ Per member, recorded:
 - radius of gyration (heavy atoms) and maximum heavy-atom extent;
 - asphericity, from the gyration tensor;
 - surface genus and component count (`mesh_topology`, as today);
-- **intramolecular contacts:** pairs of heavy atoms at least 5 bonds apart
-  and closer than the sum of their Bondi radii plus 0.5 Å.
+- **intramolecular contacts:** pairs of heavy atoms at least 6 bonds apart
+  and closer than the sum of their Bondi radii plus 0.5 Å (measured, §8.2;
+  the first draft said 5 bonds).
 
 **Folded** is a property with a stated rule, not a label someone assigns:
 - a member is **folded** if it has an intramolecular contact. The contact
-  rule (≥ 5 bonds apart, Bondi sum + 0.5 Å) excludes the 1,5 pairs of an
-  ordinary gauche kink, which are 4 bonds apart, and E14 tests that a single
-  g+g− kink isn't called folded;
+  rule (≥ 6 bonds apart, Bondi sum + 0.5 Å) excludes the 1,5 pairs of an
+  ordinary gauche kink, which are 4 bonds apart, and the 5-bond pairs of a
+  g+g− kink or a cis-alkene neighbourhood, none of which closed a surface
+  loop in the conformers measured (§8.2); E14 tests that a single g+g− kink
+  isn't called folded;
 - surface genus is a **diagnostic**, not part of the rule, because a ring's
   own genus can't be predicted before computing it: a macrocycle may or may
   not open a hole at ρ = 0.002. Each member records `genus_excess`, its genus
@@ -401,6 +404,9 @@ extended, the error that contaminates the extended statistics. ≥ 6 bonds is
 wrong on 2, both conservative (a genus-0 member left out of the extended
 population), and misses no folded member. **The measurements favour ≥ 6
 bonds with the 0.5 Å slack**; the change is its own PR.
+
+**Adopted** (the threshold PR after #81): `CONTACT_MIN_BONDS` 6 and
+`DEDUP_RMSD` 0.35 Å. Records state both as measured, citing this section.
 
 **Dedup threshold vs site means.** Every pair that 0.5 Å merges and 0.35 Å
 keeps differs in its largest site mean by more than the grid row
