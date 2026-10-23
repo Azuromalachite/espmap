@@ -2563,3 +2563,27 @@ def test_alie_is_nan_where_no_orbital_reaches():
     I = em.alie_at_points(mol, _fake_mf(C, [-0.6, -0.2, 0.3, 0.9], [2, 0, 0, 0]),
                           np.array([[0.0, 0.0, 200.0]]))
     assert np.isnan(I).all()
+
+
+# review 6 S9: |e| turned an unbound occupied orbital into a plausible ALIE
+@pytest.mark.xfail(strict=True, reason="review 6 S9: |e| hides an unbound occupied orbital")
+@pytest.mark.parametrize("e_occ", [[0.05], [-0.5, 0.02]])
+def test_alie_refuses_an_unbound_occupied_orbital(e_occ):
+    mol, pts = _h2_and_points()
+    C = np.eye(mol.nao)
+    k = len(e_occ)
+    e = list(e_occ) + [0.6] * (mol.nao - k)
+    n = [2] * k + [0] * (mol.nao - k)
+    with pytest.raises(em.ALIEUnbound):
+        em.alie_at_points(mol, _fake_mf(C, e, n), pts)
+
+
+@pytest.mark.slow
+@pytest.mark.xfail(strict=True, reason="review 6 S9: |e| hides an unbound occupied orbital")
+def test_alie_refuses_the_gas_phase_enolate():
+    """Review 6's reproduction: the gas-phase enolate's HOMO is above zero at
+    B3LYP/def2-SVP (+1.38 eV), and |e| gave a plausible 2.19 eV minimum."""
+    spec, _ = em.from_smiles("C=C[O-]")
+    mol, mf = em.run_scf(spec, basis="def2-svp", charge=-1)
+    with pytest.raises(em.ALIEUnbound):
+        em.alie_at_points(mol, mf, np.array([[0.0, 0.0, 4.0]]))

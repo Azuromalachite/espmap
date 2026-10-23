@@ -5,6 +5,7 @@ these pin WHY each refusal happens, so a refusal for the wrong reason fails.
 """
 from pathlib import Path
 
+import numpy as np
 import pytest
 from rdkit import Chem
 
@@ -339,3 +340,61 @@ def test_the_ring_reading_agrees_with_an_embedded_geometry():
         _, quad = em._ring_neighbours(m, b)
         trans_3d = abs(rdMolTransforms.GetDihedralDeg(m.GetConformer(), *quad)) > 90
         assert bool(em.small_ring_trans_bonds(Chem.MolFromSmiles(smiles))) == trans_3d, smiles
+
+
+# --- review 6 S12-S14 ------------------------------------------------------------
+@pytest.mark.xfail(strict=True, reason="review 6 S12: no heavy atoms crashes shape_descriptors")
+def test_a_molecule_without_heavy_atoms_does_not_crash():
+    try:
+        p = em.plan_ensemble(smiles="[H][H]", ensemble=1)
+    except em.EnsembleRefused:
+        return
+    assert p["members"][0]["rg"] is None and p["members"][0]["folded"] is False
+
+
+@pytest.mark.xfail(strict=True, reason="review 6 S13: the file is re-parsed once per record")
+def test_a_supplied_file_is_parsed_once(monkeypatch):
+    real = Chem.SDMolSupplier
+    calls = []
+
+    def counting(*a, **k):
+        calls.append(a)
+        return real(*a, **k)
+    monkeypatch.setattr(Chem, "SDMolSupplier", counting)
+    em.plan_ensemble(path=_DIR / "E7_poses_one_ligand.sdf", ensemble="supplied")
+    assert len(calls) <= 2                   # the gate's probe read, and one for the members
+
+
+def test_the_stereo_backstop_holds_when_verify_computed_accepts_some_completion(monkeypatch):
+    """S14 (M1): verify_computed accepts SOME completion when the approval
+    leaves stereo open; the members must still agree with record 1."""
+    real = em.verify_computed
+
+    def connectivity_only(spec, approved, **kw):
+        ok, computed, why = real(spec, approved, **kw)
+        return (True, computed, "") if "stereo" in why else (ok, computed, why)
+    monkeypatch.setattr(em, "verify_computed", connectivity_only)
+    assert [c for c, _ in _supplied("E15_one_centre_inverted.sdf")] == ["MEMBER_STEREO"]
+
+
+def test_a_generated_member_that_fails_identity_is_refused(monkeypatch):
+    """S14 (M3): the per-member identity check on generated members."""
+    monkeypatch.setattr(em, "verify_computed", lambda spec, approved, **kw: (False, "CC", "x"))
+    assert "MEMBER_IDENTITY" in {c for c, _ in _refusal(smiles="CCO", ensemble=2)}
+
+
+def test_the_contact_rule_is_the_spec_s_numbers():
+    """S14 (M7, M8): docs/ensemble-spec.md section 3 states >= 5 bonds apart and
+    Bondi + 0.5 A; a test that reads the module's constants checks nothing."""
+    assert (em.CONTACT_MIN_BONDS, em.CONTACT_SLACK) == (5, 0.5)
+    # and on a geometry: pentan-1-ol's C1...O pair is 5 bonds apart
+    m = Chem.AddHs(Chem.MolFromSmiles("CCCCCO"))
+    em._embed_and_minimise(m, 1, 1)
+    conf = m.GetConformer()
+    o = next(a.GetIdx() for a in m.GetAtoms() if a.GetSymbol() == "O")
+    pos = conf.GetPositions()
+    v = pos[0] - pos[o]
+    for d, contact in ((3.70, True), (3.74, False)):     # limit 1.70 + 1.52 + 0.5 = 3.72
+        conf.SetAtomPosition(0, (pos[o] + v / np.linalg.norm(v) * d).tolist())
+        got = {(i, j) for i, j, *_ in em.intramolecular_contacts(m)}
+        assert ((0, o) in got) is contact, d
