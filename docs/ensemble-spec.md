@@ -1,6 +1,8 @@
 # Ensembles and comparison records: specification
 
-Status: **revision 1, draft for review.** Nothing here is implemented. This
+Status: **revision 2, draft for review** (revision 1 reviewed by Arrowfield as
+the record's main consumer: stereo, identity, the resolved formula and nine
+smaller points). Nothing here is implemented. This
 is the theme of v0.3 (the user's decision of 2026-10-23): conformer ensembles
 as first-class records, and paired site comparisons between records, each
 with its uncertainty stated. The hostile cases in §7 are written **before**
@@ -53,6 +55,22 @@ them. Two sources:
 complete `espmap.record` with its own `validity` and `geometry.sha1`. The
 ensemble record refers to them by sha1; it doesn't replace them.
 
+**One stereoisomer per ensemble.** Averaging diastereomers is the quietest
+way an ensemble can be wrong:
+- a **generated** ensemble requires fully specified input: the
+  `--require-stereo` rule (`stereo_left_open`, master 3746cad) must find
+  nothing open, or the run is refused before embedding. Otherwise ETKDG picks
+  a configuration per embedding, and the "ensemble" mixes them;
+- a **supplied** ensemble requires every member to be the **same**
+  completion. Stereo is assigned from each member's 3D coordinates, and all
+  members must agree. `verify_computed` alone accepts *some* completion per
+  record, so it isn't enough here.
+
+**Identity at the top.** The ensemble record carries the approved canonical
+isomeric SMILES and its InChIKey, and every member's computed structure (stereo
+included) must match them. An archive can then identify the ensemble without
+opening its members.
+
 ## 2. Selection (generated ensembles)
 
 1. **Embed and minimise** `n_embed` conformers (default 100; the protocol
@@ -70,15 +88,22 @@ ensemble record refers to them by sha1; it doesn't replace them.
    same members in the same order on any machine, up to RDKit and PySCF
    versions, which are recorded.
 
+**K requested, K obtained.** Deduplication can leave fewer distinct
+conformers than asked for (benzene leaves one). The record keeps both
+`k_requested` and `k_obtained`, and never pads with duplicates.
+
 **Energy windows and weights.** MMFF energies choose and order the members,
 but **never weight** them. Their spread on the C18 acetate is 10.5 kcal/mol
 over 100 conformers, so Boltzmann weights from MMFF would put nearly all the
 weight on one member, from a force field whose relative conformer energies
 are not validated here. Ensemble statistics are **unweighted** by default.
-`--weight dft` (Boltzmann over the members' own SCF energies, at the stated
-temperature) is allowed only when every member's energy comes from the same
-`analysis_key`. The record then says so, and reports the effective number of
-members (Kish: (Σw)² / Σw²), so a near-single-member ensemble is visible.
+
+`--weight dft` (Boltzmann over the members' SCF energies, at the stated
+temperature) requires **DFT-optimised** members (`--optimize` per member,
+all under one `analysis_key`). Single-point energies on MMFF geometries
+carry force-field strain, so they aren't conformer energies, and weighting
+with them is refused. The record reports the effective number of members
+(Kish: (Σw)² / Σw²), so a near-single-member ensemble is visible.
 
 ## 3. Shape descriptors, and extended vs folded
 
@@ -90,9 +115,16 @@ Per member, recorded:
   and closer than the sum of their Bondi radii plus 0.5 Å.
 
 **Folded** is a property with a stated rule, not a label someone assigns:
-- a member is **folded** if it has an intramolecular contact, or if its
-  surface genus exceeds the genus of the molecule's own rings. A macrocycle
-  that is merely large enough to open a hole isn't "folded" (§7, case E3);
+- a member is **folded** if it has an intramolecular contact. The contact
+  rule (≥ 5 bonds apart, Bondi sum + 0.5 Å) excludes the 1,5 pairs of an
+  ordinary gauche kink, which are 4 bonds apart, and E14 tests that a single
+  g+g− kink isn't called folded;
+- surface genus is a **diagnostic**, not part of the rule, because a ring's
+  own genus can't be predicted before computing it: a macrocycle may or may
+  not open a hole at ρ = 0.002. Each member records `genus_excess`, its genus
+  minus that of the most extended member (largest Rg). §8 checks the contact
+  rule against it on known members, and the record lists any member where
+  the two disagree;
 - the record reports the folded count, and the statistics both over all
   members and over the extended members alone, because the measured
   conformer row is quoted both ways (5.1 vs 2.69).
@@ -106,9 +138,12 @@ ensemble_key: hash of (member analysis_key, protocol)
 analysis_key: the members' shared key (all members must share it)
 protocol: {source: generated|supplied, n_embed, seed, dedup_rmsd,
            selection: {rule, k, ...}, weighting: none|dft, temperature_K?}
+identity: {smiles (canonical, isomeric), inchikey}
+k_requested, k_obtained
 members: [{member_id, embed_conf_id, geometry_sha1, record_file, record_sha256,
-           mmff_dE?, scf_energy_Ha, rg_A, extent_A, asphericity, genus,
-           contacts, folded, validity}]
+           npz_file?, npz_sha256?, mmff_dE?, scf_energy_Ha, optimized,
+           rg_A, extent_A, asphericity, genus, genus_excess, contacts,
+           folded, validity}]
 excluded: [{index, reason, folded, rg_A}]   # never silently dropped
 convergence: {...}                          # §5
 results: global V_min / V_max / surface stats per member, and over members
@@ -117,11 +152,16 @@ sites: per site and per rule: per-member means, then over members:
 validity: {members, convergence, bias}
 ```
 
-- **Members are verifiable.** `member_id` is stable: the geometry sha1,
-  which the same input and protocol reproduce. Each member's own
-  `espmap.record` file is written beside the ensemble record, and its sha256
-  is listed, so an archive can check every member without trusting the
-  ensemble record.
+- **Members are verifiable.** `member_id` is the sha1 of the member's
+  geometry in the **verified-mapping atom order**, so a permuted copy of the
+  same conformer gets the same id. It is stable **within the recorded RDKit
+  and PySCF versions**: ETKDG output changes between RDKit releases. Across
+  versions, `embed_conf_id` with the protocol seed is the identity. Each
+  member's own `espmap.record` file (and NPZ, when written) sits beside the
+  ensemble record with its sha256 listed, so an archive can check every
+  member without trusting the ensemble record.
+- **Statistics conventions:** `sd` uses ddof = 1; `range` is max − min over
+  the members in the stated population.
 - **Sites are keyed by their definition,** atom maps included, never by a
   label alone (review 5 R5). Each statistic states its population: all
   members, or extended only.
@@ -132,8 +172,8 @@ validity: {members, convergence, bias}
 
 **Exclusions are reported with their shape.** A member whose surface fails
 integrity, or whose input or electronic validity is false, is excluded and
-listed. If the exclusions fall disproportionately on folded members, the
-ensemble's `validity.bias` is false. That is exactly the failure espmap
+listed. `validity.bias` is false **whenever any excluded member is folded**.
+That rule is conservative and testable: "disproportionately" wouldn't be. That is exactly the failure espmap
 shipped once: the χ = 2 check refused precisely the two folded C18
 conformers, and the ensemble looked converged at 1.1 kcal/mol until they
 were recovered (F9, `bench/f9_recheck.jsonl`).
@@ -166,11 +206,26 @@ espmap compare A.json B.json --sites correspondence.json --out cmp.json
 - a site in the correspondence file doesn't resolve in A or in B;
 - either record's `validity` is false where the compared quantity needs it.
 
+**Mixed sources and versions:**
+- an ensemble compared with a single record of a flexible molecule is
+  **allowed**. The single side contributes sd = 0 and carries
+  `CONFORMERS_NOT_SAMPLED`. Generated and supplied sources may be compared
+  only if their `geometry_method` (part of the `analysis_key`) matches;
+- two records with equal `analysis_key` but different espmap versions are
+  **allowed**. Both versions are recorded and the comparison carries
+  `VERSIONS_DIFFER`. The key is meant to say when numbers are comparable;
+  the version flag lets a reader check that claim.
+
 **Site correspondence** is explicit and chemical:
 `{"by": "map"|"smarts", "pairs": [{"name", "A": <site>, "B": <site>}]}`.
-SMARTS matching must be unique in each molecule, or the pair is refused.
-Correspondence by atom index across two molecules is not offered, because
-indices carry no chemistry (review 5 R5).
+- **By map:** a pair asserts homology, so mapped atoms must have the same
+  element in A and B, or the pair is refused.
+- **By SMARTS:** the match must be unique in each molecule. Matches that are
+  symmetry-equivalent (equal canonical rank, `breakTies=False`), such as
+  acetate's two oxygens, count as one site, the union of the equivalent
+  atoms. Any other multiple match is refused.
+- **By atom index** across two molecules: not offered, because indices carry
+  no chemistry (review 5 R5).
 
 **Per site pair, under each partition rule:**
 - `delta_mean`: B − A difference of site means (ensemble means for
@@ -180,8 +235,22 @@ indices carry no chemistry (review 5 R5).
 - `partition`: the difference between the two rules' `delta_mean`;
 - `sign_consistency`: for two ensembles, the fraction of member pairs (A_i,
   B_j) whose difference has the sign of `delta_mean`;
-- `resolved`: true only if |delta_mean| exceeds the stated uncertainty
-  **and** `sign_consistency` ≥ 0.9 (both thresholds to be measured, §8);
+- `resolved`, by a stated formula, so any reader re-deciding gets the same
+  answer:
+
+      U = k · sqrt(sd_A² + sd_B²) + |partition|
+      resolved  ⇔  |delta_mean| > U  and  sign_consistency ≥ s_min
+
+  - `sd_A`, `sd_B` are each side's member standard deviation (ddof = 1),
+    not a standard error. The members are a deliberately spread sample of
+    shapes, not independent draws, so the question is whether the two
+    distributions separate, not whether two means are estimated precisely;
+  - the partition sensitivity is systematic, not random, so it is added
+    linearly rather than in quadrature;
+  - `k` (default 2) and `s_min` (default 0.9) are provisional until §8
+    measures the false-resolution rate;
+  - for a single-geometry side, sd = 0 and the comparison carries
+    `CONFORMERS_NOT_SAMPLED`;
 - `uncertainty_included`: the components that went into the decision. In
   v0.3 that's conformational and partition. Method, basis, solvent and
   geometry source are **named as not included** (they arrive as a formal
@@ -199,7 +268,7 @@ stable code (`CONFORMERS_NOT_SAMPLED`).
 
 ## 7. Hostile cases, written first
 
-These become `tests/data/ensemble/` with a manifest (allowed outcomes, the
+These 29 cases become `tests/data/ensemble/` with a manifest (allowed outcomes, the
 preferred outcome, the cost of each) before any code, as for R11.
 Expectations marked *measure* get their numbers from §8 first.
 
@@ -217,6 +286,11 @@ Expectations marked *measure* get their numbers from §8 first.
 | E10 | members under two different bases | refused | a mixed-level ensemble |
 | E11 | `--weight dft` with one member 5 kcal/mol below the rest | weights computed, Kish n ≈ 1 reported | a weighted mean presented as an ensemble of K |
 | E12 | MMFF energies offered as weights | refused (not a weighting option) | a near-single-member average from force-field energies |
+| E13 | threonine SMILES with no stereo, `--ensemble` | refused before embedding (stereo left open) | an average over diastereomers |
+| E14 | a C18 member with a single g+g− kink | not folded | an ordinary kink counted as folding |
+| E15 | supplied SDF, one connectivity, one centre inverted in one member | refused (members are not one stereoisomer) | a mixed-stereoisomer ensemble |
+| E16 | `--weight dft` on single-point energies of MMFF geometries | refused (members not optimised) | weights carrying force-field strain |
+| E17 | a supplied SDF whose identity doesn't match the ensemble's InChIKey | refused | a record whose identity and members disagree |
 | C1 | compare A with itself | delta 0, unresolved | resolved |
 | C2 | compare A and B at different bases | refused | a cross-level difference |
 | C3 | a site pair whose SMARTS matches twice in B | refused | an arbitrary match |
@@ -225,6 +299,10 @@ Expectations marked *measure* get their numbers from §8 first.
 | C6 | two single-geometry C18 records | allowed; `CONFORMERS_NOT_SAMPLED`; resolved only beyond partition | resolved with no conformer caveat |
 | C7 | a non-converged ensemble vs a converged one | compared, with the non-convergence on the record | silent |
 | C8 | a correspondence by atom index | refused (by map or SMARTS only) | index-based pairing |
+| C9 | a map pair whose mapped atoms differ in element | refused | a non-homologous "pair" |
+| C10 | a SMARTS site matching acetate's two equivalent oxygens | one site, their union | refused, or one arbitrary oxygen |
+| C11 | equal `analysis_key`, different espmap versions | compared, `VERSIONS_DIFFER`, both versions recorded | silent |
+| C12 | an ensemble vs a single record of the same flexible molecule | compared; single side `CONFORMERS_NOT_SAMPLED` | refused, or the single side treated as sampled |
 
 ## 8. Measured before thresholds are fixed
 
