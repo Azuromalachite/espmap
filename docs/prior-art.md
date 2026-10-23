@@ -25,6 +25,10 @@ enough to support a novelty claim.
 | Local / per-atom molecular surfaces and their ESP statistics | `partition_surface`, `site_report` (per-site records, #24) | Multiwfn's quantitative molecular surface analysis, Lu & Chen 2012 `lu2012multiwfn`, `lu2012mt`; Lu 2024 `lu2024multiwfn` |
 | Global surface-ESP statistics: σ₊², σ₋² (each about its own sign's mean), σ²_tot, ν | `gipf_stats` → `results.gipf`, area-weighted over triangles where GIPF averaged over points. `area_stats`' `V_area_sd` is an SD about the overall mean, not σ²_tot | Murray et al. 1994, GIPF `murray1994gipf`; Bulat et al. 2010 |
 | Positive/negative areas, area-weighted mean and percentiles | `area_stats` → `results.surface_stats` and every site (#24) | Bulat et al. 2010 `bulat2010`; Lu & Chen 2012 `lu2012mt` |
+| Van der Waals radii for the radius-scaled partition | `BONDI`, `partition_surface(..., "radius_scaled")`; the record's `"radii": "Bondi; Mantina 2009 for B"` | Bondi 1964 `bondi1964`; Mantina et al. 2009 `mantina2009` (B, which Bondi does not list) |
+| Assigning space to the nearest of weighted sites | the radius-scaled rule is a multiplicatively weighted Voronoi assignment (distance / r_Bondi) | Aurenhammer 1991 `aurenhammer1991` |
+| Bonds and bond orders perceived from coordinates (xyz2mol) | RDKit's `rdDetermineBonds`, for XYZ, PDB, `--atoms` and every `verify_computed` | Kim & Kim 2015 `kim2015xyz2mol` |
+| A positive HOMO marks an anion the basis set cannot bind | `unbound_anion_warning` → `results.electronic.problems` (`UNBOUND_ANION_GAS`) | Rösch & Trickey 1997 `rosch1997`; Jensen 2010 `jensen2010` |
 | Average local ionisation energy | roadmap (v0.3) | Sjoberg et al. 1990 `sjoberg1990`; Bulat et al. 2010 |
 | Marching cubes | scikit-image `measure.marching_cubes` | Lorensen & Cline 1987 `lorensen1987`; Lewiner et al. 2003 `lewiner2003` |
 | Perceptual colormaps; diverging maps neutral at zero | `build_maps`, the colormap policy | Crameri et al. 2020 `crameri2020`, `crameri_scm`; Moreland 2009 `moreland2009` |
@@ -73,7 +77,11 @@ had a prior-art search, so none is claimed as novel:
   `validity` envelope in the JSON record;
 - for the per-site work (PR #24, after the methods above): triangle-based
   atom ownership under two partition rules computed together, partition
-  sensitivity reported per run, and caller-defined reaction sites.
+  sensitivity reported per run, and caller-defined reaction sites. The
+  radius-scaled rule itself is a weighted Voronoi assignment
+  (`aurenhammer1991`), not new. Whether Multiwfn's atomic surface
+  decomposition already offers both rules side by side has not been
+  checked (review 5 R15); do that before claiming the pairing.
 
 Before any of these appears in a paper as a contribution, it needs a
 targeted literature search, recorded here.

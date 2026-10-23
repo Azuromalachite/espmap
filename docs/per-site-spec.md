@@ -450,11 +450,12 @@ stderr, χ, a filename or console text:
   `UNBOUND_ANION_GAS`, an anion in the gas phase whose HOMO
   (`results.electronic.homo_eV`) is above zero, so its outer electron is held
   only by the basis and the map tracks the basis set (review 5 R3).
-- `validity.sites` is false if any of these is, or the site block failed its own
-  checks (`site_checks`): every atom listed once in index order, the atoms'
-  areas adding up to the surface under each rule, and potentials null exactly
-  when an entry's area is zero. `"sites"` is then `null` and `sites_reason`
-  says which check failed.
+- `validity.sites` is false if any of these is, if the molecule has no heavy
+  atom (H₂: sites are heavy atoms with their hydrogens, review 4 N7), or if
+  the site block failed its own checks (`site_checks`): every atom listed once
+  in index order, the atoms' areas adding up to the surface under each rule,
+  and potentials null exactly when an entry's area is zero. `"sites"` is then
+  `null` and `sites_reason` says which condition failed.
 - `surface.definition` states that every area here is on the ρ = 0.002 e·bohr⁻³
   electron-density isosurface. **It is not a solvent-accessible surface.** A
   large site area means much of that atom's density boundary is exposed; it
