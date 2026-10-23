@@ -304,6 +304,132 @@
    "why": "one InChIKey per ensemble, checked on every member"
   },
   {
+   "id": "E18",
+   "name": "trans-cyclooctenol from SMILES, generated",
+   "recipe": {
+    "smiles": "O[C@H]1CC/C=C/CCC1",
+    "ensemble": 10
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "members of both ring helicities averaged as one stereoisomer",
+   "cost": "fast",
+   "why": "review 6 S1: an E bond in a ring of 8 or fewer fixes the bond, not the ring's planar chirality, and no SMILES can fix it"
+  },
+  {
+   "id": "E19",
+   "name": "generated from a 3D allene file that fixes the axis",
+   "recipe": {
+    "file": "E19_allene_one_axis_3d.sdf",
+    "ensemble": 10
+   },
+   "expect": {
+    "outcome": "accept",
+    "checks": {
+     "configurations": 1
+    },
+    "or": {
+     "outcome": "refuse",
+     "before_compute": true
+    }
+   },
+   "worst": "members of both axes averaged",
+   "cost": "slow",
+   "why": "review 6 S1: re-embedding from the graph drops the axis the file fixed"
+  },
+  {
+   "id": "E20",
+   "name": "supplied: trans-cyclooctenol, both ring helicities",
+   "recipe": {
+    "file": "E20_tco_two_helicities.sdf",
+    "ensemble": "supplied"
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "diastereomers averaged",
+   "cost": "fast",
+   "why": "review 6 S1: verify_computed and the 3D stereo check see the centre, not the helicity"
+  },
+  {
+   "id": "E21",
+   "name": "supplied: an allene, both axes, one centre",
+   "recipe": {
+    "file": "E21_allene_two_axes.sdf",
+    "ensemble": "supplied"
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "diastereomers averaged",
+   "cost": "fast",
+   "why": "review 6 S1: RDKit assigns no allene axis from 3D"
+  },
+  {
+   "id": "E22",
+   "name": "supplied: ethyl cation, radical and anion on one skeleton",
+   "recipe": {
+    "file": "E22_one_skeleton_three_charges.sdf",
+    "ensemble": "supplied"
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "three species computed as record 1's",
+   "cost": "fast",
+   "why": "review 6 S2: same nuclei, different electron count; only record 1 was gated"
+  },
+  {
+   "id": "E23",
+   "name": "E22 with the radical first",
+   "recipe": {
+    "file": "E23_radical_first.sdf",
+    "ensemble": "supplied"
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "an outcome that depends on record order",
+   "cost": "fast",
+   "why": "review 6 S2"
+  },
+  {
+   "id": "E24",
+   "name": "supplied: atom maps that disagree between records",
+   "recipe": {
+    "file": "E24_atom_maps_disagree.sdf",
+    "ensemble": "supplied"
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "a site keyed by map 1 pointing at different atoms in different members",
+   "cost": "fast",
+   "why": "review 6 S2: maps are the user's names for atoms; members must agree"
+  },
+  {
+   "id": "E25",
+   "name": "supplied: record 2 of 3 cannot be read",
+   "recipe": {
+    "file": "E25_record_2_unreadable.sdf",
+    "ensemble": "supplied"
+   },
+   "expect": {
+    "outcome": "refuse",
+    "before_compute": true
+   },
+   "worst": "a two-member ensemble with the lost record never named",
+   "cost": "fast",
+   "why": "review 6 S6: unreadable records were dropped and the rest renumbered"
+  },
+  {
    "id": "C1",
    "name": "A compared with itself",
    "recipe": {

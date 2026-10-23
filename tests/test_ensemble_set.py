@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from rdkit import Chem
-from rdkit.Chem import rdMolDescriptors
+from rdkit.Chem import rdMolDescriptors, rdMolTransforms
 
 import esp_map as em
 
@@ -22,8 +22,12 @@ _DIR = Path(__file__).resolve().parent / "data" / "ensemble"
 _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases"]
 _BY_ID = {c["id"]: c for c in _CASES}
 
-# every case is unimplemented; implementation PRs remove entries
-NOT_YET = {c["id"] for c in _CASES}
+# implementation PRs remove entries. Step 3 (selection and the supplied
+# identity checks) implements the refusals before compute and E14's rule, and
+# with review 6's fixes E18, E20-E22, E24 and E25 (E23 refused already).
+NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "E16",
+                                       "E17", "E18", "E20", "E21", "E22", "E23",
+                                       "E24", "E25"}
 
 
 def _records(name):
@@ -42,8 +46,8 @@ def _key(m, stereo=True):
 
 def test_the_manifest_is_complete_and_consistent():
     ids = [c["id"] for c in _CASES]
-    assert len(ids) == len(set(ids)) == 29
-    assert {i for i in ids if i[0] == "E"} == {f"E{i}" for i in range(1, 18)}
+    assert len(ids) == len(set(ids)) == 37
+    assert {i for i in ids if i[0] == "E"} == {f"E{i}" for i in range(1, 26)}
     assert {i for i in ids if i[0] == "C"} == {f"C{i}" for i in range(1, 13)}
     files = {c["recipe"]["file"] for c in _CASES if "file" in c["recipe"]}
     assert files == {p.name for p in _DIR.glob("*.sdf")}
@@ -104,6 +108,38 @@ def test_E14_has_one_gauche_kink_and_is_otherwise_all_anti():
     assert 55 < abs(d1) < 75 and 55 < abs(d2) < 75 and np.sign(d1) != np.sign(d2)
 
 
+def _signs(name, quad):
+    return [1 if rdMolTransforms.GetDihedralDeg(m.GetConformer(), *quad) > 0 else -1
+            for m in _records(name)]
+
+
+def test_E19_E20_E21_fix_one_centre_and_vary_what_rdkit_misses():
+    for cid, quad in (("E20", (3, 4, 5, 6)), ("E21", (1, 3, 5, 6))):
+        name = _BY_ID[cid]["recipe"]["file"]
+        assert len({_key(m) for m in _records(name)}) == 1, cid     # RDKit: one stereoisomer
+        assert set(_signs(name, quad)) == {1, -1}, cid               # the torsion: two
+    assert _signs(_BY_ID["E19"]["recipe"]["file"], (1, 3, 5, 6)) == [1]
+
+
+def test_E22_E23_are_one_skeleton_with_three_electron_counts():
+    for cid in ("E22", "E23"):
+        ms = _records(_BY_ID[cid]["recipe"]["file"])
+        assert sorted(Chem.GetFormalCharge(m) for m in ms) == [-1, 0, 1]
+        assert len({tuple(a.GetSymbol() for a in m.GetAtoms()) for m in ms}) == 1
+    first = _records(_BY_ID["E23"]["recipe"]["file"])[0]
+    assert sum(a.GetNumRadicalElectrons() for a in first.GetAtoms()) == 1
+
+
+def test_E24_maps_differ_on_the_same_atoms():
+    ms = _records(_BY_ID["E24"]["recipe"]["file"])
+    maps = [tuple(a.GetAtomMapNum() for a in m.GetAtoms() if a.GetAtomicNum() > 1) for m in ms]
+    assert maps == [(1, 2, 3), (3, 2, 1)]
+
+
+def test_E25_record_2_is_unreadable_and_the_others_are_not():
+    assert [m is None for m in _records(_BY_ID["E25"]["recipe"]["file"])] == [False, True, False]
+
+
 def _params(cost):
     return [pytest.param(c, id=c["id"],
                          marks=[pytest.mark.xfail(strict=True, reason="ensembles not implemented")]
@@ -111,12 +147,39 @@ def _params(cost):
             for c in _CASES if c["cost"] == cost]
 
 
+def _refused_before_compute(expect):
+    return any(e.get("outcome") == "refuse" and e.get("before_compute")
+               for e in (expect, expect.get("or", {})))
+
+
+def _plan_kwargs(recipe):
+    kw = dict(ensemble=recipe["ensemble"], weight=recipe.get("weight"),
+              optimize=recipe.get("optimize", False))
+    if "file" in recipe:
+        kw["path"] = _DIR / recipe["file"]
+    else:
+        kw["smiles"] = recipe["smiles"]
+    return kw
+
+
 def _run(case):
     """Execute a case against the implementation (docs/ensemble-spec.md section 9
     steps 3-5). Written against the spec's names; adapt the call, never the
     expectation."""
+    r, e = case["recipe"], case["expect"]
+    if r.get("classify_only"):
+        got = em.shape_descriptors(_records(r["file"])[0])
+        assert {k: got[k] for k in e["checks"]} == e["checks"]
+        return
+    if "ensemble" in r and _refused_before_compute(e):
+        # step 3: plan_ensemble is everything before the first SCF. A case
+        # whose expectation allows "accept" (E9's "or") passes here only by
+        # refusing; accepting would need the runner (step 4).
+        with pytest.raises(em.EnsembleRefused):
+            em.plan_ensemble(**_plan_kwargs(r))
+        return
     if not hasattr(em, "run_ensemble") or not hasattr(em, "compare_records"):
-        pytest.fail("ensembles and comparison records are not implemented yet")
+        pytest.fail("ensemble runner and comparison records are not implemented yet")
     raise NotImplementedError("wire the case recipe to run_ensemble / compare_records")
 
 
