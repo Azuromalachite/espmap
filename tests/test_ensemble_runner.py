@@ -330,7 +330,6 @@ def test_optimize_may_move_only_a_generated_geometry(origin, moves):
 
 
 
-@pytest.mark.xfail(strict=True, reason="an optimised member's record carries a new sha1 (E11)")
 def test_optimised_members_are_complete_and_resumed(tmp_path):
     """Found by the v0.3.0 acceptance run: with --optimize every member ran
     (rc 0) and was then counted failed, because its record's geometry is the

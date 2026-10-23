@@ -2353,7 +2353,11 @@ def _member_complete(json_path, npz_path, sha1):
             npz_sha1 = str(z["geometry_sha1"])
     except Exception:
         return False
-    return rec.get("geometry", {}).get("sha1") == sha1 == npz_sha1
+    # an optimised member's record holds the optimised geometry and names
+    # the input it started from (E11, found by the v0.3.0 acceptance run)
+    g = rec.get("geometry", {})
+    started_from = g.get("sha1") if g.get("optimised_from_sha1") is None else g["optimised_from_sha1"]
+    return started_from == sha1 and g.get("sha1") == npz_sha1
 
 
 def failure_kind(rc, stderr):
