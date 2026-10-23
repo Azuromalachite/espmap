@@ -284,7 +284,6 @@ def _conv_rec(plan, n, tmp_path, site=None):
     return em.run_ensemble(p, tmp_path, runner=Stub(site=site), log=lambda s: None)
 
 
-@pytest.mark.xfail(strict=True, reason="validity.convergence collapses 'not judgeable' to false")
 @pytest.mark.parametrize("n", [1, 2])
 def test_too_few_members_is_not_judgeable_not_failed(plan, tmp_path, n):
     rec = _conv_rec(plan, n, tmp_path)
@@ -303,7 +302,6 @@ def test_three_or_more_members_that_do_not_converge_are_false(plan, tmp_path):
     assert rec["convergence"]["converged"] is False and rec["validity"]["convergence"] is False
 
 
-@pytest.mark.xfail(strict=True, reason="the schema forbids null and the record writes false")
 def test_not_judgeable_convergence_is_null_in_validity_and_allowed_by_the_schema(plan, tmp_path):
     """The invariant: convergence.converged is null => validity.convergence is null."""
     types = _SCHEMA["properties"]["validity"]["properties"]["convergence"]["type"]

@@ -2670,7 +2670,9 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
         kish_n=(float(1 / np.sum(weights ** 2)) if weights is not None else None),
         results=results, sites=sites,
         validity=dict(members=bool(members) and not excluded,
-                      convergence=bool(converged),
+                      # null when not judgeable (fewer than 3 usable values, or no
+                      # site table): not measured is not failed
+                      convergence=converged,
                       unbiased=not any(e["folded"] for e in excluded)))
 
 

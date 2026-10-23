@@ -617,8 +617,11 @@
      "description": "every member's own validity holds"
     },
     "convergence": {
-     "type": "boolean",
-     "description": "section 5"
+     "type": [
+      "boolean",
+      "null"
+     ],
+     "description": "true: judgeable and converged; false: judgeable and not converged; null: not judgeable (fewer than 3 usable members, or no site table). Always equal to convergence.converged"
     },
     "unbiased": {
      "type": "boolean",
