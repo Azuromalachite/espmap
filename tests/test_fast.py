@@ -1288,6 +1288,62 @@ def test_site_block_is_withheld_from_an_invalid_record():
     assert block["schema"] == em.SITES_SCHEMA and reason is None
 
 
+# ------------------------------------------------- review 5 R8: say which check
+@pytest.mark.parametrize("gate, verified, mapped, says", [
+    (dict(forced=True), True, True, "gate"),
+    (None, None, None, "no structure gate ran"),
+    (dict(forced=False), False, True, "structure not verified"),
+    (dict(forced=False), True, False, "atom order not verified"),
+    (dict(forced=True), False, False, "gate"),          # every cause is named
+])
+def test_input_reason_names_the_failing_check(gate, verified, mapped, says):
+    """R8: a forced atom-order failure read 'forced past the gate, or
+    structure not verified', neither of which had happened."""
+    reason = em.input_invalid_reason(gate, verified, mapped)
+    assert says in reason
+    if gate and gate["forced"] and verified is False:
+        assert "structure not verified" in reason and "atom order" in reason
+
+
+def test_sites_block_passes_the_input_reason_through():
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    block, reason = em.sites_block(dict(input=False, surface=True, sites=False),
+                                   P, faces, _field(P), X, sym,
+                                   input_reason="input not valid: atom order not verified")
+    assert block is None and "atom order not verified" in reason
+
+
+def test_a_failed_identity_check_records_what_was_perceived():
+    """R8: verify_computed returned None for the computed SMILES on a
+    connectivity mismatch, so a forced record could not say what it ran."""
+    from rdkit import Chem
+    spec, _ = em.from_smiles("COC")
+    ok, computed, why = em.verify_computed(spec, Chem.MolFromSmiles("CCO"))
+    assert ok is False and computed == "COC" and "connectivity" in why
+
+
+# ------------------------------------------------ review 5 R9: NPZ partition
+def test_npz_partition_follows_the_site_table():
+    """R9: the NPZ wrote tri_atom_* whenever input and surface were valid, so
+    H2 (no heavy atom, no site table) still shipped a partition."""
+    sym, X = _CH2O
+    P, faces = _blob_mesh(X)
+    assert em.tri_atom_arrays(False, P, faces, X, sym) == {}
+    arrays = em.tri_atom_arrays(True, P, faces, X, sym)
+    assert set(arrays) == {"tri_atom_nearest_nucleus", "tri_atom_radius_scaled"}
+    assert all(len(v) == len(faces) and v.min() >= 0 for v in arrays.values())
+
+
+def test_npz_omits_a_rule_that_cannot_run():
+    """R9: absence had three encodings; an unavailable rule was an array of
+    -1. It is now omitted, as the schema's npz list already allows."""
+    sym = ["Fe", "O"]
+    X = [[0.0, 0.0, 0.0], [1.8, 0.0, 0.0]]
+    P, faces = _blob_mesh(X)
+    assert set(em.tri_atom_arrays(True, P, faces, X, sym)) == {"tri_atom_nearest_nucleus"}
+
+
 # ------------------------------------------- review 4 N5: one record contract
 def test_partition_names_its_primary_and_compared_rules():
     sym, X = _CH2O
