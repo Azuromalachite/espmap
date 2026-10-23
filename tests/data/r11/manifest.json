@@ -1369,6 +1369,346 @@
    "header": "2D",
    "source": "MMFF94s chlorobenzene saved with a 2D header",
    "why": "the header is the file's own statement; the reader cannot overrule it"
+  },
+  {
+   "file": "draw_chlorobenzene_tilted_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction, rotated 35 deg about x and 20 deg about y",
+   "why": "a coplanar drawing out of the xy plane: z != 0 but still flat"
+  },
+  {
+   "file": "draw_chlorobenzene_at_z5_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction translated to z = 5",
+   "why": "every z equal but not zero: still flat"
+  },
+  {
+   "file": "draw_cyclohexanol_tilted_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction, rotated 35 deg about x and 20 deg about y",
+   "why": "a coplanar drawing out of the xy plane: z != 0 but still flat"
+  },
+  {
+   "file": "draw_cyclohexanol_at_z5_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction translated to z = 5",
+   "why": "every z equal but not zero: still flat"
+  },
+  {
+   "file": "draw_thf_tilted_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction, rotated 35 deg about x and 20 deg about y",
+   "why": "a coplanar drawing out of the xy plane: z != 0 but still flat"
+  },
+  {
+   "file": "draw_thf_at_z5_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction translated to z = 5",
+   "why": "every z equal but not zero: still flat"
+  },
+  {
+   "file": "draw_thf_znoise_0.002_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A, z uniform in +-0.002 A",
+   "why": "a flat sp3 ring with z noise; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_thf_znoise_0.02_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A, z uniform in +-0.02 A",
+   "why": "a flat sp3 ring with z noise; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_thf_znoise_0.05_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A, z uniform in +-0.05 A",
+   "why": "a flat sp3 ring with z noise; real puckering is ~0.2 A or more"
+  },
+  {
+   "file": "draw_hexane_squash_0.8_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, y scaled by 0.8",
+   "why": "a hand-squashed flat chain: sp3 angles neither 120 nor real"
+  },
+  {
+   "file": "draw_hexane_squash_1.25_1.5.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.5 A, y scaled by 1.25",
+   "why": "a hand-squashed flat chain: sp3 angles neither 120 nor real"
+  },
+  {
+   "file": "draw_diethylether_squash_0.8_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A, y scaled by 0.8",
+   "why": "a hand-squashed flat chain: sp3 angles neither 120 nor real"
+  },
+  {
+   "file": "draw_diethylether_squash_1.25_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A, y scaled by 1.25",
+   "why": "a hand-squashed flat chain: sp3 angles neither 120 nor real"
+  },
+  {
+   "file": "draw_cyclobutane_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A",
+   "why": "a flat sp3 4-ring; a real one is puckered"
+  },
+  {
+   "file": "draw_cyclobutanol_1.45.mol",
+   "kind": "drawing",
+   "allowed": [
+    "drawing",
+    "ambiguous"
+   ],
+   "prefer": "drawing",
+   "outcomes": {
+    "drawing": "correct",
+    "ambiguous": "BLOCK",
+    "geometry": "silent wrong geometry"
+   },
+   "header": "3D",
+   "source": "RDKit depiction at 1.45 A",
+   "why": "a flat sp3 4-ring; a real one is puckered"
+  },
+  {
+   "file": "real_isoxazole_noH.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, heavy atoms rotated into xy",
+   "why": "a real heavy-atom skeleton that is planar"
+  },
+  {
+   "file": "real_anisole_noH.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, heavy atoms rotated into xy",
+   "why": "a real heavy-atom skeleton that is planar"
+  },
+  {
+   "file": "real_dimethylether_noH.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, heavy atoms rotated into xy",
+   "why": "a real heavy-atom skeleton that is planar"
+  },
+  {
+   "file": "real_cyclopropane_noH.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, H removed, heavy atoms rotated into xy",
+   "why": "a real heavy-atom skeleton that is planar"
+  },
+  {
+   "file": "real_isoxazole.mol",
+   "kind": "geometry",
+   "allowed": [
+    "geometry",
+    "ambiguous"
+   ],
+   "prefer": "geometry",
+   "outcomes": {
+    "geometry": "correct",
+    "ambiguous": "BLOCK",
+    "drawing": "recorded discard"
+   },
+   "header": "3D",
+   "source": "RDKit ETKDG + MMFF94s, rotated into the xy plane",
+   "why": "a real heteroaromatic whose N-O sits near a length tolerance"
   }
  ]
 }
