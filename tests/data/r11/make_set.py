@@ -1,4 +1,6 @@
-"""Build the R11 hostile input set: flat (every z = 0) structure files that a
+"""Build the R11 hostile input set: 80 planar and near-planar structure files,
+mostly exactly z = 0 with deliberate near-planar controls (a pyramidal
+aniline N, one atom at z = 1e-5, a drawing with +-1e-4 A z noise), that a
 drawing-vs-geometry rule must classify, each with what the gate should do.
 
 Written BEFORE any rule (review 5 R11; two rules written first both failed on
@@ -138,7 +140,7 @@ def _fixture(name):
     return _plane(next(iter(sup)))
 
 
-# --- A. drawings at editor scales, 3D flag, every z = 0 -----------------------
+# --- A. drawings at editor scales, 3D flag, z = 0 (noise control: A's last) ---
 SCALES = (0.825, 1.0, 1.2, 1.35, 1.4, 1.45, 1.5, 1.54, 1.7, 2.0)
 for L in SCALES:
     _write(f"draw_chlorobenzene_{L}", _depiction("Clc1ccccc1", L), True, DRAW, "drawing",

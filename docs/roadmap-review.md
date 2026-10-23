@@ -24,7 +24,8 @@ P4. The findings below are as of revision 2.
 **Review 6** is scheduled for the start of the `espmap.record/2` or P4 work,
 whichever comes first: a whole-repo adversarial review, with its brief written
 then. Until then, R11 (drawing vs geometry) is handled on its own: a hostile
-input set first (`tests/data/r11`), then a rule written to pass it.
+input set first (`tests/data/r11`, #59), then a rule written to pass it
+(`fix/r11-flat-files`: 80/80 safe, 78/80 preferred).
 
 ## Retractions — read these first
 

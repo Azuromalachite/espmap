@@ -325,17 +325,17 @@ def test_real_3d_coordinates_are_used_as_is(tmp_path):
 _ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
 
 
-def _flat_nitrite_mol(tmp_path, header="3D"):
-    """A DFT-like nitrite in the xy plane (N-O 1.258 A, 115 deg), Kekule:
-    N=O and N-O(-). One element pair, so lengths cannot decide."""
+def _flat_nitrite_mol(tmp_path, header="3D", length=1.258):
+    """A nitrite in the xy plane (115 deg), Kekule: N=O and N-O(-). One
+    element pair. At 1.258 A it is the DFT geometry; at 1.5 A a drawing."""
     import math
     from rdkit import Chem
     m = Chem.RWMol(Chem.MolFromSmiles("N(=O)[O-]"))
     c = Chem.Conformer(3)
     h = math.radians(115 / 2)
     c.SetAtomPosition(0, (0.0, 0.0, 0.0))
-    c.SetAtomPosition(1, (1.258 * math.sin(h), 1.258 * math.cos(h), 0.0))
-    c.SetAtomPosition(2, (-1.258 * math.sin(h), 1.258 * math.cos(h), 0.0))
+    c.SetAtomPosition(1, (length * math.sin(h), length * math.cos(h), 0.0))
+    c.SetAtomPosition(2, (-length * math.sin(h), length * math.cos(h), 0.0))
     c.Set3D(header == "3D")
     m.AddConformer(c)
     p = tmp_path / "nitrite.mol"
@@ -363,15 +363,23 @@ def test_planar_geometry_is_kept_and_drawings_are_discarded(path, expect):
     assert expect in info["source"], (path, info["source"])
 
 
-def test_symmetric_flat_ion_with_a_3d_header_is_refused_not_guessed(tmp_path):
-    """Kekule nitrite has two bond ORDERS but one element pair, and a DFT
-    geometry gives both bonds 1.258 A. Counting orders called it a drawing and
-    MMFF replaced it with N-O 1.42 A; lengths cannot tell the two apart."""
-    p = _flat_nitrite_mol(tmp_path)
+def test_symmetric_flat_ion_at_a_drawing_length_is_refused_not_guessed(tmp_path):
+    """Kekule nitrite has two bond ORDERS but one element pair. Drawn at a
+    drawing program's 1.5 A it looks like a symmetric molecule: refused.
+    Counting orders once called the DFT geometry a drawing and MMFF replaced
+    it with N-O 1.42 A."""
+    p = _flat_nitrite_mol(tmp_path, length=1.5)
     mol, probs = em.parse_for_check(path=str(p), charge=-1)
     assert mol is None and probs[0][1] == "DIMENSION_AMBIGUOUS"
     with pytest.raises(ValueError):
         em.from_file(str(p))
+
+
+def test_symmetric_flat_ion_at_real_lengths_is_kept(tmp_path):
+    """Review 5 R11: the DFT nitrite (1.258 A, within 10 % of N-O and N=O)
+    is a geometry; v0.2.0 refused it as DIMENSION_AMBIGUOUS."""
+    _, info = em.from_file(str(_flat_nitrite_mol(tmp_path)))
+    assert "as-is" in info["source"], info["source"]
 
 
 def test_symmetric_flat_ion_with_a_2d_header_is_a_drawing(tmp_path):
@@ -2285,14 +2293,15 @@ def test_declared_geometry_origin_is_normalised(text, label):
 def _nitrite_files(tmp_path):
     """One nitrite geometry, written twice: an SDF that declares a DFT origin
     and an XYZ that cannot declare anything."""
+    import math
     from rdkit import Chem
-    from rdkit.Chem import AllChem
-    m = Chem.AddHs(Chem.MolFromSmiles("N(=O)[O-]"))
-    AllChem.EmbedMolecule(m, randomSeed=1)
-    c = m.GetConformer()
-    for i in range(m.GetNumAtoms()):           # tilt out of z = 0 (DIMENSION_AMBIGUOUS)
-        p = c.GetAtomPosition(i)
-        c.SetAtomPosition(i, (p.x, p.y + 0.3 * p.x, p.z + 0.4 * p.x))
+    m = Chem.MolFromSmiles("N(=O)[O-]")
+    c = Chem.Conformer(3)
+    t = math.radians(35)                       # bench/fixtures/nitrite.sdf, tilted rigidly
+    for i, (x, y) in enumerate([(0.0037, 0.4427), (-1.0666, -0.2126), (1.0628, -0.2301)]):
+        c.SetAtomPosition(i, (x, y * math.cos(t), y * math.sin(t)))
+    c.Set3D(True)
+    m.AddConformer(c)
     sdf = tmp_path / "nitrite.sdf"
     m.SetProp("geometry", "B3LYP/def2-TZVP, PCM water, Cartesian BFGS")
     w = Chem.SDWriter(str(sdf)); w.write(m); w.close()

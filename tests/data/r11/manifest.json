@@ -1,5 +1,5 @@
 {
- "about": "Build the R11 hostile input set: flat (every z = 0) structure files that a\ndrawing-vs-geometry rule must classify, each with what the gate should do.",
+ "about": "Build the R11 hostile input set: 80 planar and near-planar structure files,\nmostly exactly z = 0 with deliberate near-planar controls (a pyramidal\naniline N, one atom at z = 1e-5, a drawing with +-1e-4 A z noise), that a\ndrawing-vs-geometry rule must classify, each with what the gate should do.",
  "severity": {
   "silent wrong geometry": 3,
   "recorded discard": 2,

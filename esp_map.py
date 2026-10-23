@@ -296,26 +296,66 @@ def coordinate_kind(mol, fmt, tol=0.03):
     real planar geometries -- a DFT-optimised chlorobenzene in the xy plane,
     water from an .xyz -- and so depended on how many decimals a file printed.
       - .xyz and .pdb are never drawings;
-      - MOL/SDF/CDXML whose header says 2D are drawings;
-      - a 3D header with every z = 0 is a drawing only if every bond has the
-        same length (within tol) across at least two element pairs. Drawing
-        programs draw every bond at one length; a geometry has C-H ~1.09,
-        C-Cl ~1.74 A. Pairs ignore bond ORDER: Kekule nitrite has N=O and
-        N-O(-), both 1.258 A in a DFT geometry, and counting orders called it
-        a drawing. With one element pair (nitrite, nitrate, CO2, a diatomic)
-        lengths cannot tell a drawing from a symmetric molecule -> ambiguous.
+      - MOL/SDF/CDXML whose header says 2D are drawings. The header is read
+        from the file (_header_dim), not from RDKit's flag, which turns a
+        3D header into 2D when every z is 0 and a bond carries a stereo mark
+        (real C2F4 with an "either" double bond was discarded as a drawing);
+      - a 3D file whose atoms all lie within FLAT_TOL of one plane is flat,
+        wherever the plane is: a drawing tilted, moved to z = 5 or given z
+        noise is still a drawing. A non-flat file is a geometry. A flat one:
+      - an sp3 atom lying flat where no real molecule can put it
+        (flat_sp3_problems) makes it a DRAWING; a flat sp3 four-membered
+        ring (real cyclobutane puckers, oxetane nearly does not) makes it
+        AMBIGUOUS;
+      - every bond the same length (within tol) at a drawing program's
+        standard (DRAWING_BOND_LENGTHS) makes it a DRAWING with two or more
+        element pairs. With one pair a symmetric molecule could look the
+        same, so it is AMBIGUOUS unless the length fits none of the bonds
+        drawn: benzene and CO2 at 1.5 A are DRAWINGS (aromatic C-C +7.3 %,
+        C=O +21 %), nitrate is AMBIGUOUS (its N-O single bond fits 1.5 A,
+        +9.5 %). An acyclic two-coordinate sp3 atom at a
+        real angle is evidence against a drawing and skips this test
+        (anti-butane's carbon skeleton, 1.53 A, 112 deg);
+      - otherwise it is a GEOMETRY if every bond is within tolerance of its
+        reference length (flat_length_problems);
+      - if not, a DRAWING when its bonds are uniform across two or more
+        element pairs (a drawing at an unusual scale) and some bond is
+        DRAWN_BOND_FACTOR tolerances off, else AMBIGUOUS: a real H-free
+        isoxazole (N-O just over) is refused, not discarded.
+    Review 5 R11: master discarded real C6F6 and C2F4, and computed a
+    stretched drawing and a z-jittered one flat. Two rules written before a
+    test set each opened a silent hole (a chlorobenzene drawing at 1.4 A;
+    flat cyclohexanol and THF), and the first rule written against the
+    frozen tests/data/r11 set opened more off it (squashed chains, tilted
+    drawings, flat cyclobutane), found by an independent probe.
+    Residual, by construction: a drawing within tolerance of a real
+    geometry is computed as one (hexane drawn at 1.45 A with y stretched
+    15 % has C-C 1.51 A and 113 deg).
     """
+    import numpy as np
     if mol.GetNumConformers() == 0:
         return "none"
     if fmt in ("xyz", "pdb"):
         return "geometry"
     c = mol.GetConformer()
-    if not c.Is3D():
+    header_3d = mol.HasProp("_header_dim") and mol.GetProp("_header_dim") == "3D"
+    if not (c.Is3D() or header_3d):
         return "drawing"
-    if max(abs(c.GetAtomPosition(i).z) for i in range(mol.GetNumAtoms())) >= 1e-6:
+    X = np.array([list(c.GetAtomPosition(i)) for i in range(mol.GetNumAtoms())])
+    X -= X.mean(axis=0)
+    dev = np.abs(X @ np.linalg.svd(X)[2][-1]).max() if len(X) > 3 else 0.0
+    if dev > FLAT_TOL:
         return "geometry"
     if mol.GetNumBonds() == 0:
         return "geometry"
+    sp3_problems, real_angles, ring4 = flat_sp3_problems(mol)
+    if sp3_problems:
+        # a nearly flat real ring (H-free 1,3-cyclohexadiene, 0.09 A off its
+        # plane) is refused, not discarded; a drawing is flat to ~0
+        rings_only = all(p.startswith("flat ") for p in sp3_problems)
+        return "ambiguous" if rings_only and dev > RING_OFF_PLANE else "drawing"
+    if ring4:
+        return "ambiguous"
     pairs, lengths = set(), []
     for b in mol.GetBonds():
         i, j = b.GetBeginAtomIdx(), b.GetEndAtomIdx()
@@ -323,9 +363,145 @@ def coordinate_kind(mol, fmt, tol=0.03):
                                 b.GetEndAtom().GetSymbol()))))
         lengths.append((c.GetAtomPosition(i) - c.GetAtomPosition(j)).Length())
     mean = sum(lengths) / len(lengths)
-    if max(abs(x - mean) for x in lengths) > tol * mean:
+    uniform = max(abs(x - mean) for x in lengths) <= tol * mean
+    at_drawing_length = any(abs(mean - d) <= tol * d for d in DRAWING_BOND_LENGTHS)
+    if uniform and at_drawing_length and not real_angles:
+        if len(pairs) > 1:
+            return "drawing"
+        # one pair: a symmetric molecule could look the same, unless the
+        # length fits none of the bonds drawn (benzene, CO2 at 1.5 A; nitrate's
+        # N-O single bond fits 1.5 A, so it stays undecided)
+        if len(flat_length_problems(mol, lengths, aromatic_cc=True)) == len(lengths):
+            return "drawing"
+        return "ambiguous"
+    if not flat_length_problems(mol, lengths):
         return "geometry"
-    return "drawing" if len(pairs) > 1 else "ambiguous"
+    if uniform and len(pairs) > 1 and flat_length_problems(mol, lengths, DRAWN_BOND_FACTOR):
+        return "drawing"
+    return "ambiguous"
+
+
+# A file is flat when every atom lies within this of its best-fit plane (A).
+# A real non-planar molecule leaves it by far more (a CH2's hydrogens by
+# ~0.9, ammonia's N by ~0.3); a converter's z noise stays well inside it.
+FLAT_TOL = 0.1
+# A flat file whose only sp3 problem is a ring is refused rather than called
+# a drawing when it sits further than this off its plane (A).
+RING_OFF_PLANE = 0.01
+# Standard bond lengths drawing programs write (A): RDKit and most editors
+# 1.5, Marvin 1.54, ChemDraw 0.825 (its 14.4 pt default in MOL units).
+DRAWING_BOND_LENGTHS = (1.5, 1.54, 0.825)
+# A bond in a flat file may sit this far from its reference length and still
+# be real. Measured on the R11 set's real geometries: worst aromatic +4.0
+# (furan C-O); worst non-aromatic -9.8 (enolate C-O), -9.2 carbonate, -8.8
+# nitrate, where one Kekule form is compared with a delocalised bond. Ozone,
+# +11.3, falls outside and is refused rather than computed. A chlorobenzene
+# drawing at 1.4 A has C-Cl -21 %.
+PLAUSIBLE_TOL = 0.10
+# A bond to an sp3 carbon or a localised C=C has no Kekule ambiguity, and
+# real ones sit within 4 % of the reference (C-C 1.50-1.54, C-O 1.43, C-N
+# 1.47, C-F up to 1.38, C-Cl 1.78; C=C 1.33, the enolate's 1.37 +3.6 %). A
+# squashed hexane drawn at 1.5 A has C-C +5.3 %; cyclopentadiene drawn at
+# 1.45 A has C=C +9.6 %. Aromatic C-C joins only in the one-pair test (all
+# carbon; worst real +2.3 %, furan; benzene drawn at 1.5 A is +7.3 %).
+TIGHT_BOND_TOL = 0.05
+# single, aromatic, double, triple: fraction of the single-bond length
+_ORDER_FACTOR = {1.0: 1.0, 1.5: 0.92, 2.0: 0.87, 3.0: 0.79}
+# An implausible flat file is called a drawing only when some bond is this
+# many tolerances off; nearer, it is refused. Measured: every drawing that
+# reaches that step is 1.58x or more (phenylacetate drawn at 1.4 A), real
+# H-free isoxazole 1.00x (aromatic N-O +10.0 %).
+DRAWN_BOND_FACTOR = 1.3
+# Angles a real acyclic two-coordinate sp3 atom takes (deg): H2S 92, water
+# 104.5, chains ~112-114. A drawing's zigzag is 120.
+SP3_REAL_ANGLE = (90.0, 118.0)
+
+
+def bond_reference_length(bond):
+    """A rough expected length (A) for an RDKit bond: the sum of the two
+    atoms' covalent radii (RDKit's table, Cordero et al. 2008) scaled for
+    bond order. Used only to ask whether a flat file could be a real
+    geometry (coordinate_kind)."""
+    from rdkit import Chem
+    pt = Chem.GetPeriodicTable()
+    r = (pt.GetRcovalent(bond.GetBeginAtom().GetAtomicNum())
+         + pt.GetRcovalent(bond.GetEndAtom().GetAtomicNum()))
+    return r * _ORDER_FACTOR.get(bond.GetBondTypeAsDouble(), 1.0)
+
+
+def flat_length_problems(mol, lengths, factor=1.0, aromatic_cc=False):
+    """Bonds of a flat file further from their reference length than a real
+    bond goes (TIGHT_BOND_TOL for a bond to an sp3 carbon or a C=C, else
+    PLAUSIBLE_TOL, each times factor); empty if every bond could be real.
+
+    aromatic_cc puts aromatic C-C in the tight class too. Only the one-pair
+    test asks for it, where the file is all carbon: in a heteroaromatic
+    lactam RDKit's aromatic C-C is localised (uracil's C4-C5 1.477 A, +5.6 %,
+    and C5=C6 1.335 A), and a 5 % class refused real uracil and cytosine."""
+    from rdkit import Chem
+    sp3 = Chem.HybridizationType.SP3
+    out = []
+    for b, L in zip(mol.GetBonds(), lengths):
+        ref = bond_reference_length(b)
+        ends = (b.GetBeginAtom(), b.GetEndAtom())
+        tight = (any(a.GetSymbol() == "C" and a.GetHybridization() == sp3 for a in ends)
+                 or (b.GetBondTypeAsDouble() in ((1.5, 2.0) if aromatic_cc else (2.0,))
+                     and ends[0].GetSymbol() == ends[1].GetSymbol() == "C"))
+        tol = (TIGHT_BOND_TOL if tight else PLAUSIBLE_TOL) * factor
+        if abs(L / ref - 1) > tol:
+            out.append(f"{ends[0].GetSymbol()}-{ends[1].GetSymbol()} {L:.3f} A vs {ref:.2f}")
+    return out
+
+
+def flat_sp3_problems(mol):
+    """(problems, real_angles, ring4) for the sp3 atoms of a flat file.
+
+    problems name sp3 atoms that no real molecule puts in a plane:
+    - three or more neighbours: a tetrahedral centre is never flat
+      (t-butanol, 1-amino-2-propanol's C2, cyclohexanol's C1);
+    - in a ring of five to eight with a bond between two sp3 ring atoms:
+      the eclipsed bond puckers it (cyclopentane, THF, cyclohexane). A lone
+      sp3 atom between sp2 ones stays flat (fluorene's and
+      cyclopentadiene's CH2, 1,4-cyclohexadiene);
+    - acyclic, two neighbours, outside SP3_REAL_ANGLE: a drawn hexane at
+      120 deg, or one squashed to 130.
+    real_angles counts acyclic two-coordinate sp3 atoms inside it: evidence
+    the coordinates were computed, not drawn (anti-butane's skeleton,
+    water). Ring angles are fixed by the ring in a drawing too, so they
+    count for neither. ring4 lists flat four-membered rings with such a
+    bond: cyclobutane puckers but oxetane barely does, so they are refused.
+    Hybridisation is RDKit's, which calls conjugated N and O (amides,
+    anilines, pyrrole, furan) sp2."""
+    import math
+    from rdkit import Chem
+    sp3 = Chem.HybridizationType.SP3
+    out, real, ring4 = [], 0, []
+    c = mol.GetConformer()
+    for ring in mol.GetRingInfo().BondRings():
+        if any(mol.GetBondWithIdx(k).GetBeginAtom().GetHybridization() == sp3
+               and mol.GetBondWithIdx(k).GetEndAtom().GetHybridization() == sp3
+               for k in ring):
+            if len(ring) == 4:
+                ring4.append(ring)
+            elif 5 <= len(ring) <= 8:
+                out.append(f"flat {len(ring)}-ring with an sp3-sp3 bond")
+    for a in mol.GetAtoms():
+        if a.GetHybridization() != sp3:
+            continue
+        nb = [n.GetIdx() for n in a.GetNeighbors()]
+        tag = f"sp3 {a.GetSymbol()}{a.GetIdx()}"
+        if len(nb) >= 3:
+            out.append(f"{tag} with {len(nb)} neighbours lies flat")
+        elif len(nb) == 2 and not a.IsInRing():
+            p, q, r = (c.GetAtomPosition(i) for i in (nb[0], a.GetIdx(), nb[1]))
+            u, v = p - q, r - q
+            ang = math.degrees(math.acos(max(-1.0, min(1.0, u.DotProduct(v)
+                                                       / (u.Length() * v.Length())))))
+            if SP3_REAL_ANGLE[0] <= ang <= SP3_REAL_ANGLE[1]:
+                real += 1
+            else:
+                out.append(f"{tag} bent {ang:.0f} deg")
+    return out, real, ring4
 
 
 def from_file(path, n_confs=20, seed=0xC0FFEE, charge=0, record=None):
@@ -741,6 +917,28 @@ def _perceive_bonds(m, charge, fmt):
     return mol
 
 
+def _molfile_header_dims(path):
+    """The dimension code on line 2 of each MOL/SDF record ("2D", "3D" or
+    ""), in file order. coordinate_kind needs what the file says: RDKit's
+    conformer flag turns a 3D header into 2D when every z is 0 and a bond
+    carries a stereo mark."""
+    import re
+    from pathlib import Path
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    out = []
+    for k, rec in enumerate(re.split(r"^\$\$\$\$[^\n]*$", text, flags=re.M)):
+        if k:
+            if not rec.strip():
+                continue
+            rec = rec[1:] if rec.startswith("\n") else rec
+        lines = rec.split("\n")
+        out.append(lines[1][20:22].strip().upper() if len(lines) > 1 else "")
+    return out
+
+
 def read_structure(path, charge=0, record=None):
     """The single structure reader. Returns (mol or None, problems, n_found).
 
@@ -757,11 +955,15 @@ def read_structure(path, charge=0, record=None):
     try:
         if ext == "cdxml":
             mols = [m for m in Chem.MolsFromCDXMLFile(str(path)) if m is not None]
-        elif ext == "sdf":
-            mols = [m for m in Chem.SDMolSupplier(str(path), removeHs=False)
-                    if m is not None]
-        elif ext == "mol":
-            mols = [Chem.MolFromMolFile(str(path), removeHs=False)]
+        elif ext in ("sdf", "mol"):
+            mols = (list(Chem.SDMolSupplier(str(path), removeHs=False))
+                    if ext == "sdf" else
+                    [Chem.MolFromMolFile(str(path), removeHs=False)])
+            dims = _molfile_header_dims(path)
+            if len(dims) == len(mols):
+                for m, d in zip(mols, dims):
+                    if m is not None:
+                        m.SetProp("_header_dim", d)
         elif ext in ("xyz", "pdb"):
             # Neither format carries trustworthy bond ORDERS. XYZ has no bonds
             # at all (v3 rejected every xyz as "MULTIPLE_FRAGMENTS"). PDB has
@@ -809,11 +1011,11 @@ def read_structure(path, charge=0, record=None):
     kind = coordinate_kind(m, ext)
     if kind == "ambiguous":
         return None, [(BLOCK, "DIMENSION_AMBIGUOUS",
-                       f"{path} is flagged 3D with every z = 0 and every bond "
-                       f"the same length: a drawing and a symmetric planar "
-                       f"molecule look identical",
-                       "write a 2D header if this is a drawing, or give any "
-                       "atom a non-zero z (or save as .xyz) if it is a geometry")], n
+                       f"{path} is flagged 3D but flat (every atom within "
+                       f"{FLAT_TOL} A of one plane), and its bonds and angles "
+                       f"cannot tell a drawing from a real planar molecule",
+                       "write a 2D header if this is a drawing; if it is a "
+                       "geometry, save it as .xyz")], n
     m.SetProp("_coords", kind)
     return m, [], n
 

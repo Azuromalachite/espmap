@@ -18,10 +18,11 @@ in SMILES order (map 1 = acetyl CH3), which no chemist reads as C1; the
 coordinates here are those files' coordinates, only the maps change.
 
 Nitrite's DFT geometry lies exactly in z = 0 with two equal N-O bonds, which
-the structure gate refuses as DIMENSION_AMBIGUOUS (H5: a drawing looks the
-same). Its fixture input is that geometry rigidly rotated out of the plane,
-the remedy the gate names: every internal coordinate, and so the ESP, is
-unchanged; only the frame differs from bench/fixtures/nitrite.sdf.
+v0.2.0's structure gate refused as DIMENSION_AMBIGUOUS (H5: a drawing looks
+the same; review 5 R11 now keeps it). Its fixture input is that geometry
+rigidly rotated out of the plane, the remedy the gate named: every internal
+coordinate, and so the ESP, is unchanged; only the frame differs from
+bench/fixtures/nitrite.sdf.
 
 Every record is computed from a committed file with every atom supplied, so
 nothing is embedded or relaxed: geometry_provenance.relaxation is "none".
