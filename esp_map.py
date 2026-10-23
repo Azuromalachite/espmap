@@ -161,7 +161,7 @@ import numpy as np
 
 # the one place the version is written: pyproject.toml reads it from here
 # (review 5 R18), and provenance.espmap_version is this module's own
-__version__ = "0.2.1"
+__version__ = "0.3.0.dev0"
 
 BOHR = 0.52917721092
 HA2KCAL = 627.5095
@@ -3678,7 +3678,7 @@ def provenance():
                 threads=int(lib.num_threads()), blas=blas)
 
 
-def analysis_fields(xc, basis, solvent, iso, spacing, density_fit, geometry_method,
+def analysis_fields(xc, basis, solvent, iso, spacing, margin, density_fit, geometry_method,
                     reaction_field=False):
     """What makes two records' NUMBERS comparable (spec section 5). Colour
     settings are deliberately absent: review 3's single compare_key would
@@ -3691,11 +3691,17 @@ def analysis_fields(xc, basis, solvent, iso, spacing, density_fit, geometry_meth
 
     geometry_method (see geometry_method()) is how the coordinates were
     made. Review 4 N2: it was absent, yet on small anions it is the largest
-    measured axis (MMFF vs DFT up to 6.5 kcal/mol, above the basis row)."""
+    measured axis (MMFF vs DFT up to 6.5 kcal/mol, above the basis row).
+
+    margin is the box margin, which places the grid lattice. Review 7 R7-6:
+    it was absent, and at 0.26 bohr margins 5.0 / 5.13 / 5.20 moved butanol's
+    V_min by 0.13 and a chlorobenzene site mean by 0.20 kcal/mol under one
+    key. Every key changed with it: v0.3 records do not compare with v0.2."""
     solv = None if solvent is None or solvent.lower() == "vacuum" else solvent.lower()
     return dict(xc=xc_key(xc), basis=basis_key(basis), solvent=solv,
                 solvent_esp=SOLVENT_ESP[bool(reaction_field)] if solv else None,
-                spacing_bohr=float(spacing), density_fit=bool(density_fit),
+                spacing_bohr=float(spacing), margin_bohr=float(margin),
+                density_fit=bool(density_fit),
                 geometry_method=geometry_method,
                 surface_definition=surface_definition(iso))
 
@@ -4826,7 +4832,7 @@ def main():
         # refused above); unreadable file text does not mask a valid flag
         declared=next((x for x in ((gi or {}).get("declared_geometry"), a.geometry_origin)
                        if x and declared_geometry_method(x)), None))
-    a_fields = analysis_fields(a.xc, a.basis, a.solvent, a.iso, a.spacing,
+    a_fields = analysis_fields(a.xc, a.basis, a.solvent, a.iso, a.spacing, a.margin,
                                a.density_fit, g_method, reaction_field=rf_added)
     r_fields = render_fields(cmap_name, kind, vlim, a.elev, a.azim, a.size, a.ambient)
     symbols = [mol.atom_symbol(i) for i in range(mol.natm)]

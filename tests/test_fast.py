@@ -850,7 +850,7 @@ def test_scale_is_comparable_only_when_the_user_fixed_it(kind, lim, vmin, vmax,
 
 
 _A = dict(xc="b3lyp", basis="def2-svp", solvent="vacuum", iso=0.002,
-          spacing=0.2, density_fit=False, geometry_method="etkdg_mmff94s")
+          spacing=0.2, margin=5.0, density_fit=False, geometry_method="etkdg_mmff94s")
 _R = dict(cmap="vik", kind="diverging", vlim=(-25.0, 25.0), elev=20.0, azim=-60.0,
           size=900, ambient=0.35)
 
@@ -2687,7 +2687,6 @@ def _gauss_density(mol, dm, origin, n, spacing, block=20000):
                for c in mol.atom_coords())
 
 
-@pytest.mark.xfail(strict=True, reason="R7-6: margin moves the lattice, not the key")
 def test_r7_e11_margin_changes_the_key_or_nothing(monkeypatch):
     """Review 7 R7-E11. Measured on b11d7c4 (chlorobenzene, butanol, def2-SVP,
     0.26 bohr): margins 5.0 / 5.13 / 5.20 give one analysis_key but V_min
@@ -2701,3 +2700,8 @@ def test_r7_e11_margin_changes_the_key_or_nothing(monkeypatch):
     identical = surf[5.0] == surf[5.13] == surf[5.20]
     keyed = "margin" in inspect.signature(em.analysis_fields).parameters
     assert identical or keyed
+
+
+def test_r7_6_margin_is_in_the_analysis_key():
+    assert _keys(a={"margin": 5.13})[0] != _keys()[0]
+    assert em.analysis_fields(**_A)["margin_bohr"] == 5.0
