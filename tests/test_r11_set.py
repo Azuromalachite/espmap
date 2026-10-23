@@ -19,7 +19,7 @@ _DIR = Path(__file__).resolve().parent / "data" / "r11"
 _CASES = json.loads((_DIR / "manifest.json").read_text(encoding="utf-8"))["cases"]
 
 # what the current rule gets wrong; a new rule removes entries. Against v0.2.0
-# the 105 cases had 15 unsafe and 41 not preferred; the rule now has none
+# the 105 cases had 15 unsafe and 27 more safe but not preferred; the rule now has none
 # unsafe and these not preferred, every one a BLOCK:
 UNSAFE_NOW = set()
 NOT_PREFERRED_NOW = UNSAFE_NOW | {
