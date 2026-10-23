@@ -8,8 +8,10 @@
     "(three numbers) | any | enum:A|B|C (a closed vocabulary, review 5 R10), a trailing ? meaning nullable;",
     "\"#name\" is $defs.name, \"#name?\" the same or null.",
     "Change this file in the same commit as the code that changes the record.",
-    "npz lists the arrays of a valid run; tri_atom_* are present only when validity.input and",
-    "validity.surface are both true (review 4 N8), the conditions under which sites_block runs."
+    "npz lists the arrays of a valid run. Absence has one encoding, a missing array (review 5 R9):",
+    "tri_atom_<rule> is present only when validity.sites is true, and only for a rule that could run",
+    "(an element without a Bondi radius has no tri_atom_radius_scaled). atom_maps is per atom, so an",
+    "unmapped atom is 0, RDKit's own 'no map' value; in the JSON it is null."
   ],
   "schema": "espmap.record/1",
   "$defs": {

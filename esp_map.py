@@ -877,8 +877,10 @@ def verify_computed(spec, approved, max_stereo=1024):
     match = (sk_g.GetSubstructMatch(sk_t)
              if sk_t.GetNumBonds() == sk_g.GetNumBonds() else ())
     if not match:
-        return False, None, ("the connectivity perceived from the coordinates is "
-                             "not the approved structure's")
+        # review 5 R8: say what WAS computed, so a forced record names it
+        return False, _perceived_smiles(g, Chem.GetFormalCharge(approved)), (
+            "the connectivity perceived from the coordinates is not the "
+            "approved structure's")
     conf = Chem.Conformer(tmpl.GetNumAtoms())
     for i, j in enumerate(match):
         conf.SetAtomPosition(i, [float(x) for x in rows[j][1:4]])
@@ -896,6 +898,38 @@ def verify_computed(spec, approved, max_stereo=1024):
     if computed not in allowed:
         return False, computed, "the stereochemistry in the coordinates differs"
     return True, computed, ""
+
+
+def _perceived_smiles(g, charge):
+    """The molecule a set of coordinates is, as far as the coordinates say:
+    bond orders perceived at the approved total charge, or connectivity
+    alone when orders cannot be assigned. For the record of a forced run."""
+    from rdkit import Chem
+    from rdkit.Chem import rdDetermineBonds
+    try:
+        m = Chem.Mol(g)
+        rdDetermineBonds.DetermineBondOrders(m, charge=charge)
+        return Chem.MolToSmiles(Chem.RemoveHs(m))
+    except Exception:
+        return Chem.MolToSmiles(Chem.RemoveHs(_skeleton(g), sanitize=False))
+
+
+def input_invalid_reason(gate, verified, mapped_ok):
+    """Why validity.input is false, naming every failing check (review 5 R8:
+    a forced atom-order failure was reported as 'forced past the gate, or
+    structure not verified', neither of which had happened)."""
+    causes = []
+    if gate is None:
+        causes.append("no structure gate ran")
+    elif gate["forced"]:
+        causes.append("the gate's BLOCK was forced")
+    if verified is False:
+        causes.append("structure not verified (input.computed_smiles is what was computed)")
+    if mapped_ok is False:
+        # the record has no separate field for this until a schema change
+        # (spec section 6, "Deferred"); this reason is where it is recorded
+        causes.append("atom order not verified (verify_mapping)")
+    return "input not valid: " + ("; ".join(causes) or "unknown")
 
 
 def check_identity(spec, probe, approved, kept, force, stage):
@@ -2343,13 +2377,32 @@ def site_checks(rep, P, faces, V):
     return out
 
 
-def sites_block(valid, P, faces, V, coords, symbols, **kw):
+def tri_atom_arrays(has_sites, P, faces, coords, symbols):
+    """The NPZ's per-triangle partition, {"tri_atom_<rule>": owner index}.
+
+    Written exactly when the record has a site table: review 4 N8 withheld it
+    from invalid input or surface, and review 5 R9 found it still written for
+    H2 (no heavy atom) and for a block that failed its own checks. A rule
+    that cannot run (an element without a Bondi radius) is omitted rather
+    than filled with -1: absence has one encoding, a missing array."""
+    if not has_sites:
+        return {}
+    out = {}
+    for r in PARTITION_RULES:
+        t = partition_surface(P, faces, coords, symbols, r)
+        if t is not None:
+            out[f"tri_atom_{r}"] = t
+    return out
+
+
+def sites_block(valid, P, faces, V, coords, symbols, input_reason=None, **kw):
     """(site report, None), or (None, reason) when the record is not valid:
     per-site values near a clipped box face, or for a forced-through
     structure, would be worse than the global ones (spec section 3). A block
-    that fails its own checks is withheld the same way."""
+    that fails its own checks is withheld the same way. input_reason is
+    input_invalid_reason(...), which names the failing check (review 5 R8)."""
     if not valid["input"]:
-        return None, "input not valid (forced past the gate, or structure not verified)"
+        return None, input_reason or "input not valid"
     if not valid["surface"]:
         return None, "surface not valid (see results.surface.problems)"
     if not valid.get("electronic", True):
@@ -2925,6 +2978,8 @@ def main():
         h_source = [("optimised" if a.optimize else "supplied") if s == "H" else None
                     for s in symbols]
     sites, sites_reason = sites_block(valid, P_A, faces, V, coords_A, symbols,
+                                      input_reason=input_invalid_reason(gate, verified,
+                                                                        mapped_ok),
                                       atom_maps=atom_maps, h_source=h_source,
                                       groups=site_groups, source=f"caller:{sites_by}")
     valid["sites"] = sites is not None
@@ -2958,16 +3013,10 @@ def main():
         print(f"wrote {a.html}  (interactive 3D)")
     if a.npz:
         import json
-        # the atom owning each triangle, per partition rule (-1: rule not
-        # available): enough to colour or regroup by site without another SCF.
-        # Written only when a site table would be (sites_block's conditions):
-        # review 4 N8, the NPZ let a consumer redo a partition of a record
-        # whose JSON withheld its sites as invalid.
-        tri_atom = {}
-        if valid["input"] and valid["surface"] and valid["electronic"]:
-            for r in PARTITION_RULES:
-                t = partition_surface(P_A, faces, coords_A, symbols, r)
-                tri_atom[f"tri_atom_{r}"] = np.full(len(faces), -1) if t is None else t
+        # the atom owning each triangle, per partition rule: enough to colour
+        # or regroup by site without another SCF. Only when the record has a
+        # site table (tri_atom_arrays).
+        tri_atom = tri_atom_arrays(valid["sites"], P_A, faces, coords_A, symbols)
         maps = np.array([(atom_maps or {}).get(i, 0) for i in range(len(symbols))])
         np.savez_compressed(a.npz, verts=verts, faces=faces, V=V,
                             symbols=np.array(symbols), coords=mol.atom_coords(),
