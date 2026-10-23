@@ -1991,7 +1991,8 @@ def supplied_members(path, charge=None, basis="def2-tzvp", spin=0):
 
     def state(m):
         return (Chem.GetFormalCharge(m), sum(a.GetNumRadicalElectrons() for a in m.GetAtoms()),
-                tuple(a.GetAtomMapNum() for a in m.GetAtoms() if a.GetAtomicNum() > 1))
+                tuple(a.GetAtomMapNum() for a in m.GetAtoms() if a.GetAtomicNum() > 1),
+                tuple(a.GetIsotope() for a in m.GetAtoms()))
 
     ref_state, ref_signs = state(first), None
     for r, m in enumerate(members, start=1):
@@ -2005,15 +2006,24 @@ def supplied_members(path, charge=None, basis="def2-tzvp", spin=0):
                 out += blocks
                 continue
             got = state(m)
+            # isotopes are compared atom by atom only when the atom counts agree;
+            # a member with other atoms is refused below (hydrogens, identity)
+            same_n = len(got[3]) == len(ref_state[3])
+            iso = [i for i, (x, y) in enumerate(zip(got[3], ref_state[3])) if x != y] if same_n else []
             for code, what, a, b in (("MEMBER_CHARGE", "formal charge", got[0], ref_state[0]),
                                      ("MEMBER_SPIN", "unpaired electrons", got[1], ref_state[1]),
-                                     ("MEMBER_MAPS", "atom maps", got[2], ref_state[2])):
+                                     ("MEMBER_MAPS", "atom maps", got[2], ref_state[2]),
+                                     # S11, the user's decision: one isotopologue per
+                                     # ensemble, never normalised away
+                                     ("MEMBER_ISOTOPES", "isotope labels at atoms",
+                                      [(i, got[3][i]) for i in iso],
+                                      [(i, ref_state[3][i]) for i in iso])):
                 if a != b:
                     out.append(_ensemble_block(
                         code, f"record {r}: {what} {a}, record 1 {b}",
                         f"remove record {r}: one ensemble is one species, its atoms "
                         f"named the same way in every record"))
-            if got != ref_state:
+            if got[:3] != ref_state[:3] or iso:
                 continue
         if not coordinates_fix_stereo(m):
             out.append(_ensemble_block(

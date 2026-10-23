@@ -27,7 +27,7 @@ _BY_ID = {c["id"]: c for c in _CASES}
 # with review 6's fixes E18, E20-E22, E24 and E25 (E23 refused already).
 NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "E16",
                                        "E17", "E18", "E20", "E21", "E22", "E23",
-                                       "E24", "E25"}
+                                       "E24", "E25", "E27", "E28"}
 
 
 def _records(name):
