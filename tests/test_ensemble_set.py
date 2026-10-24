@@ -383,13 +383,17 @@ def _inject(name, a, b, corr):
         _write(b, rb)
         return lambda c: abs(c["sites"][0]["by_rule"]["nearest_nucleus"]["sign_consistency"] - 0.7) < 1e-9
     if name == "B_version_differs":
-        # C11: B as the v0.3.0 release wrote it (numeric/1 by declaration,
-        # no contract field); A is this build. Under R7-7 the pair compares
-        # only because both are espmap.numeric/1.
-        for _, rec in rb:
-            prov = rec["provenance"]
-            prov.update(espmap_version="0.3.0", code="v0.3.0")
-            prov.pop("measurement_contract", None)
+        # C11: two releases under one measurement contract. Under R7-7 a dev
+        # build and a release are refused, so the case needs two releases the
+        # table puts under this build's contract; until a second release
+        # exists it cannot be built honestly, and is skipped saying so.
+        rel = [v for v, c in em.CONTRACT_BY_RELEASE.items() if c == em.MEASUREMENT_CONTRACT]
+        if len(rel) < 2:
+            pytest.skip(f"C11 needs two releases under {em.MEASUREMENT_CONTRACT}; the table has {rel}")
+        for recs, v in ((ra, rel[-1]), (rb, rel[0])):
+            for _, rec in recs:
+                rec["provenance"].update(espmap_version=v, code=f"v{v}")
+        _write(a, ra)
         _write(b, rb)
         return lambda c: c["inputs"]["A"]["espmap_version"] != c["inputs"]["B"]["espmap_version"]
     raise NotImplementedError(f"injection {name!r} is not wired")
