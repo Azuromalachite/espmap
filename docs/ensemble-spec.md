@@ -178,8 +178,7 @@ convergence: {...}                          # §5
 results: global V_min / V_max / surface stats per member, and over members
 sites: per site and per rule: per-member means, then over members:
        mean, sd, min, max, range, n; and the same over extended members
-validity: {members, convergence (true | false | null: not judgeable), no_folded_exclusion,
-           unbiased (= no_folded_exclusion; kept for ensemble/1, R7-9)}
+validity: {members, convergence (true | false | null: not judgeable), unbiased}
 ```
 
 - **Members are verifiable.** `member_id` is the sha1 of the member's
@@ -204,7 +203,12 @@ validity: {members, convergence (true | false | null: not judgeable), no_folded_
 integrity, or whose input or electronic validity is false, is excluded and
 listed. `validity.unbiased` is false **whenever any excluded member is folded**
 (named so that true reads as fine, like every other validity flag; `bias` in
-the first draft).
+the first draft). **What it means, exactly (review 7 R7-9):**
+no folded member was excluded. It is not a claim that the ensemble is
+unbiased: selection, the
+force field and shapes never sampled can bias a sample without excluding
+anything. The name stays because `espmap.ensemble/1` is frozen; a clearer
+name waits for `espmap.ensemble/2`.
 That rule is conservative and testable: "disproportionately" wouldn't be. That is exactly the failure espmap
 shipped once: the χ = 2 check refused precisely the two folded C18
 conformers, and the ensemble looked converged at 1.1 kcal/mol until they
@@ -332,13 +336,15 @@ stated in `not_resolvable` when it applies:
 **A measurement contract, not a version warning (R7-7).** An equal
 `analysis_key` says one protocol, not one program.
 - Records from one build (same version and commit) always compare.
-- Records from different builds compare only when each states (in
-  `provenance.measurement_contract`) or its release declares
-  (`CONTRACT_BY_RELEASE`) the same contract that espmap knows.
+- Records from different builds compare only when each one's release
+  declares the same contract in espmap's own table (`CONTRACT_BY_RELEASE`).
+  A dev build, an unknown version and v0.2.x declare none.
 - Otherwise the comparison is refused: `COMPARE_CONTRACT_UNKNOWN`, or
   `COMPARE_CONTRACT_DIFFERS`.
-- A record whose stated contract contradicts its own release is refused as
-  edited.
+- The contract is enforced, never written: `espmap.record/1` and
+  `espmap.compare/1` keep their frozen shapes. A record that states a
+  contract of its own is not record/1, and is refused
+  (`COMPARE_SCHEMA_UNSUPPORTED`).
 - An ensemble whose members come from several builds needs one contract
   across them.
 - `VERSIONS_DIFFER` remains as a flag when two releases share a contract.

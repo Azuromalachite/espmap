@@ -197,13 +197,14 @@ def test_different_levels_of_theory_are_refused(tmp_path):                      
     assert _codes(em.compare_records, a, b, CORR) == {"COMPARE_ANALYSIS_DIFFERS"}
 
 
-def test_flags_versions_convergence_and_bias(tmp_path):                         # C7, C11
+def test_flags_versions_convergence_and_bias(tmp_path, monkeypatch):            # C7, C11
     a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: 1.0, RS: 1.0})] * 3, converged=False,
                   unbiased=False, excluded=[dict(conformer="conf_03", folded=True)])
     # R7-7 (the user's triage of review 7): v0.2.1 vs v0.3.0 is now refused
     # (K1); two releases under one contract still compare, with the flag
+    monkeypatch.setitem(em.CONTRACT_BY_RELEASE, "0.3.1", "espmap.numeric/1")
     b = _single(tmp_path, "b", _record("CCCCCCCO", {NN: 1.0, RS: 1.0}, version="0.3.1",
-                                       prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/1")))
+                                       prov=dict(code="v0.3.1")))
     c = em.compare_records(a, b, CORR)
     assert set(c["flags"]) == {"CONFORMERS_NOT_SAMPLED", "VERSIONS_DIFFER", "NOT_CONVERGED",
                                "SELECTION_BIASED"}
@@ -405,6 +406,19 @@ def test_r7_10_the_schema_rejects_a_resolved_site_that_was_not_evaluable(tmp_pat
 
 
 # --- review 7 R7-7: a measurement contract, not a version warning ----------------
+def test_r7_7_compare1_keeps_its_shape(tmp_path):
+    """The contract is enforced, never emitted: compare/1 is frozen (the
+    user's decision on the v0.3.1 branch)."""
+    import json as _json
+    a, b = _sides(tmp_path, dict(version="0.3.0", prov=dict(code="v0.3.0")),
+                  dict(version="0.3.0", prov=dict(code="v0.3.0")))
+    c = em.compare_records(a, b, CORR)
+    schema = _json.loads((Path(__file__).resolve().parents[1] / "docs" / "compare-schema.json")
+                         .read_text(encoding="utf-8"))
+    assert set(c["inputs"]["A"]) == set(schema["$defs"]["input"]["properties"])
+
+
+
 # Same analysis_key, different espmap: only a declared contract may make the
 # numbers comparable. Counterexamples first; strict xfails until the fix.
 R77 = pytest.mark.xfail(strict=True, reason="R7-7: a version difference only warns")
@@ -443,23 +457,34 @@ def test_r7_7_k4_one_dev_version_two_commits_do_not_compare(tmp_path):
                                 dict(version="0.3.1.dev0", prov=dict(code="v0.3.0-5-gbbbbbbb")))
 
 
-def test_r7_7_k6_two_contracts_do_not_compare(tmp_path):
-    assert _refused_by_contract(
-        tmp_path, dict(version="0.3.1", prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/1")),
-        dict(version="0.4.0", prov=dict(code="v0.4.0", measurement_contract="espmap.numeric/2")))
+def test_r7_7_k6_two_contracts_do_not_compare(tmp_path, monkeypatch):
+    monkeypatch.setitem(em.CONTRACT_BY_RELEASE, "0.3.1", "espmap.numeric/1")
+    monkeypatch.setitem(em.CONTRACT_BY_RELEASE, "0.4.0", "espmap.numeric/2")
+    assert _refused_by_contract(tmp_path, dict(version="0.3.1", prov=dict(code="v0.3.1")),
+                                dict(version="0.4.0", prov=dict(code="v0.4.0")))
 
 
-def test_r7_7_k7_an_unknown_contract_is_refused(tmp_path):
-    assert _refused_by_contract(
-        tmp_path, dict(version="0.3.1", prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/9")),
-        dict(version="0.3.1", prov=dict(code="v0.3.1-2-gccccccc", measurement_contract="espmap.numeric/9")))
+def _refused_as_not_record1(tmp, a, b):
+    try:
+        em.compare_records(*_sides(tmp, a, b), CORR)
+    except em.CompareRefused as e:
+        return {c for _, c, _, _ in e.findings} == {"COMPARE_SCHEMA_UNSUPPORTED"}
+    return False
 
 
-def test_r7_7_k8_a_contract_that_contradicts_its_release_is_refused(tmp_path):
-    """v0.3.0 is numeric/1 by declaration; a v0.3.0 record claiming another
-    contract was edited or forged."""
-    assert _refused_by_contract(
-        tmp_path, dict(version="0.3.0", prov=dict(code="v0.3.0", measurement_contract="espmap.numeric/2")),
+def test_r7_7_k7_a_record_stating_a_contract_is_not_record1(tmp_path):
+    """record/1 has no contract field (the user's decision): a record that
+    states one was edited, and is refused, never believed."""
+    assert _refused_as_not_record1(
+        tmp_path, dict(version="0.3.0", prov=dict(code="v0.3.0", measurement_contract="espmap.numeric/9")),
+        dict(version="0.3.0", prov=dict(code="v0.3.0")))
+
+
+def test_r7_7_k8_a_dev_record_cannot_claim_a_contract(tmp_path):
+    """A dev build claiming a release's contract to compare across builds."""
+    assert _refused_as_not_record1(
+        tmp_path, dict(version="0.3.1.dev0", prov=dict(code="v0.3.0-3-gaaaaaaa",
+                                                       measurement_contract="espmap.numeric/1")),
         dict(version="0.3.0", prov=dict(code="v0.3.0")))
 
 
@@ -480,9 +505,10 @@ def test_r7_7_k3_one_build_compares_with_itself(tmp_path):
     assert "VERSIONS_DIFFER" not in em.compare_records(a, b, CORR)["flags"]
 
 
-def test_r7_7_k5_two_releases_under_one_contract_compare_with_a_flag(tmp_path):
-    """v0.3.0 (numeric/1 by declaration) and a later release that writes the
-    same contract: comparable, and the record says the versions differ."""
+def test_r7_7_k5_two_releases_under_one_contract_compare_with_a_flag(tmp_path, monkeypatch):
+    """v0.3.0 and a later release the table puts under the same contract:
+    comparable, and the record says the versions differ."""
+    monkeypatch.setitem(em.CONTRACT_BY_RELEASE, "0.3.1", "espmap.numeric/1")
     a, b = _sides(tmp_path, dict(version="0.3.0", prov=dict(code="v0.3.0")),
-                  dict(version="0.3.1", prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/1")))
+                  dict(version="0.3.1", prov=dict(code="v0.3.1")))
     assert "VERSIONS_DIFFER" in em.compare_records(a, b, CORR)["flags"]

@@ -2838,9 +2838,10 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                       # null when not judgeable (fewer than 3 usable values, or no
                       # site table): not measured is not failed
                       convergence=converged,
-                      # review 7 R7-9: what the check is, by name; 'unbiased'
-                      # stays (ensemble/1 is frozen) and means only this
-                      no_folded_exclusion=not any(e["folded"] for e in failures),
+                      # review 7 R7-9: means only "no folded member was
+                      # excluded", never "the sample is unbiased"; the name
+                      # stays because ensemble/1 is frozen (ensemble/2 may
+                      # rename it)
                       unbiased=not any(e["folded"] for e in failures)))
 
 
@@ -3108,6 +3109,12 @@ def validate_record(rec, where):
         raise CompareRefused([_cmp_block(
             "COMPARE_SCHEMA_UNSUPPORTED", f"{where}: no {', '.join(miss)}",
             "compare records written by espmap, unedited")])
+    if "measurement_contract" in (rec.get("provenance") or {}):
+        # R7-7: the contract is espmap's own table, never a record's claim
+        raise CompareRefused([_cmp_block(
+            "COMPARE_SCHEMA_UNSUPPORTED",
+            f"{where}: provenance.measurement_contract is not a {RECORD_SCHEMA} field",
+            "compare records written by espmap, unedited")])
 
 
 def validate_ensemble(rec, where):
@@ -3218,19 +3225,14 @@ def _pair_entry(rows_a, rows_b, key, rule_cfg, partition, single, blockers=()):
 def _side_contracts(sides):
     """Review 7 R7-7: the contract both sides share, or CompareRefused. Records
     from one build always compare; records from different builds compare only
-    when every record states (or its release declares) the same known
+    when every record's release declares the same known
     contract. An ensemble whose members come from several builds must have
-    one contract across them."""
+    one contract across them. The contract of a record is its release's
+    (CONTRACT_BY_RELEASE); records state none."""
     out, builds = {}, {}
     for s in "AB":
         recs = [r for _, _, r in sides[s]["members"]]
-        got = [record_contract(r) for r in recs]
-        bad = [f"{c}: {p}" for (c_, _, _), (_, p) in zip(sides[s]["members"], got) for c in [c_] if p]
-        if bad:
-            raise CompareRefused([_cmp_block(
-                "COMPARE_CONTRACT_UNKNOWN", f"side {s}: " + "; ".join(bad),
-                "compare records written by espmap, unedited")])
-        contracts = {c for c, _ in got}
+        contracts = {record_contract(r) for r in recs}
         side_builds = {_build(r) for r in recs}
         if len(side_builds) > 1 or None in side_builds:
             if None in contracts or len(contracts) > 1:
@@ -3296,7 +3298,7 @@ def compare_records(path_a, path_b, correspondence, rule=None):
     flags = []
     if any(single.values()):
         flags.append("CONFORMERS_NOT_SAMPLED")
-    contract = _side_contracts(sides)
+    _side_contracts(sides)
     vers = {s: (sides[s]["members"][0][2].get("provenance") or {}).get("espmap_version")
             for s in "AB"}
     if vers["A"] != vers["B"]:
@@ -3365,8 +3367,7 @@ def compare_records(path_a, path_b, correspondence, rule=None):
         ex = r.get("excluded") or []
         inputs[s] = dict(
             kind=kind, path=str(path), sha256=sides[s]["sha"], analysis_key=r["analysis_key"],
-            espmap_version=vers[s], measurement_contract=contract,
-            n_members=len(sides[s]["members"]),
+            espmap_version=vers[s], n_members=len(sides[s]["members"]),
             member_records=[dict(record=m["record"], sha256=m["record_sha256"])
                             for m in r.get("members", [])] if kind == "ensemble" else [],
             excluded=len(ex), excluded_folded=[bool(e.get("folded")) for e in ex],
@@ -4319,36 +4320,32 @@ def code_identity():
 # into numbers. Two records from different builds compare only under one
 # known contract.
 #
+# The contract lives here, not in the record: espmap.record/1 is frozen (the
+# user's decision on the v0.3.1 branch). A release's contract is looked up
+# by the espmap_version every record already carries; a dev build has none,
+# and compares only with records from its own commit.
+#
 # Bump MEASUREMENT_CONTRACT (espmap.numeric/2, ...) in any change that moves
 # a number under an unchanged analysis_key, and add the new contract to
-# MEASUREMENT_CONTRACTS. tests/test_fixtures.py pins the fixture numbers to
-# the contract they were computed under, so such a change fails until the
-# contract is bumped.
+# MEASUREMENT_CONTRACTS. At every release, add its version to
+# CONTRACT_BY_RELEASE under MEASUREMENT_CONTRACT (tests/test_fixtures.py
+# fails a release version that is missing, and pins the fixture numbers to
+# the contract they were computed under).
 MEASUREMENT_CONTRACT = "espmap.numeric/1"
 MEASUREMENT_CONTRACTS = {
     "espmap.numeric/1": "the numerics of espmap v0.3.0: analysis_key with margin_bohr, "
                         "lattice origin at min(coords) - margin, marching cubes at the "
                         "isovalue, ESP on the isosurface vertices, both partition rules",
 }
-# Releases that predate the record field, and the contract each one had.
-# v0.2.x declares none: its records do not compare with any other build's.
+# Every release and the contract its numbers keep. v0.2.x declares none:
+# its records do not compare with any other build's.
 CONTRACT_BY_RELEASE = {"0.3.0": "espmap.numeric/1"}
 
 
 def record_contract(rec):
-    """(contract, problem) for one record: the contract it states, else the
-    one its release declares; problem when it states one espmap does not know,
-    or one its own release contradicts (an edited record)."""
-    prov = rec.get("provenance") or {}
-    version, stated = prov.get("espmap_version"), prov.get("measurement_contract")
-    declared = CONTRACT_BY_RELEASE.get(version)
-    if stated is None:
-        return declared, None
-    if stated not in MEASUREMENT_CONTRACTS:
-        return None, f"it states measurement contract {stated!r}, which this espmap does not know"
-    if declared is not None and declared != stated:
-        return None, f"espmap {version} is {declared}, but the record states {stated}"
-    return stated, None
+    """The contract of the release that wrote rec, or None (a dev build, an
+    unknown version, or v0.2.x)."""
+    return CONTRACT_BY_RELEASE.get((rec.get("provenance") or {}).get("espmap_version"))
 
 
 def _build(rec):
@@ -4379,8 +4376,7 @@ def provenance():
                 if p.get("user_api") == "blas"]
     except ImportError:
         pass
-    return dict(**code_identity(), measurement_contract=MEASUREMENT_CONTRACT,
-                python=platform.python_version(),
+    return dict(**code_identity(), python=platform.python_version(),
                 numpy=np.__version__, scipy=ver("scipy"),
                 scikit_image=ver("scikit-image"), pyscf=ver("pyscf"),
                 rdkit=ver("rdkit"), matplotlib=ver("matplotlib"),

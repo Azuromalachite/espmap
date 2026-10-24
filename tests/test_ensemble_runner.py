@@ -550,12 +550,14 @@ def test_r7_7_a_resume_under_another_contract_is_refused(plan, tmp_path, monkeyp
     assert e.value.findings[0][1] == "ENSEMBLE_RESUME_PROTOCOL_MISMATCH"
 
 
-def test_r7_9_validity_names_what_it_checks(plan, tmp_path):
-    """Review 7 R7-9: 'unbiased' reads as a claim about the sample, but it
-    only says no folded member was excluded. The record also carries
-    no_folded_exclusion, equal to it; 'unbiased' stays (ensemble/1 is
-    frozen) and its description says what it is."""
+def test_r7_9_validity_keeps_its_frozen_shape_and_says_what_unbiased_means(plan, tmp_path):
+    """Review 7 R7-9: 'unbiased' only says no folded member was excluded.
+    ensemble/1 is frozen, so the wire keeps exactly its fields (the user's
+    decision: a better name waits for ensemble/2), and the spec and README
+    say what the flag means and does not."""
     ok = em.run_ensemble(plan, tmp_path / "ok", runner=Stub(), log=lambda s: None)
-    assert ok["validity"]["no_folded_exclusion"] is ok["validity"]["unbiased"] is True
-    desc = _SCHEMA["properties"]["validity"]["properties"]["unbiased"]["description"]
-    assert "no_folded_exclusion" in desc and "not a claim" in desc
+    assert set(ok["validity"]) == {"members", "convergence", "unbiased"}
+    root = Path(__file__).resolve().parents[1]
+    for doc in ("docs/ensemble-spec.md", "README.md"):
+        text = (root / doc).read_text(encoding="utf-8")
+        assert "no folded member was excluded" in text and "not a claim" in text, doc

@@ -203,6 +203,14 @@ def test_pinned_values_name_their_contract():
     assert PINNED_UNDER in em.MEASUREMENT_CONTRACTS
 
 
+def test_a_release_version_is_in_the_contract_table():
+    """A released espmap with no contract entry would make its own records
+    incomparable with every other build's (R7-7)."""
+    import re
+    if re.fullmatch(r"\d+\.\d+\.\d+", em.__version__):
+        assert em.CONTRACT_BY_RELEASE.get(em.__version__) == em.MEASUREMENT_CONTRACT
+
+
 @pytest.mark.skipif(DRY, reason="a dry run uses another basis")
 @pytest.mark.parametrize("name", NAMES)
 def test_fixture_values_are_pinned(name):
