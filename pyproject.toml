@@ -51,4 +51,5 @@ version = { attr = "esp_map.__version__" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: performs a real SCF calculation"]
+markers = ["slow: performs a real SCF calculation",
+           "release: hours of SCF (ensembles); run for a release, not by the monthly smoke"]

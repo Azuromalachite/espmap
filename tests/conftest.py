@@ -14,6 +14,8 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: performs a real SCF calculation")
+    config.addinivalue_line("markers", "release: hours of SCF (ensembles); run for a release by "
+                                       "bench/acceptance.py, excluded from the monthly smoke")
 
 
 def pytest_collection_modifyitems(config, items):

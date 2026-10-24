@@ -442,6 +442,7 @@ def test_fast_case(case, tmp_path):
 
 
 @pytest.mark.slow
+@pytest.mark.release        # hours: run by bench/acceptance.py, not by the monthly smoke
 @pytest.mark.parametrize("case", _params("slow"))
 def test_slow_case(case, tmp_path):
     _run(case, tmp_path)
