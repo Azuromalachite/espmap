@@ -7,7 +7,11 @@ computed at two earlier commits, which nothing in the file said. This file
 records which code accepted, which code computed every member, and the
 environment, and says whether they are one revision.
 
-    python bench/acceptance.py --release 0.3.0 --work DIR [--only E3 E4]
+    python bench/acceptance.py --release 0.3.1 --work DIR --suite [--only E3 E4]
+
+--suite runs the full suite (--runslow) on the same checkout first and
+records it; bench/check_release.py, which CI runs on every v* tag, requires
+it (review 7 R7-14).
 
 Each case runs in DIR/<case> through the hostile set's own runner
 (tests/test_ensemble_set.py _run). A case directory made by another
@@ -42,6 +46,22 @@ def member_codes(case_dir):
     return out
 
 
+def run_suite(code):
+    """The full suite, slow tests included, on this checkout: counts as
+    pytest reports them (review 7 R7-14: a tag needs it on exactly its code)."""
+    import re
+    import subprocess
+    cmd = [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "--runslow", "-q"]
+    t0 = time.time()
+    r = subprocess.run(cmd, cwd=HERE.parent, capture_output=True, text=True)
+    last = next((line for line in reversed(r.stdout.splitlines()) if " in " in line), "")
+    n = {k: int(m[1]) if (m := re.search(rf"(\d+) {k}", last)) else 0
+         for k in ("passed", "failed", "errors", "skipped", "xfailed", "xpassed")}
+    n["errors"] += int(m[1]) if (m := re.search(r"(\d+) error\b", last)) else 0
+    return dict(code=code, command="pytest -p no:cacheprovider --runslow -q", returncode=r.returncode,
+                wall_s=round(time.time() - t0, 1), summary=last.strip("= "), **n)
+
+
 def main(argv=None):
     import test_ensemble_set as ts
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -49,6 +69,9 @@ def main(argv=None):
     ap.add_argument("--work", required=True, type=Path)
     ap.add_argument("--only", nargs="*", default=None)
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--suite", action="store_true",
+                    help="also run the full suite (--runslow) first and record it; "
+                         "bench/check_release.py requires it")
     a = ap.parse_args(argv)
     prov = em.provenance()
     code = prov["code"]
@@ -57,6 +80,11 @@ def main(argv=None):
     out = a.out or HERE / f"acceptance_v{a.release}.json"
     if out.exists() and a.out is None:
         raise SystemExit(f"{out} exists; acceptance files are not overwritten (pass --out)")
+    suite = None
+    if a.suite:
+        print("full suite (--runslow) ...", flush=True)
+        suite = run_suite(code)
+        print(suite["summary"], flush=True)
     cases = {}
     for cid in a.only or SLOW:
         d = a.work / cid
@@ -92,10 +120,13 @@ def main(argv=None):
         environment={k: prov[k] for k in ("python", "numpy", "scipy", "scikit_image",
                                           "pyscf", "rdkit", "threads", "blas")},
         all_pass=all(r["verdict"] == "PASS" for r in cases.values()),
+        suite=suite,
         cases=cases)
     out.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
-    print(f"wrote {out}: all_pass {rec['all_pass']}, self_contained {rec['self_contained']}")
-    return 0 if rec["all_pass"] and rec["self_contained"] else 1
+    suite_ok = suite is None or suite.get("returncode") == 0
+    print(f"wrote {out}: all_pass {rec['all_pass']}, self_contained {rec['self_contained']}"
+          + ("" if suite is None else f", suite exit {suite.get('returncode')}"))
+    return 0 if rec["all_pass"] and rec["self_contained"] and suite_ok else 1
 
 
 if __name__ == "__main__":

@@ -192,6 +192,25 @@ PINNED = {
 }
 
 
+# The contract PINNED was computed under (review 7 R7-7). A change that moves
+# a pinned number under an unchanged analysis_key is a new contract: bump
+# em.MEASUREMENT_CONTRACT and this together, never PINNED alone.
+PINNED_UNDER = "espmap.numeric/1"
+
+
+def test_pinned_values_name_their_contract():
+    assert em.MEASUREMENT_CONTRACT == PINNED_UNDER
+    assert PINNED_UNDER in em.MEASUREMENT_CONTRACTS
+
+
+def test_a_release_version_is_in_the_contract_table():
+    """A released espmap with no contract entry would make its own records
+    incomparable with every other build's (R7-7)."""
+    import re
+    if re.fullmatch(r"\d+\.\d+\.\d+", em.__version__):
+        assert em.CONTRACT_BY_RELEASE.get(em.__version__) == em.MEASUREMENT_CONTRACT
+
+
 @pytest.mark.skipif(DRY, reason="a dry run uses another basis")
 @pytest.mark.parametrize("name", NAMES)
 def test_fixture_values_are_pinned(name):
