@@ -23,7 +23,8 @@ does not. Do not add a compatibility shim for a signature you changed.
 pip install -e ".[test]"
 python esp_map.py --selftest           # physics + all 11 colormap orientations
 pytest                                 # fast tests, seconds, no SCF
-pytest --runslow -m slow               # tests with real DFT, a few minutes
+pytest --runslow -m "slow and not release"   # real DFT smoke, minutes
+pytest --runslow -m release            # ensemble cases, hours (release runs)
 python esp_map.py --smiles "Clc1ccccc1" --lim 25 --out esp.png
 ```
 
@@ -262,6 +263,9 @@ ones:
 - Raise PySCF's `max_memory` for `--density-fit` runs and re-time the C18
   acetate: at 898 nao density fitting was slower than exact (1,175 s vs
   875 s) with peak memory under the default 4 GB cap.
-- Reduce the slow suite's runtime. The whole suite took 165 s at v0.2.0
-  (528 tests, 34 with real DFT, 4 threads); chlorobenzene's literature-range
-  σ-hole test is 65 s of that.
+- Reduce the slow suite's runtime. At v0.3.0 the whole suite took 4 h 19 min
+  (1466 passed, 4 threads, clean clone of 33f5370), almost all of it the 21
+  ensemble cases (marker ): C12 48 min, C7 46, E5 41, E4 38, E7
+  and E3 23, E11 19. The rest of the slow tests take minutes; the longest is
+  chlorobenzene's literature-range σ-hole test, 70 s. At v0.2.0 the suite was
+  165 s (528 tests, 34 with real DFT).

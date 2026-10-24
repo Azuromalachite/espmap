@@ -445,7 +445,8 @@ Two consequences for anyone quoting a number from this:
 ```bash
 pip install -e ".[test]"
 pytest                      # fast tests, seconds, no SCF
-pytest --runslow -m slow    # tests with real DFT, a few minutes
+pytest --runslow -m "slow and not release"   # tests with real DFT, minutes
+pytest --runslow -m release                 # the ensemble cases, hours
 ```
 
 Every test is a defect that actually shipped at some point, lifted from the
