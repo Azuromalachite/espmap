@@ -2471,7 +2471,9 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     _check_run_manifest(out, dict(schema="espmap.ensemble_run/1",
                                   identity=ensemble_identity(plan),
                                   member_args=[str(x) for x in member_args],
-                                  member_inputs=inputs))
+                                  member_inputs=inputs,
+                                  # R7-7: one numerical behaviour per directory
+                                  measurement_contract=MEASUREMENT_CONTRACT))
     history = {}
     if log_path.exists():
         for line in log_path.read_text(encoding="utf-8").splitlines():
