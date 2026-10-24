@@ -56,6 +56,11 @@ def problems(acc, version, changed):
             out.append(f"the suite ran on {s.get('code')!r}, not the accepted {code!r}")
         if "--runslow" not in (s.get("command") or ""):
             out.append("the suite ran without the slow tests (--runslow)")
+        # the process's exit status is the verdict; the parsed counts only
+        # describe it (an interrupted run or a collection error can leave
+        # clean-looking counts: the user's review of R7-14)
+        if s.get("returncode") != 0:
+            out.append(f"the suite process exited {s.get('returncode')!r}, not 0")
         if s.get("failed") != 0 or s.get("errors") != 0 or not s.get("passed"):
             out.append(f"the suite did not pass: {s.get('passed')} passed, {s.get('failed')} failed, "
                        f"{s.get('errors')} errors")

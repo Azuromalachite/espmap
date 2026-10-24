@@ -25,7 +25,7 @@ def _acc(**kw):
              acceptance_code="v0.3.0-12-g0123456789ab", declared_code_version="0.3.1",
              member_compute_codes=["v0.3.0-12-g0123456789ab"], self_contained=True, all_pass=True,
              suite=dict(code="v0.3.0-12-g0123456789ab", passed=1500, failed=0, errors=0,
-                        command="pytest --runslow"),
+                        command="pytest --runslow", returncode=0),
              cases={"E1": dict(verdict="PASS")})
     a.update(kw)
     return a
@@ -72,24 +72,20 @@ def test_the_accepted_commit_is_read_from_its_describe():
 
 
 # --- the user's review of the v0.3.1 branch: a failed suite process --------------
-HOLE = pytest.mark.xfail(strict=True, reason="R7-14: the suite's return code is never read")
 _SUITE_OK = dict(code="v0.3.0-12-g0123456789ab", passed=100, failed=0, errors=0,
                  command="pytest --runslow")
 
 
-@HOLE
 def test_a_suite_whose_process_failed_does_not_license_a_tag():
     """pytest exited 1 (a collection error, a crash, an interrupted run) but
     the parsed counts look clean: the counts are not the verdict."""
     assert _problems(_acc(suite=dict(_SUITE_OK, returncode=1)))
 
 
-@HOLE
 def test_a_suite_without_a_return_code_does_not_license_a_tag():
     assert _problems(_acc(suite=dict(_SUITE_OK)))
 
 
-@HOLE
 def test_acceptance_with_a_failed_suite_exits_nonzero(tmp_path, monkeypatch):
     """bench/acceptance.py --suite must fail the command when the suite
     fails, whatever the acceptance cases did."""

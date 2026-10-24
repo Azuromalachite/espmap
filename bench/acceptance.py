@@ -123,8 +123,10 @@ def main(argv=None):
         suite=suite,
         cases=cases)
     out.write_text(json.dumps(rec, indent=1) + "\n", encoding="utf-8")
-    print(f"wrote {out}: all_pass {rec['all_pass']}, self_contained {rec['self_contained']}")
-    return 0 if rec["all_pass"] and rec["self_contained"] else 1
+    suite_ok = suite is None or suite.get("returncode") == 0
+    print(f"wrote {out}: all_pass {rec['all_pass']}, self_contained {rec['self_contained']}"
+          + ("" if suite is None else f", suite exit {suite.get('returncode')}"))
+    return 0 if rec["all_pass"] and rec["self_contained"] and suite_ok else 1
 
 
 if __name__ == "__main__":
