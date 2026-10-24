@@ -38,6 +38,8 @@ before and after any change to `esp_at_points`, `run_scf`, `total_dm` or
 | read | `read_structure`, `parse_for_check`, `from_smiles`, `from_file` | **one** reader, **one** embedder — see Invariants |
 | gate | `check_structure`, `print_check` | runs **before** geometry or SCF |
 | ensemble | `plan_ensemble`, `select_ensemble`, `supplied_members`, `shape_descriptors` | before any SCF; one molecule, one stereoisomer, one atom order (`docs/ensemble-spec.md`) |
+| ensemble run | `run_ensemble`, `assemble_ensemble` | one process per member; a run manifest refuses a resume under another protocol; shape from the final geometry when optimised; `espmap.ensemble/1` |
+| compare | `compare_records`, `check_correspondence`, `validate_record`, `validate_ensemble` | refuses differing `analysis_key`s and unverified inputs; never `resolved` with < 2 members, a buried site or unconverged ensemble; `espmap.compare/1` |
 | electronic | `run_scf`, `total_dm`, `density_on_grid`, `esp_at_points` | RKS, or UKS when `spin != 0` |
 | surface | `extract_surface`, `mesh_topology`, `surface_problems` | integrity-checked, raises by default |
 | property | `sigma_hole` | axis from the bond, not from a ring |
