@@ -23,7 +23,8 @@ does not. Do not add a compatibility shim for a signature you changed.
 pip install -e ".[test]"
 python esp_map.py --selftest           # physics + all 11 colormap orientations
 pytest                                 # fast tests, seconds, no SCF
-pytest --runslow -m slow               # tests with real DFT, a few minutes
+pytest --runslow -m "slow and not release"   # real DFT smoke, minutes
+pytest --runslow -m release            # ensemble cases, hours (release runs)
 python esp_map.py --smiles "Clc1ccccc1" --lim 25 --out esp.png
 ```
 
@@ -221,6 +222,17 @@ Any change to basis, functional, grid, surface definition or solvent handling
 invalidates the table above. Re-measure the affected axis and update both this
 file and `README.md` — the numbers appear in both and in the module docstring.
 
+**Any change that moves a number under an unchanged `analysis_key` is a new
+measurement contract.** Bump `MEASUREMENT_CONTRACT` (`espmap.numeric/2`, …),
+add it to `MEASUREMENT_CONTRACTS`, and move `PINNED_UNDER` in
+`tests/test_fixtures.py` with the regenerated fixtures. At every release, add
+its version to `CONTRACT_BY_RELEASE`. Never add one under a contract its
+numbers do not keep. The contract lives in that table, never in a record:
+`espmap.record/1`, `ensemble/1` and `compare/1` are frozen, and a shape change
+is a new schema version. Records from different builds compare only under one
+contract (review 7 R7-7). The margin moved V_min by 0.13 kcal/mol under one key
+before review 7 put it in the key.
+
 `docs/adversarial-review-1.md` through `-5.md` record every defect found so
 far, with the reproduction for each (review 5's in `docs/review-5/`). If a test fails in a way
 that looks familiar, it is probably in there.
@@ -251,6 +263,9 @@ ones:
 - Raise PySCF's `max_memory` for `--density-fit` runs and re-time the C18
   acetate: at 898 nao density fitting was slower than exact (1,175 s vs
   875 s) with peak memory under the default 4 GB cap.
-- Reduce the slow suite's runtime. The whole suite took 165 s at v0.2.0
-  (528 tests, 34 with real DFT, 4 threads); chlorobenzene's literature-range
-  σ-hole test is 65 s of that.
+- Reduce the slow suite's runtime. At v0.3.0 the whole suite took 4 h 19 min
+  (1466 passed, 4 threads, clean clone of 33f5370), almost all of it the 21
+  ensemble cases (marker ): C12 48 min, C7 46, E5 41, E4 38, E7
+  and E3 23, E11 19. The rest of the slow tests take minutes; the longest is
+  chlorobenzene's literature-range σ-hole test, 70 s. At v0.2.0 the suite was
+  165 s (528 tests, 34 with real DFT).

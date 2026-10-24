@@ -33,11 +33,14 @@ NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "
                                        "E10", "E11", "E19",
                                        "C3", "C8", "C9",
                                        # #78's slow comparison run, on aa87d66 (after
-                                       # review 7). C4, C5 and C11 stay: their numbers
-                                       # are injected, the slow runner does not wire
-                                       # injections, and tests/test_compare.py covers
-                                       # each on synthetic records with known numbers
-                                       "C1", "C2", "C6", "C7", "C10", "C12"}
+                                       # review 7)
+                                       "C1", "C2", "C6", "C7", "C10", "C12",
+                                       # injections wired, real DFT on a clean clone at
+                                       # 637dd4e (v0.3.1 work). Comparison cases need a
+                                       # checkout git can identify: under R7-7 a dev
+                                       # build with unknown code is refused. C11 stays:
+                                       # it needs two releases under one contract
+                                       "C4", "C5"}
 
 
 def _records(name):
@@ -322,6 +325,83 @@ def _side(spec, r, tmp_path, name):
     return out
 
 
+def _records_of(path):
+    """[(file, record)] for a single record or every member of an ensemble."""
+    p = Path(path)
+    rec = json.loads(p.read_text(encoding="utf-8"))
+    if rec.get("schema") == em.ENSEMBLE_SCHEMA:
+        return [(p.parent / m["record"], json.loads((p.parent / m["record"]).read_text(encoding="utf-8")))
+                for m in rec["members"]]
+    return [(p, rec)]
+
+
+def _set_site(rec, atoms, nn, rs):
+    """Every site atom's mean under each rule; the site's area-weighted mean
+    is then exactly that value."""
+    for e in rec["sites"]["atoms"]:
+        if e["index"] in atoms:
+            e["nearest_nucleus"]["V_area_mean_kcal_mol"] = nn
+            e["radius_scaled"]["V_area_mean_kcal_mol"] = rs
+
+
+def _write(path, recs):
+    """Write edited member records back and re-hash them in the parent, so
+    the injected ensemble is internally consistent (compare checks hashes)."""
+    import hashlib
+    for f, rec in recs:
+        f.write_text(json.dumps(rec), encoding="utf-8")
+    p = Path(path)
+    parent = json.loads(p.read_text(encoding="utf-8"))
+    if parent.get("schema") == em.ENSEMBLE_SCHEMA:
+        for m in parent["members"]:
+            m["record_sha256"] = hashlib.sha256((p.parent / m["record"]).read_bytes()).hexdigest()
+        p.write_text(json.dumps(parent), encoding="utf-8")
+
+
+def _inject(name, a, b, corr):
+    """The comparison cases' injections, on real computed records. Each
+    returns a check that the injection reached the comparison record."""
+    ra, rb = _records_of(a), _records_of(b)
+    (pair,) = em.check_correspondence(em.record_mol(ra[0][1]), em.record_mol(rb[0][1]), corr)
+    if name == "delta_below_partition":
+        # C4: B's site is 0.5 above A's under one rule and 3.0 under the
+        # other, so the partition term (2.5) exceeds the delta (0.5)
+        for _, rec in rb:
+            _set_site(rec, pair["atoms_B"], 1.5, 4.0)
+        for _, rec in ra:
+            _set_site(rec, pair["atoms_A"], 1.0, 1.0)
+        _write(a, ra)
+        _write(b, rb)
+        return lambda c: (c["sites"][0]["partition"] > abs(c["sites"][0]["by_rule"]["nearest_nucleus"]["delta_mean"]))
+    if name == "sign_consistency_0.7":
+        # C5: A's members 7 x 0.0 and 3 x 10.0 (mean 3.0), B's all 5.0: the
+        # mean difference is +2.0 but 30 of 100 member pairs point the other way
+        assert len(ra) == 10 and len(rb) == 10, (len(ra), len(rb))
+        for i, (_, rec) in enumerate(ra):
+            v = 10.0 if i >= 7 else 0.0
+            _set_site(rec, pair["atoms_A"], v, v)
+        for _, rec in rb:
+            _set_site(rec, pair["atoms_B"], 5.0, 5.0)
+        _write(a, ra)
+        _write(b, rb)
+        return lambda c: abs(c["sites"][0]["by_rule"]["nearest_nucleus"]["sign_consistency"] - 0.7) < 1e-9
+    if name == "B_version_differs":
+        # C11: two releases under one measurement contract. Under R7-7 a dev
+        # build and a release are refused, so the case needs two releases the
+        # table puts under this build's contract; until a second release
+        # exists it cannot be built honestly, and is skipped saying so.
+        rel = [v for v, c in em.CONTRACT_BY_RELEASE.items() if c == em.MEASUREMENT_CONTRACT]
+        if len(rel) < 2:
+            pytest.skip(f"C11 needs two releases under {em.MEASUREMENT_CONTRACT}; the table has {rel}")
+        for recs, v in ((ra, rel[-1]), (rb, rel[0])):
+            for _, rec in recs:
+                rec["provenance"].update(espmap_version=v, code=f"v{v}")
+        _write(a, ra)
+        _write(b, rb)
+        return lambda c: c["inputs"]["A"]["espmap_version"] != c["inputs"]["B"]["espmap_version"]
+    raise NotImplementedError(f"injection {name!r} is not wired")
+
+
 def _run_compare(case, tmp_path):
     r, e = case["recipe"], case["expect"]
     corr = r["sites"]
@@ -334,14 +414,15 @@ def _run_compare(case, tmp_path):
             em.check_correspondence(mols["A"], mols["B"], corr)
         except em.CompareRefused:
             return
-    if r.get("inject"):
-        raise NotImplementedError(f"injection {r['inject']!r} is not wired yet")
     a, b = _side(r["A"], r, tmp_path, "A"), _side(r["B"], r, tmp_path, "B")
+    took = _inject(r["inject"], a, b, corr) if r.get("inject") else None
     if e["outcome"] == "refuse":
         with pytest.raises(em.CompareRefused):
             em.compare_records(a, b, corr)
         return
     c = em.compare_records(a, b, corr)
+    if took is not None:
+        assert took(c), f"the injection {r['inject']!r} did not reach the comparison"
     for name, want in e.get("checks", {}).items():
         if name == "flags":
             assert set(want) <= set(c["flags"]), c["flags"]
@@ -355,7 +436,7 @@ def _run_compare(case, tmp_path):
         elif name in ("site_atoms_A", "site_atoms_B"):
             assert len(c["correspondence"]["pairs"][0]["atoms_" + name[-1]]) == want
         elif name == "versions_recorded":
-            assert len([c["inputs"][s]["espmap_version"] for s in "AB"]) == want
+            assert len({c["inputs"][s]["espmap_version"] for s in "AB"}) == want
         elif name == "single_side":
             assert c["inputs"][want]["kind"] == "single"
         else:
@@ -368,6 +449,7 @@ def test_fast_case(case, tmp_path):
 
 
 @pytest.mark.slow
+@pytest.mark.release        # hours: run by bench/acceptance.py, not by the monthly smoke
 @pytest.mark.parametrize("case", _params("slow"))
 def test_slow_case(case, tmp_path):
     _run(case, tmp_path)

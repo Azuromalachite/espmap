@@ -537,3 +537,27 @@ def test_r7_10_ensemble_records_validate_against_the_schema(case, tmp_path):
     rec = json.loads(json.dumps(em.run_ensemble(p, tmp_path, runner=runner, log=lambda s: None)))
     errors = sorted(jsonschema.Draft202012Validator(_SCHEMA).iter_errors(rec), key=lambda e: list(e.path))
     assert not errors, [f"{list(e.path)}: {e.message}" for e in errors]
+
+
+def test_r7_7_a_resume_under_another_contract_is_refused(plan, tmp_path, monkeypatch):
+    """Members computed under numeric/1, the rest after an upgrade that
+    changed the numerics: one ensemble would hold two programs' numbers."""
+    em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(fail={"conf_03"}),
+                    log=lambda s: None)
+    monkeypatch.setattr(em, "MEASUREMENT_CONTRACT", "espmap.numeric/2")
+    with pytest.raises(em.EnsembleRefused) as e:
+        em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(), log=lambda s: None)
+    assert e.value.findings[0][1] == "ENSEMBLE_RESUME_PROTOCOL_MISMATCH"
+
+
+def test_r7_9_validity_keeps_its_frozen_shape_and_says_what_unbiased_means(plan, tmp_path):
+    """Review 7 R7-9: 'unbiased' only says no folded member was excluded.
+    ensemble/1 is frozen, so the wire keeps exactly its fields (the user's
+    decision: a better name waits for ensemble/2), and the spec and README
+    say what the flag means and does not."""
+    ok = em.run_ensemble(plan, tmp_path / "ok", runner=Stub(), log=lambda s: None)
+    assert set(ok["validity"]) == {"members", "convergence", "unbiased"}
+    root = Path(__file__).resolve().parents[1]
+    for doc in ("docs/ensemble-spec.md", "README.md"):
+        text = (root / doc).read_text(encoding="utf-8")
+        assert "no folded member was excluded" in text and "not a claim" in text, doc

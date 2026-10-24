@@ -203,7 +203,12 @@ validity: {members, convergence (true | false | null: not judgeable), unbiased}
 integrity, or whose input or electronic validity is false, is excluded and
 listed. `validity.unbiased` is false **whenever any excluded member is folded**
 (named so that true reads as fine, like every other validity flag; `bias` in
-the first draft).
+the first draft). **What it means, exactly (review 7 R7-9):**
+no folded member was excluded. It is not a claim that the ensemble is
+unbiased: selection, the
+force field and shapes never sampled can bias a sample without excluding
+anything. The name stays because `espmap.ensemble/1` is frozen; a clearer
+name waits for `espmap.ensemble/2`.
 That rule is conservative and testable: "disproportionately" wouldn't be. That is exactly the failure espmap
 shipped once: the χ = 2 check refused precisely the two folded C18
 conformers, and the ensemble looked converged at 1.1 kcal/mol until they
@@ -327,6 +332,22 @@ stated in `not_resolvable` when it applies:
 - **An ensemble side's convergence must be true** (R7-5). `false`, or `null`
   (not judgeable, as with K = 2), reports the numbers unresolved: "ensemble
   convergence not established".
+
+**A measurement contract, not a version warning (R7-7).** An equal
+`analysis_key` says one protocol, not one program.
+- Records from one build (same version and commit) always compare.
+- Records from different builds compare only when each one's release
+  declares the same contract in espmap's own table (`CONTRACT_BY_RELEASE`).
+  A dev build, an unknown version and v0.2.x declare none.
+- Otherwise the comparison is refused: `COMPARE_CONTRACT_UNKNOWN`, or
+  `COMPARE_CONTRACT_DIFFERS`.
+- The contract is enforced, never written: `espmap.record/1` and
+  `espmap.compare/1` keep their frozen shapes. A record that states a
+  contract of its own is not record/1, and is refused
+  (`COMPARE_SCHEMA_UNSUPPORTED`).
+- An ensemble whose members come from several builds needs one contract
+  across them.
+- `VERSIONS_DIFFER` remains as a flag when two releases share a contract.
 
 Before anything is compared, both files are validated (R7-8). An unknown
 schema, a foreign file or a missing field is `COMPARE_SCHEMA_UNSUPPORTED`.
