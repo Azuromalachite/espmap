@@ -548,3 +548,15 @@ def test_r7_7_a_resume_under_another_contract_is_refused(plan, tmp_path, monkeyp
     with pytest.raises(em.EnsembleRefused) as e:
         em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(), log=lambda s: None)
     assert e.value.findings[0][1] == "ENSEMBLE_RESUME_PROTOCOL_MISMATCH"
+
+
+@pytest.mark.xfail(strict=True, reason="R7-9: only 'unbiased', which claims more than it checks")
+def test_r7_9_validity_names_what_it_checks(plan, tmp_path):
+    """Review 7 R7-9: 'unbiased' reads as a claim about the sample, but it
+    only says no folded member was excluded. The record also carries
+    no_folded_exclusion, equal to it; 'unbiased' stays (ensemble/1 is
+    frozen) and its description says what it is."""
+    ok = em.run_ensemble(plan, tmp_path / "ok", runner=Stub(), log=lambda s: None)
+    assert ok["validity"]["no_folded_exclusion"] is ok["validity"]["unbiased"] is True
+    desc = _SCHEMA["properties"]["validity"]["properties"]["unbiased"]["description"]
+    assert "no_folded_exclusion" in desc and "not a claim" in desc
