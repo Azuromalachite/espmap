@@ -203,6 +203,7 @@ espmap compare c18/ensemble.json c16/ensemble.json --sites corr.json --out compa
 - **Inputs.** Either side is a single record or an ensemble.
 - **Sites** are matched by atom map (`"3+H"` adds atom 3's hydrogens) or by SMARTS, never by index. A pattern that matches two inequivalent atoms is refused.
 - **Refused:** two records with different `analysis_key`s (another method, basis, solvent, grid, margin or geometry source), and anything that isn't an unedited espmap record.
+- **Refused across builds without one measurement contract.** An equal key says the protocol matched, not the program. Records from different espmap builds compare only when both carry, or their release declares, the same known contract (`provenance.measurement_contract`, today `espmap.numeric/1`; v0.3.0 is numeric/1 by declaration). v0.2.x declares none, and a dev build compares only with records from the same commit.
 - **The rule.** A contrast is `resolved` when |Δ| > U = k·√(sd_A² + sd_B²) + |partition| and the member pairs agree in sign. The rule is named in the record and is provisional.
 - **Never resolved, whatever the numbers,** when:
   - a side has fewer than two members (`CONFORMERS_NOT_SAMPLED`);

@@ -221,6 +221,14 @@ Any change to basis, functional, grid, surface definition or solvent handling
 invalidates the table above. Re-measure the affected axis and update both this
 file and `README.md` — the numbers appear in both and in the module docstring.
 
+**Any change that moves a number under an unchanged `analysis_key` is a new
+measurement contract.** Bump `MEASUREMENT_CONTRACT` (`espmap.numeric/2`, …),
+add it to `MEASUREMENT_CONTRACTS`, and move `PINNED_UNDER` in
+`tests/test_fixtures.py` with the regenerated fixtures. Never add a release to
+`CONTRACT_BY_RELEASE` under a contract its numbers do not keep. Records from
+different builds compare only under one contract (review 7 R7-7). The margin
+moved V_min by 0.13 kcal/mol under one key before review 7 put it in the key.
+
 `docs/adversarial-review-1.md` through `-5.md` record every defect found so
 far, with the reproduction for each (review 5's in `docs/review-5/`). If a test fails in a way
 that looks familiar, it is probably in there.

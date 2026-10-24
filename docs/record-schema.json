@@ -136,6 +136,7 @@
     },
     "provenance": {
       "espmap_version": "str", "code": "str", "installed_distribution_version": "str?",
+      "measurement_contract": "str",
       "python": "str", "numpy": "str",
       "scipy": "str?", "scikit_image": "str?", "pyscf": "str?", "rdkit": "str?",
       "matplotlib": "str?", "threads": "int",

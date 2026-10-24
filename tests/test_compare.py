@@ -200,12 +200,15 @@ def test_different_levels_of_theory_are_refused(tmp_path):                      
 def test_flags_versions_convergence_and_bias(tmp_path):                         # C7, C11
     a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: 1.0, RS: 1.0})] * 3, converged=False,
                   unbiased=False, excluded=[dict(conformer="conf_03", folded=True)])
-    b = _single(tmp_path, "b", _record("CCCCCCCO", {NN: 1.0, RS: 1.0}, version="0.2.1"))
+    # R7-7 (the user's triage of review 7): v0.2.1 vs v0.3.0 is now refused
+    # (K1); two releases under one contract still compare, with the flag
+    b = _single(tmp_path, "b", _record("CCCCCCCO", {NN: 1.0, RS: 1.0}, version="0.3.1",
+                                       prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/1")))
     c = em.compare_records(a, b, CORR)
     assert set(c["flags"]) == {"CONFORMERS_NOT_SAMPLED", "VERSIONS_DIFFER", "NOT_CONVERGED",
                                "SELECTION_BIASED"}
     assert c["inputs"]["A"]["excluded"] == 1 and c["inputs"]["A"]["excluded_folded"] == [True]
-    assert {c["inputs"]["A"]["espmap_version"], c["inputs"]["B"]["espmap_version"]} == {"0.3.0", "0.2.1"}
+    assert {c["inputs"]["A"]["espmap_version"], c["inputs"]["B"]["espmap_version"]} == {"0.3.0", "0.3.1"}
 
 
 def test_per_member_rows_and_descriptive_partitions_are_in_the_record(tmp_path):
@@ -418,11 +421,10 @@ def _refused_by_contract(tmp, a, b):
     try:
         em.compare_records(*_sides(tmp, a, b), CORR)
     except em.CompareRefused as e:
-        return {c for _, c, _, _ in e.value.findings} <= CONTRACT_CODES
+        return {c for _, c, _, _ in e.findings} <= CONTRACT_CODES
     return False
 
 
-@R77
 def test_r7_7_k1_a_v021_record_does_not_compare_with_a_v030_one(tmp_path):
     """Even under one analysis_key (a key collision, or an edited record):
     v0.2.x declares no contract."""
@@ -430,34 +432,29 @@ def test_r7_7_k1_a_v021_record_does_not_compare_with_a_v030_one(tmp_path):
                                 dict(version="0.3.0", prov=dict(code="v0.3.0")))
 
 
-@R77
 def test_r7_7_k2_a_dev_build_does_not_compare_with_a_release(tmp_path):
     assert _refused_by_contract(tmp_path, dict(version="0.3.0.dev0", prov=dict(code="v0.2.1-86-g976d343")),
                                 dict(version="0.3.0", prov=dict(code="v0.3.0")))
 
 
-@R77
 def test_r7_7_k4_one_dev_version_two_commits_do_not_compare(tmp_path):
     """The same version string from two commits is two programs."""
     assert _refused_by_contract(tmp_path, dict(version="0.3.1.dev0", prov=dict(code="v0.3.0-3-gaaaaaaa")),
                                 dict(version="0.3.1.dev0", prov=dict(code="v0.3.0-5-gbbbbbbb")))
 
 
-@R77
 def test_r7_7_k6_two_contracts_do_not_compare(tmp_path):
     assert _refused_by_contract(
         tmp_path, dict(version="0.3.1", prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/1")),
         dict(version="0.4.0", prov=dict(code="v0.4.0", measurement_contract="espmap.numeric/2")))
 
 
-@R77
 def test_r7_7_k7_an_unknown_contract_is_refused(tmp_path):
     assert _refused_by_contract(
         tmp_path, dict(version="0.3.1", prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/9")),
         dict(version="0.3.1", prov=dict(code="v0.3.1-2-gccccccc", measurement_contract="espmap.numeric/9")))
 
 
-@R77
 def test_r7_7_k8_a_contract_that_contradicts_its_release_is_refused(tmp_path):
     """v0.3.0 is numeric/1 by declaration; a v0.3.0 record claiming another
     contract was edited or forged."""
@@ -466,7 +463,6 @@ def test_r7_7_k8_a_contract_that_contradicts_its_release_is_refused(tmp_path):
         dict(version="0.3.0", prov=dict(code="v0.3.0")))
 
 
-@R77
 def test_r7_7_k9_an_ensemble_of_two_programs_is_refused(tmp_path):
     """Members computed by two espmap builds: the ensemble has no one contract."""
     a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: v, RS: v}, version=ver, prov=dict(code=code))

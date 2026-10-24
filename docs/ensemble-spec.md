@@ -328,6 +328,20 @@ stated in `not_resolvable` when it applies:
   (not judgeable, as with K = 2), reports the numbers unresolved: "ensemble
   convergence not established".
 
+**A measurement contract, not a version warning (R7-7).** An equal
+`analysis_key` says one protocol, not one program.
+- Records from one build (same version and commit) always compare.
+- Records from different builds compare only when each states (in
+  `provenance.measurement_contract`) or its release declares
+  (`CONTRACT_BY_RELEASE`) the same contract that espmap knows.
+- Otherwise the comparison is refused: `COMPARE_CONTRACT_UNKNOWN`, or
+  `COMPARE_CONTRACT_DIFFERS`.
+- A record whose stated contract contradicts its own release is refused as
+  edited.
+- An ensemble whose members come from several builds needs one contract
+  across them.
+- `VERSIONS_DIFFER` remains as a flag when two releases share a contract.
+
 Before anything is compared, both files are validated (R7-8). An unknown
 schema, a foreign file or a missing field is `COMPARE_SCHEMA_UNSUPPORTED`.
 A member whose sha256, analysis_key or geometry differs from what its parent
