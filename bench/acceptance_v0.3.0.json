@@ -1,0 +1,334 @@
+{
+ "schema": "espmap.acceptance/1",
+ "target_release": "0.3.0",
+ "acceptance_code": "v0.2.1-106-g33f537036620",
+ "declared_code_version": "0.3.0",
+ "member_compute_codes": [
+  "v0.2.1-106-g33f537036620"
+ ],
+ "self_contained": true,
+ "environment": {
+  "python": "3.12.15",
+  "numpy": "2.5.4",
+  "scipy": "1.18.1",
+  "scikit_image": "0.26.0",
+  "pyscf": "2.14.0",
+  "rdkit": "2026.9.1",
+  "threads": 4,
+  "blas": null
+ },
+ "all_pass": true,
+ "cases": {
+  "E1": {
+   "verdict": "PASS",
+   "wall_s": 8.0,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00"
+    ]
+   },
+   "ensemble_key": "5628ba07bdf87b7c0c87d46b2f80ea5b86cd339f",
+   "analysis_key": "7bd60a2a94519eded4611f68cb62c091905d4582",
+   "k": [
+    10,
+    1
+   ],
+   "excluded": {},
+   "folded": 0,
+   "relabelled": 0,
+   "converged": null,
+   "not_converged": 0,
+   "not_judgeable": 36,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": null,
+    "unbiased": true
+   }
+  },
+  "E2": {
+   "verdict": "PASS",
+   "wall_s": 24.7,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00",
+     "conf_01"
+    ]
+   },
+   "ensemble_key": "72f03cc8aaf332e2c825b041443fa6b5ff9f454e",
+   "analysis_key": "7bd60a2a94519eded4611f68cb62c091905d4582",
+   "k": [
+    10,
+    2
+   ],
+   "excluded": {},
+   "folded": 0,
+   "relabelled": 0,
+   "converged": null,
+   "not_converged": 0,
+   "not_judgeable": 48,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": null,
+    "unbiased": true
+   }
+  },
+  "E3": {
+   "verdict": "PASS",
+   "wall_s": 1369.1,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00",
+     "conf_01",
+     "conf_02",
+     "conf_03",
+     "conf_04",
+     "conf_05",
+     "conf_06",
+     "conf_07",
+     "conf_08",
+     "conf_09"
+    ]
+   },
+   "ensemble_key": "8c4b40c1f26d74dcbed19b3e4bfd483d9508ca01",
+   "analysis_key": "7bd60a2a94519eded4611f68cb62c091905d4582",
+   "k": [
+    10,
+    10
+   ],
+   "excluded": {},
+   "folded": 1,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 59,
+   "not_judgeable": 12,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": false,
+    "unbiased": true
+   }
+  },
+  "E4": {
+   "verdict": "PASS",
+   "wall_s": 2955.1,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00",
+     "conf_01",
+     "conf_02",
+     "conf_03",
+     "conf_04",
+     "conf_05",
+     "conf_06",
+     "conf_07",
+     "conf_08",
+     "conf_09"
+    ]
+   },
+   "ensemble_key": "58149c9cdd8c20d3ebca90cf4d583589b38fc257",
+   "analysis_key": "7bd60a2a94519eded4611f68cb62c091905d4582",
+   "k": [
+    10,
+    10
+   ],
+   "excluded": {},
+   "folded": 2,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 7,
+   "not_judgeable": 14,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": false,
+    "unbiased": true
+   }
+  },
+  "E5": {
+   "verdict": "PASS",
+   "wall_s": 2429.5,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00",
+     "conf_02",
+     "conf_03",
+     "conf_04",
+     "conf_05",
+     "conf_06",
+     "conf_07",
+     "conf_08"
+    ]
+   },
+   "ensemble_key": "939157e2ef3d775ee4506e4300868dc92378b21b",
+   "analysis_key": "7bd60a2a94519eded4611f68cb62c091905d4582",
+   "k": [
+    10,
+    8
+   ],
+   "excluded": {
+    "conf_01": "MEMBER_RUN_FAILED",
+    "conf_09": "MEMBER_RUN_FAILED"
+   },
+   "folded": 0,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 2,
+   "not_judgeable": 14,
+   "kish_n": null,
+   "validity": {
+    "members": false,
+    "convergence": false,
+    "unbiased": false
+   }
+  },
+  "E6": {
+   "verdict": "PASS",
+   "wall_s": 18.9,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00",
+     "conf_01"
+    ]
+   },
+   "ensemble_key": "1b59ccf4feb45141d1ccd13ab598c17ffb97e4a1",
+   "analysis_key": "7bd60a2a94519eded4611f68cb62c091905d4582",
+   "k": [
+    10,
+    2
+   ],
+   "excluded": {},
+   "folded": 0,
+   "relabelled": 0,
+   "converged": null,
+   "not_converged": 0,
+   "not_judgeable": 36,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": null,
+    "unbiased": true
+   }
+  },
+  "E7": {
+   "verdict": "PASS",
+   "wall_s": 1408.1,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00",
+     "conf_01",
+     "conf_02",
+     "conf_03",
+     "conf_04",
+     "conf_05",
+     "conf_06",
+     "conf_07",
+     "conf_08",
+     "conf_09",
+     "conf_10",
+     "conf_11",
+     "conf_12",
+     "conf_13",
+     "conf_14",
+     "conf_15",
+     "conf_16",
+     "conf_17",
+     "conf_18",
+     "conf_19"
+    ]
+   },
+   "ensemble_key": "4bd5e39a4ed7568d8a55b5ada2ec7c9ad860e868",
+   "analysis_key": "c0574a1eef0843770ab3b38c5d7e957d55fea959",
+   "k": [
+    20,
+    20
+   ],
+   "excluded": {},
+   "folded": 0,
+   "relabelled": 8,
+   "converged": true,
+   "not_converged": 0,
+   "not_judgeable": 5,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": true,
+    "unbiased": true
+   }
+  },
+  "E10": {
+   "verdict": "PASS",
+   "wall_s": 279.7,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00",
+     "conf_01"
+    ]
+   }
+  },
+  "E11": {
+   "verdict": "PASS",
+   "wall_s": 1110.2,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00",
+     "conf_01",
+     "conf_02",
+     "conf_03",
+     "conf_04",
+     "conf_05"
+    ]
+   },
+   "ensemble_key": "4bea82494f193069eeff2900365bf9da5ae74588",
+   "analysis_key": "de939043811f1690937141bc7d83628409229f44",
+   "k": [
+    6,
+    6
+   ],
+   "excluded": {},
+   "folded": 0,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 2,
+   "not_judgeable": 6,
+   "kish_n": 2.233983180253532,
+   "validity": {
+    "members": true,
+    "convergence": false,
+    "unbiased": true
+   }
+  },
+  "E19": {
+   "verdict": "PASS",
+   "wall_s": 66.8,
+   "member_compute_codes": {
+    "v0.2.1-106-g33f537036620": [
+     "conf_00",
+     "conf_01",
+     "conf_02",
+     "conf_03",
+     "conf_04"
+    ]
+   },
+   "ensemble_key": "52e26dce33fc1d28e05c96c59b01e9b286185e92",
+   "analysis_key": "7bd60a2a94519eded4611f68cb62c091905d4582",
+   "k": [
+    10,
+    5
+   ],
+   "excluded": {},
+   "folded": 0,
+   "relabelled": 0,
+   "converged": false,
+   "not_converged": 10,
+   "not_judgeable": 2,
+   "kish_n": null,
+   "validity": {
+    "members": true,
+    "convergence": false,
+    "unbiased": true
+   }
+  }
+ }
+}
