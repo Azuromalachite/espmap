@@ -69,3 +69,42 @@ def test_the_accepted_commit_is_read_from_its_describe():
     assert m.commit_of("v0.3.0-12-g0123456789ab") == "0123456789ab"
     assert m.commit_of("v0.3.0") == "v0.3.0"
     assert m.commit_of("unknown") is None and m.commit_of("v0.3.0-1-gabc1234-dirty") is None
+
+
+# --- the user's review of the v0.3.1 branch: a failed suite process --------------
+HOLE = pytest.mark.xfail(strict=True, reason="R7-14: the suite's return code is never read")
+_SUITE_OK = dict(code="v0.3.0-12-g0123456789ab", passed=100, failed=0, errors=0,
+                 command="pytest --runslow")
+
+
+@HOLE
+def test_a_suite_whose_process_failed_does_not_license_a_tag():
+    """pytest exited 1 (a collection error, a crash, an interrupted run) but
+    the parsed counts look clean: the counts are not the verdict."""
+    assert _problems(_acc(suite=dict(_SUITE_OK, returncode=1)))
+
+
+@HOLE
+def test_a_suite_without_a_return_code_does_not_license_a_tag():
+    assert _problems(_acc(suite=dict(_SUITE_OK)))
+
+
+@HOLE
+def test_acceptance_with_a_failed_suite_exits_nonzero(tmp_path, monkeypatch):
+    """bench/acceptance.py --suite must fail the command when the suite
+    fails, whatever the acceptance cases did."""
+    import sys
+    import types
+    spec = importlib.util.spec_from_file_location("acceptance", _P.parent / "acceptance.py")
+    acc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(acc)
+    stub = types.SimpleNamespace(_BY_ID={"E1": {}}, _run=lambda case, d: Path(d).mkdir(parents=True))
+    monkeypatch.setitem(sys.modules, "test_ensemble_set", stub)
+    monkeypatch.setattr(acc.em, "provenance", lambda: dict(
+        code="v0.3.0-12-g0123456789ab", espmap_version="0.3.1", python="3", numpy="2", scipy=None,
+        scikit_image=None, pyscf=None, rdkit=None, threads=4, blas=None))
+    monkeypatch.setattr(acc, "run_suite", lambda code: dict(_SUITE_OK, code=code, returncode=1,
+                                                            summary="interrupted"))
+    rc = acc.main(["--release", "0.3.1", "--work", str(tmp_path / "w"), "--only", "E1",
+                   "--out", str(tmp_path / "a.json"), "--suite"])
+    assert rc != 0
