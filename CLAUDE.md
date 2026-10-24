@@ -265,7 +265,7 @@ ones:
   875 s) with peak memory under the default 4 GB cap.
 - Reduce the slow suite's runtime. At v0.3.0 the whole suite took 4 h 19 min
   (1466 passed, 4 threads, clean clone of 33f5370), almost all of it the 21
-  ensemble cases (marker ): C12 48 min, C7 46, E5 41, E4 38, E7
+  ensemble cases (marker `release`): C12 48 min, C7 46, E5 41, E4 38, E7
   and E3 23, E11 19. The rest of the slow tests take minutes; the longest is
   chlorobenzene's literature-range σ-hole test, 70 s. At v0.2.0 the suite was
   165 s (528 tests, 34 with real DFT).
