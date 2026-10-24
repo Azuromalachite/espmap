@@ -3234,6 +3234,15 @@ def _side_contracts(sides):
         recs = [r for _, _, r in sides[s]["members"]]
         contracts = {record_contract(r) for r in recs}
         side_builds = {_build(r) for r in recs}
+        if side_builds == {None} and None in contracts:
+            # no commit names the build (code unknown or dirty) and its version
+            # declares no contract: one build, perhaps, but nothing shows it
+            prov = recs[0].get("provenance") or {}
+            raise CompareRefused([_cmp_block(
+                "COMPARE_CONTRACT_UNKNOWN",
+                f"side {s}: the espmap build cannot be identified (code {prov.get('code')!r}) and "
+                f"espmap {prov.get('espmap_version')} declares no measurement contract",
+                "recompute with a released espmap, or from a clean git checkout")])
         if len(side_builds) > 1 or None in side_builds:
             if None in contracts or len(contracts) > 1:
                 raise CompareRefused([_cmp_block(

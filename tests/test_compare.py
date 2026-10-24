@@ -514,7 +514,6 @@ def test_r7_7_k5_two_releases_under_one_contract_compare_with_a_flag(tmp_path, m
     assert "VERSIONS_DIFFER" in em.compare_records(a, b, CORR)["flags"]
 
 
-@pytest.mark.xfail(strict=True, reason="R7-7: an unidentifiable build is reported as 'more than one build'")
 @pytest.mark.parametrize("code", ["unknown", "v0.3.0-3-gaaaaaaa-dirty", None])
 def test_r7_7_an_unidentifiable_dev_build_is_refused_and_says_why(tmp_path, code):
     """Found by the C4/C5 real-DFT run (records computed where git could not
