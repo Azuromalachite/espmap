@@ -103,7 +103,7 @@ def test_include_h_adds_the_sites_hydrogens():
 
 
 # --- synthetic records with known numbers ---------------------------------------
-def _record(smiles, site_means, vmin=-20.0, key="k" * 40, version="0.3.0", valid=True):
+def _record(smiles, site_means, vmin=-20.0, key="k" * 40, version="0.3.0", valid=True, prov=None):
     """A record of smiles with every atom given area 1 and, under each rule,
     the mean site_means[rule] (same for every atom)."""
     m = _mol(smiles)
@@ -114,7 +114,7 @@ def _record(smiles, site_means, vmin=-20.0, key="k" * 40, version="0.3.0", valid
         geometry=dict(symbols=[a.GetSymbol() for a in m.GetAtoms()], bonds=em.record_bonds(
             Chem.MolFromSmiles(smiles)), sha1="0" * 40),
         input=dict(approved_smiles=smiles, computed_smiles=smiles),
-        provenance=dict(espmap_version=version),
+        provenance=dict(espmap_version=version, **(prov or {})),
         results=dict(V_min_kcal_mol=vmin, V_max_kcal_mol=-vmin),
         sites=dict(atoms=[dict(index=a.GetIdx(), atom_map=a.GetAtomMapNum() or None,
                                element=a.GetSymbol(),
@@ -399,3 +399,94 @@ def test_r7_10_the_schema_rejects_a_resolved_site_that_was_not_evaluable(tmp_pat
     assert not list(v.iter_errors(c))
     c["sites"][0]["evaluable"] = False                     # a tampered record
     assert list(v.iter_errors(c))
+
+
+# --- review 7 R7-7: a measurement contract, not a version warning ----------------
+# Same analysis_key, different espmap: only a declared contract may make the
+# numbers comparable. Counterexamples first; strict xfails until the fix.
+R77 = pytest.mark.xfail(strict=True, reason="R7-7: a version difference only warns")
+CONTRACT_CODES = {"COMPARE_CONTRACT_UNKNOWN", "COMPARE_CONTRACT_DIFFERS"}
+
+
+def _sides(tmp, a, b):
+    """Two single records, A hexanol and B heptanol, provenance as given."""
+    return (_single(tmp, "a", _record("CCCCCCO", {NN: 1.0, RS: 1.0}, **a)),
+            _single(tmp, "b", _record("CCCCCCCO", {NN: 2.0, RS: 2.0}, **b)))
+
+
+def _refused_by_contract(tmp, a, b):
+    try:
+        em.compare_records(*_sides(tmp, a, b), CORR)
+    except em.CompareRefused as e:
+        return {c for _, c, _, _ in e.value.findings} <= CONTRACT_CODES
+    return False
+
+
+@R77
+def test_r7_7_k1_a_v021_record_does_not_compare_with_a_v030_one(tmp_path):
+    """Even under one analysis_key (a key collision, or an edited record):
+    v0.2.x declares no contract."""
+    assert _refused_by_contract(tmp_path, dict(version="0.2.1", prov=dict(code="v0.2.1")),
+                                dict(version="0.3.0", prov=dict(code="v0.3.0")))
+
+
+@R77
+def test_r7_7_k2_a_dev_build_does_not_compare_with_a_release(tmp_path):
+    assert _refused_by_contract(tmp_path, dict(version="0.3.0.dev0", prov=dict(code="v0.2.1-86-g976d343")),
+                                dict(version="0.3.0", prov=dict(code="v0.3.0")))
+
+
+@R77
+def test_r7_7_k4_one_dev_version_two_commits_do_not_compare(tmp_path):
+    """The same version string from two commits is two programs."""
+    assert _refused_by_contract(tmp_path, dict(version="0.3.1.dev0", prov=dict(code="v0.3.0-3-gaaaaaaa")),
+                                dict(version="0.3.1.dev0", prov=dict(code="v0.3.0-5-gbbbbbbb")))
+
+
+@R77
+def test_r7_7_k6_two_contracts_do_not_compare(tmp_path):
+    assert _refused_by_contract(
+        tmp_path, dict(version="0.3.1", prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/1")),
+        dict(version="0.4.0", prov=dict(code="v0.4.0", measurement_contract="espmap.numeric/2")))
+
+
+@R77
+def test_r7_7_k7_an_unknown_contract_is_refused(tmp_path):
+    assert _refused_by_contract(
+        tmp_path, dict(version="0.3.1", prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/9")),
+        dict(version="0.3.1", prov=dict(code="v0.3.1-2-gccccccc", measurement_contract="espmap.numeric/9")))
+
+
+@R77
+def test_r7_7_k8_a_contract_that_contradicts_its_release_is_refused(tmp_path):
+    """v0.3.0 is numeric/1 by declaration; a v0.3.0 record claiming another
+    contract was edited or forged."""
+    assert _refused_by_contract(
+        tmp_path, dict(version="0.3.0", prov=dict(code="v0.3.0", measurement_contract="espmap.numeric/2")),
+        dict(version="0.3.0", prov=dict(code="v0.3.0")))
+
+
+@R77
+def test_r7_7_k9_an_ensemble_of_two_programs_is_refused(tmp_path):
+    """Members computed by two espmap builds: the ensemble has no one contract."""
+    a = _ensemble(tmp_path, "a", [_record("CCCCCCO", {NN: v, RS: v}, version=ver, prov=dict(code=code))
+                                  for v, ver, code in ((1.0, "0.3.0", "v0.3.0"), (1.1, "0.3.0", "v0.3.0"),
+                                                       (1.2, "0.3.0.dev0", "v0.2.1-86-g976d343"))])
+    b = _ensemble(tmp_path, "b", [_record("CCCCCCCO", {NN: v, RS: v}) for v in (5.0, 5.1, 5.2)])
+    with pytest.raises(em.CompareRefused):
+        em.compare_records(a, b, CORR)
+
+
+def test_r7_7_k3_one_build_compares_with_itself(tmp_path):
+    """A dev build is comparable with records from the very same commit."""
+    a, b = _sides(tmp_path, dict(version="0.3.1.dev0", prov=dict(code="v0.3.0-3-gaaaaaaa")),
+                  dict(version="0.3.1.dev0", prov=dict(code="v0.3.0-3-gaaaaaaa")))
+    assert "VERSIONS_DIFFER" not in em.compare_records(a, b, CORR)["flags"]
+
+
+def test_r7_7_k5_two_releases_under_one_contract_compare_with_a_flag(tmp_path):
+    """v0.3.0 (numeric/1 by declaration) and a later release that writes the
+    same contract: comparable, and the record says the versions differ."""
+    a, b = _sides(tmp_path, dict(version="0.3.0", prov=dict(code="v0.3.0")),
+                  dict(version="0.3.1", prov=dict(code="v0.3.1", measurement_contract="espmap.numeric/1")))
+    assert "VERSIONS_DIFFER" in em.compare_records(a, b, CORR)["flags"]
