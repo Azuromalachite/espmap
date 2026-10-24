@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 _P = Path(__file__).resolve().parents[1] / "bench" / "check_release.py"
-pytestmark = pytest.mark.xfail(strict=True, reason="R7-14: no release check yet")
 
 
 def _mod():

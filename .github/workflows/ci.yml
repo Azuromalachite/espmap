@@ -24,6 +24,21 @@ jobs:
       - run: pip install -e ".[test]"
       - run: pytest -q
 
+  release:
+    name: release evidence is about this tag's code
+    # review 7 R7-14: a v* tag needs bench/acceptance_v<version>.json from
+    # bench/acceptance.py --suite on the same code (only prose may differ)
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: python bench/check_release.py "${{ github.ref_name }}"
+
   slow:
     name: slow suite (real SCF)
     # only on demand and monthly: these run genuine DFT and take minutes
