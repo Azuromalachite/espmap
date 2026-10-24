@@ -292,10 +292,47 @@ espmap compare A.json B.json --sites correspondence.json --out cmp.json
 The comparison record carries `subject_A` and `subject_B` copied from the
 inputs, and the sha256 of each input record.
 
-A comparison of two single-geometry records of flexible molecules is
-allowed. Its conformational component is "not measured", and it can't be
-`resolved` beyond the partition uncertainty alone. The record says so in a
-stable code (`CONFORMERS_NOT_SAMPLED`).
+**Additions from the consumer review** (Arrowfield, against the Atlas's
+prospective analysis plan, before the code):
+- a site may include its own hydrogens, `"n+H"` by map or `include_h` by
+  SMARTS, recombined exactly from the members' per-atom rows (triangles are
+  owned per atom); single-atom values stay diagnostic;
+- per-member rows per side (`conformer`, `folded`, both rules), so any other
+  decision rule, a bootstrap or an extended-only reading can be recomputed
+  from the record alone;
+- the partition used by the rule is named (`delta_between_rules`); two other
+  readings are recorded as descriptive numbers (`between_side_means`,
+  `max_member`), never used by the rule;
+- a `global_extrema` block for V_min and V_max, shaped like a site;
+- per ensemble side, the excluded count, their folded flags,
+  `validity.unbiased` (flag `SELECTION_BIASED` when false) and convergence;
+- `resolved_under` names the rule, so `resolved` is never read as a
+  consumer's own verdict; a single-geometry side says
+  `measured: not_measured`.
+
+A comparison with a single-geometry side (a single record, or an ensemble
+that kept one member) is **allowed but never resolved** (the user's
+decision, 2026-10-24, an invariant of the code): delta, partition and the
+descriptive numbers are reported, that side's conformational uncertainty is
+`not_measured`, `resolved` is false with a `not_resolvable` reason, and the
+comparison carries `CONFORMERS_NOT_SAMPLED`. Refusing such a comparison
+belongs to a teaching layer, not to the measurement.
+
+Two more gates on `resolved` (review 7), each an invariant of the code, each
+stated in `not_resolvable` when it applies:
+- **A site must have a value on every member under both rules** (R7-4). A
+  folded member can bury a site. Dropping it would shrink n silently, so
+  such a site is `evaluable: false`, `not_evaluable` names the side,
+  conformer and rule, and its numbers are reported unresolved.
+- **An ensemble side's convergence must be true** (R7-5). `false`, or `null`
+  (not judgeable, as with K = 2), reports the numbers unresolved: "ensemble
+  convergence not established".
+
+Before anything is compared, both files are validated (R7-8). An unknown
+schema, a foreign file or a missing field is `COMPARE_SCHEMA_UNSUPPORTED`.
+A member whose sha256, analysis_key or geometry differs from what its parent
+lists is `COMPARE_MEMBER_CHANGED` or `COMPARE_MEMBER_MISMATCH`.
+`docs/compare-schema.json` is the record's JSON Schema.
 
 ## 7. Hostile cases, written first
 

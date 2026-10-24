@@ -2907,6 +2907,459 @@ def ensemble_main(a, argv):
     return 0
 
 
+# ---------------------------------------------------------------- comparison
+# docs/ensemble-spec.md section 6, the record shape reviewed by Arrowfield
+# against the Atlas's prospective analysis plan before this code was written.
+COMPARE_SCHEMA = "espmap.compare/1"
+COMPARE_RULE = dict(
+    id="espmap-0.3-provisional",
+    formula="U = k*sqrt(sd_A^2 + sd_B^2) + |partition|; "
+            "resolved iff |delta_mean| > U and sign_consistency >= s_min",
+    k=2.0, s_min=0.9, sd="member standard deviation, ddof 1 (0 for a single geometry)",
+    partition_definition="delta_between_rules: |delta_mean(nearest_nucleus) - "
+                         "delta_mean(radius_scaled)|",
+    status="provisional", source=None)
+UNCERTAINTY_INCLUDED = ["conformational", "partition"]
+UNCERTAINTY_NOT_INCLUDED = ["method", "basis", "solvent", "geometry_source"]
+
+
+class CompareRefused(ValueError):
+    """A comparison that may not be made; .findings as EnsembleRefused's."""
+
+    def __init__(self, findings):
+        self.findings = findings
+        super().__init__("; ".join(f"{c}: {m}" for _, c, m, _ in findings))
+
+
+def _cmp_block(code, message, remedy):
+    return (BLOCK, code, message, remedy)
+
+
+def record_mol(rec):
+    """The record's molecule in record atom order, hydrogens included: the
+    geometry's symbols and bonds for connectivity, the approved structure's
+    charges and bond orders mapped onto it (taken together from one match,
+    so they stay consistent). For SMARTS site matching in compare."""
+    from rdkit import Chem
+    g = rec["geometry"]
+    sk = Chem.RWMol()
+    for s in g["symbols"]:
+        a = Chem.Atom(s)
+        a.SetNoImplicit(True)
+        sk.AddAtom(a)
+    for i, j, _ in g.get("bonds") or []:
+        sk.AddBond(int(i), int(j), Chem.BondType.SINGLE)
+    smi = rec["input"].get("approved_smiles") or rec["input"].get("gate_smiles")
+    appr = Chem.AddHs(Chem.MolFromSmiles(smi))
+    for a in appr.GetAtoms():
+        a.SetAtomMapNum(0)
+    Chem.Kekulize(appr, clearAromaticFlags=True)
+    skel = sk.GetMol()
+    skel.UpdatePropertyCache(strict=False)
+    match = skel.GetSubstructMatch(_skeleton(appr))
+    if not match:
+        raise CompareRefused([_cmp_block(
+            "COMPARE_STRUCTURE", "the record's bonds do not match its approved structure",
+            "use a record whose structure was verified")])
+    out = Chem.RWMol(skel)
+    for ai, ri in enumerate(match):
+        out.GetAtomWithIdx(ri).SetFormalCharge(appr.GetAtomWithIdx(ai).GetFormalCharge())
+    for b in appr.GetBonds():
+        ob = out.GetBondBetweenAtoms(match[b.GetBeginAtomIdx()], match[b.GetEndAtomIdx()])
+        ob.SetBondType(b.GetBondType())
+    for e in (rec.get("sites") or {}).get("atoms") or []:
+        out.GetAtomWithIdx(e["index"]).SetAtomMapNum(int(e.get("atom_map") or 0))
+    m = out.GetMol()
+    Chem.SanitizeMol(m)
+    return m
+
+
+def resolve_site(mol, site, by, include_h=False):
+    """Record atom indices of one site. by "map": a list of atom-map numbers,
+    each optionally "n+H" (its hydrogens too). by "smarts": the matched
+    atoms; several matches are one site only when symmetry-equivalent
+    (equal canonical ranks, breakTies=False, on the connectivity with its
+    hydrogens and without bond orders, so resonance-equivalent atoms such as
+    acetate's two oxygens are one site; bond orders are the drawing's, as
+    in verify_computed), and then their union. Stereo is not matched.
+    Returns (atoms, None) or (None, reason)."""
+    from rdkit import Chem
+    atoms = set()
+    if by == "map":
+        by_map = {a.GetAtomMapNum(): a.GetIdx() for a in mol.GetAtoms() if a.GetAtomMapNum()}
+        for s in (site if isinstance(site, list) else [site]):
+            s = str(s)
+            with_h = s.endswith("+H")
+            n = int(s[:-2] if with_h else s)
+            if n not in by_map:
+                return None, f"no atom carries map {n}"
+            atoms.add(by_map[n])
+            if with_h:
+                atoms |= {x.GetIdx() for x in mol.GetAtomWithIdx(by_map[n]).GetNeighbors()
+                          if x.GetAtomicNum() == 1}
+        return sorted(atoms), None
+    patt = Chem.MolFromSmarts(site)
+    if patt is None:
+        return None, f"SMARTS {site!r} does not parse"
+    matches = mol.GetSubstructMatches(patt, uniquify=True)
+    if not matches:
+        return None, f"SMARTS {site!r} matches nothing"
+    ranks = list(Chem.CanonicalRankAtoms(_skeleton(mol), breakTies=False))
+    if len({tuple(sorted(ranks[i] for i in m)) for m in matches}) > 1:
+        return None, (f"SMARTS {site!r} matches {len(matches)} atom sets that are not "
+                      f"symmetry-equivalent")
+    for m in matches:
+        atoms |= set(m)
+    if include_h:
+        atoms |= {x.GetIdx() for i in list(atoms) for x in mol.GetAtomWithIdx(i).GetNeighbors()
+                  if x.GetAtomicNum() == 1}
+    return sorted(atoms), None
+
+
+def check_correspondence(mol_a, mol_b, corr):
+    """Resolve every pair of a correspondence on both molecules, or refuse.
+    By index across two molecules is never offered (review 5 R5); by map, a
+    pair asserts homology, so the mapped atoms' elements must agree."""
+    from rdkit import Chem
+    by = corr.get("by")
+    if by not in ("map", "smarts"):
+        raise CompareRefused([_cmp_block(
+            "COMPARE_BY_INDEX" if by == "index" else "COMPARE_CORRESPONDENCE",
+            f"sites by {by!r}: atom indices carry no chemistry across two molecules",
+            "name sites by atom map or by SMARTS")])
+    out, bad = [], []
+    for p in corr["pairs"]:
+        h = bool(p.get("include_h"))
+        a, why_a = resolve_site(mol_a, p["A"], by, h)
+        b, why_b = resolve_site(mol_b, p["B"], by, h)
+        if a is None or b is None:
+            bad.append(_cmp_block("COMPARE_SITE_UNRESOLVED",
+                                  f"site {p['name']!r}: {why_a or why_b}",
+                                  "name the site so it resolves to one site in each molecule"))
+            continue
+        if by == "map":
+            ea = [mol_a.GetAtomWithIdx(i).GetSymbol() for i in a
+                  if mol_a.GetAtomWithIdx(i).GetAtomicNum() > 1]
+            eb = [mol_b.GetAtomWithIdx(i).GetSymbol() for i in b
+                  if mol_b.GetAtomWithIdx(i).GetAtomicNum() > 1]
+            if sorted(ea) != sorted(eb):
+                bad.append(_cmp_block("COMPARE_MAP_ELEMENT",
+                                      f"site {p['name']!r}: {ea} in A, {eb} in B",
+                                      "a map pair asserts homology: map atoms of one element"))
+                continue
+        out.append(dict(name=p["name"], A=p["A"], B=p["B"], include_h=h, atoms_A=a, atoms_B=b))
+    if bad:
+        raise CompareRefused(bad)
+    return out
+
+
+def site_value(rec, atoms, rule):
+    """A site's area-weighted mean V under one rule, recombined from the
+    record's per-atom rows. Exact: triangles are owned per atom, so this is
+    the mean over the union of their triangles (equal to the record's own
+    reaction_sites value for the same atoms). None when the site has no
+    surface under the rule."""
+    rows = {e["index"]: (e.get(rule) or {}) for e in (rec.get("sites") or {}).get("atoms") or []}
+    area = num = 0.0
+    for i in atoms:
+        r = rows.get(i) or {}
+        a, v = r.get("area_A2") or 0.0, r.get("V_area_mean_kcal_mol")
+        if a > 0 and v is not None:
+            area, num = area + a, num + a * v
+    return num / area if area > 0 else None
+
+
+# what compare reads of a record and of an ensemble, by path; a file missing
+# any of them is refused before anything is interpreted (review 7 R7-8)
+_RECORD_NEEDS = (("analysis_key",), ("key_fields", "analysis"), ("validity",),
+                 ("geometry", "sha1"), ("geometry", "symbols"), ("geometry", "bonds"),
+                 ("input",), ("results", "V_min_kcal_mol"), ("results", "V_max_kcal_mol"),
+                 ("sites",), ("provenance",))
+_ENSEMBLE_NEEDS = (("analysis_key",), ("members",), ("validity",), ("convergence",))
+_MEMBER_NEEDS = ("conformer", "record", "record_sha256", "folded", "geometry_sha1")
+
+
+def _missing(rec, needs):
+    out = []
+    for path in needs:
+        node = rec
+        for k in path:
+            if not isinstance(node, dict) or k not in node:
+                out.append(".".join(path))
+                break
+            node = node[k]
+    return out
+
+
+def validate_record(rec, where):
+    """Refuse anything compare would misread as an espmap.record/1."""
+    if not isinstance(rec, dict) or rec.get("schema") != RECORD_SCHEMA:
+        got = rec.get("schema") if isinstance(rec, dict) else type(rec).__name__
+        raise CompareRefused([_cmp_block(
+            "COMPARE_SCHEMA_UNSUPPORTED", f"{where}: schema {got!r}, not {RECORD_SCHEMA}",
+            f"compare {RECORD_SCHEMA} or {ENSEMBLE_SCHEMA} files written by espmap")])
+    miss = _missing(rec, _RECORD_NEEDS)
+    if miss:
+        raise CompareRefused([_cmp_block(
+            "COMPARE_SCHEMA_UNSUPPORTED", f"{where}: no {', '.join(miss)}",
+            "compare records written by espmap, unedited")])
+
+
+def validate_ensemble(rec, where):
+    """Refuse an ensemble record compare would misread."""
+    miss = _missing(rec, _ENSEMBLE_NEEDS)
+    if not miss and not isinstance(rec["members"], list):
+        miss = ["members"]
+    for i, m in enumerate(rec.get("members") or []):
+        miss += [f"members[{i}].{k}" for k in _MEMBER_NEEDS if not isinstance(m, dict) or k not in m]
+    if miss:
+        raise CompareRefused([_cmp_block(
+            "COMPARE_SCHEMA_UNSUPPORTED", f"{where}: no {', '.join(miss)}",
+            "compare ensemble records written by espmap, unedited")])
+
+
+def _load_side(path):
+    """(kind, record, sha256, [(conformer, folded, member record)]). Every
+    member is checked against what its parent says of it: the file's sha256,
+    the analysis_key and the geometry (review 7 R7-8: a parent claiming a
+    key its members were not computed under was compared on the claim)."""
+    import hashlib
+    import json
+    p = Path(path)
+    raw = p.read_bytes()
+    try:
+        rec = json.loads(raw)
+    except ValueError:
+        raise CompareRefused([_cmp_block(
+            "COMPARE_SCHEMA_UNSUPPORTED", f"{p} is not JSON",
+            "compare espmap JSON records")]) from None
+    sha = hashlib.sha256(raw).hexdigest()
+    if isinstance(rec, dict) and rec.get("schema") == ENSEMBLE_SCHEMA:
+        validate_ensemble(rec, str(p))
+        members, bad = [], []
+        for m in rec["members"]:
+            mp = p.parent / m["record"]
+            mraw = mp.read_bytes()
+            if hashlib.sha256(mraw).hexdigest() != m["record_sha256"]:
+                raise CompareRefused([_cmp_block(
+                    "COMPARE_MEMBER_CHANGED", f"{mp} is not the member {p} lists",
+                    "recompute the ensemble, or restore the member record")])
+            try:
+                mrec = json.loads(mraw)
+            except ValueError:
+                mrec = None
+            validate_record(mrec, str(mp))
+            if mrec["analysis_key"] != rec["analysis_key"]:
+                bad.append(f"{m['conformer']} has analysis_key {mrec['analysis_key'][:10]}, "
+                           f"the parent says {str(rec['analysis_key'])[:10]}")
+            if mrec["geometry"]["sha1"] != m["geometry_sha1"]:
+                bad.append(f"{m['conformer']} has geometry {mrec['geometry']['sha1'][:10]}, "
+                           f"the parent says {str(m['geometry_sha1'])[:10]}")
+            members.append((m["conformer"], m["folded"], mrec))
+        if bad:
+            raise CompareRefused([_cmp_block(
+                "COMPARE_MEMBER_MISMATCH", f"{p}: " + "; ".join(bad),
+                "recompute the ensemble; never edit its record")])
+        if not members:
+            raise CompareRefused([_cmp_block(
+                "COMPARE_SCHEMA_UNSUPPORTED", f"{p} has no members",
+                "compare an ensemble that kept at least one member")])
+        return "ensemble", rec, sha, members
+    validate_record(rec, str(p))
+    return "single", rec, sha, [("single", None, rec)]
+
+
+def _side_stats(vals):
+    v = [x for x in vals if x is not None]
+    s = _stats(v)
+    return dict(mean=s["mean"], sd=s["sd"] if s["sd"] is not None else (0.0 if v else None),
+                min=s["min"], max=s["max"], range=s["range"], n=s["n"])
+
+
+def _pair_entry(rows_a, rows_b, key, rule_cfg, partition, single, blockers=()):
+    """mean, delta, conformational, sign consistency, U and resolved for one
+    quantity (a site under one rule, or a global extremum). blockers are
+    reasons the quantity may not be resolved whatever the numbers say
+    (review 7: a site missing on a member, convergence not established)."""
+    va = [r[key] for r in rows_a]
+    vb = [r[key] for r in rows_b]
+    sa, sb = _side_stats(va), _side_stats(vb)
+    if sa["mean"] is None or sb["mean"] is None:
+        return dict(mean_A=sa["mean"], mean_B=sb["mean"], delta_mean=None,
+                    conformational=dict(A=sa, B=sb), sign_consistency=None, U=None,
+                    resolved=None, resolved_under=rule_cfg["id"])
+    delta = sb["mean"] - sa["mean"]
+    pairs = [(x, y) for x in va if x is not None for y in vb if y is not None]
+    agree = sum(1 for x, y in pairs if np.sign(y - x) == np.sign(delta) and y != x)
+    sc = agree / len(pairs) if pairs else None
+    U = rule_cfg["k"] * float(np.hypot(sa["sd"], sb["sd"])) + (partition or 0.0)
+    # The user's decision (2026-10-24), an invariant, not wording: with fewer
+    # than 2 usable values on a side, conformational uncertainty is not
+    # measured, and the comparison reports delta and partition but is never
+    # resolved. A single record, or a one-member ensemble (benzene), counts.
+    unmeasured = {s: n < 2 for s, n in (("A", sa["n"]), ("B", sb["n"]))}
+    why = ((["conformers not sampled on side "
+             + " and ".join(s for s in "AB" if unmeasured[s])] if any(unmeasured.values()) else [])
+           + list(blockers))
+    resolved = bool(not why and abs(delta) > U
+                    and sc is not None and sc >= rule_cfg["s_min"])
+    conf = dict(A=dict(sa, measured="not_measured" if unmeasured["A"] else "members"),
+                B=dict(sb, measured="not_measured" if unmeasured["B"] else "members"))
+    return dict(mean_A=sa["mean"], mean_B=sb["mean"], delta_mean=delta, conformational=conf,
+                sign_consistency=sc, U=U, resolved=resolved, resolved_under=rule_cfg["id"],
+                **({"not_resolvable": "; ".join(why)} if why else {}))
+
+
+def compare_records(path_a, path_b, correspondence, rule=None):
+    """espmap.compare/1 for two records (single or ensemble). Refused before
+    anything is compared when the analysis keys differ, a site does not
+    resolve, a map pair's elements differ, sites are by index, or a member
+    lacks a valid site table."""
+    rule = dict(COMPARE_RULE, **(rule or {}))
+    sides = {}
+    for s, path in (("A", path_a), ("B", path_b)):
+        kind, rec, sha, members = _load_side(path)
+        sides[s] = dict(kind=kind, rec=rec, sha=sha, members=members)
+    if correspondence.get("by") not in ("map", "smarts"):
+        check_correspondence(None, None, correspondence)          # refuses
+    ka, kb = (sides[s]["rec"]["analysis_key"] for s in "AB")
+    if ka != kb:
+        fa = sides["A"]["members"][0][2]["key_fields"]["analysis"]
+        fb = sides["B"]["members"][0][2]["key_fields"]["analysis"]
+        diff = sorted(k for k in set(fa) | set(fb) if fa.get(k) != fb.get(k))
+        raise CompareRefused([_cmp_block(
+            "COMPARE_ANALYSIS_DIFFERS", f"A and B differ in {', '.join(diff)}",
+            "compute both under one protocol; a comparison across levels of theory "
+            "is refused, never footnoted")])
+    bad = [f"{s} {c}" for s in "AB" for c, _, r in sides[s]["members"]
+           if not r["validity"].get("sites")]
+    if bad:
+        raise CompareRefused([_cmp_block(
+            "COMPARE_INVALID", f"no valid site table: {', '.join(bad)}",
+            "compare records whose validity.sites is true")])
+    mols = {s: record_mol(sides[s]["members"][0][2]) for s in "AB"}
+    pairs = check_correspondence(mols["A"], mols["B"], correspondence)
+
+    # a single record, or an ensemble that kept one member (benzene)
+    single = {s: len(sides[s]["members"]) < 2 for s in "AB"}
+    flags = []
+    if any(single.values()):
+        flags.append("CONFORMERS_NOT_SAMPLED")
+    vers = {s: (sides[s]["members"][0][2].get("provenance") or {}).get("espmap_version")
+            for s in "AB"}
+    if vers["A"] != vers["B"]:
+        flags.append("VERSIONS_DIFFER")
+    # Review 7 R7-5: convergence gates resolution, it is not only a flag. An
+    # ensemble side resolves only when its convergence is true; false, or
+    # null (not judgeable, K = 2), reports the numbers unresolved.
+    unconverged = []
+    for s in "AB":
+        r = sides[s]["rec"]
+        if sides[s]["kind"] != "ensemble":
+            continue
+        v = r.get("validity") or {}
+        conv = v["convergence"] if "convergence" in v else (r.get("convergence") or {}).get("converged")
+        if conv is not True:
+            unconverged.append(f"{s} ({'not judgeable' if conv is None else 'false'})")
+            if "NOT_CONVERGED" not in flags:
+                flags.append("NOT_CONVERGED")
+        if not v.get("unbiased", True) and "SELECTION_BIASED" not in flags:
+            flags.append("SELECTION_BIASED")
+    conv_block = ([f"ensemble convergence not established on side {', '.join(unconverged)}"]
+                  if unconverged else [])
+
+    sites = []
+    for p in pairs:
+        rows = {s: [dict(conformer=c, folded=f,
+                         **{rl: site_value(r, p[f"atoms_{s}"], rl) for rl in PARTITION_RULES})
+                    for c, f, r in sides[s]["members"]] for s in "AB"}
+        means = {(s, rl): _side_stats([x[rl] for x in rows[s]])["mean"]
+                 for s in "AB" for rl in PARTITION_RULES}
+        deltas = [None if means[("B", rl)] is None or means[("A", rl)] is None
+                  else means[("B", rl)] - means[("A", rl)] for rl in PARTITION_RULES]
+        partition = None if None in deltas else abs(deltas[0] - deltas[1])
+        # Review 7 R7-4: a member where the site has no surface under either
+        # rule (a folded member burying it) made n shrink silently. Such a
+        # site is not evaluable: numbers reported, never resolved.
+        missing = [dict(side=s, conformer=x["conformer"], rule=rl)
+                   for s in "AB" for x in rows[s] for rl in PARTITION_RULES if x[rl] is None]
+        site_block = ([f"site not evaluable on every member ({len(missing)} member-rule "
+                       f"values missing)"] if missing else [])
+        by_rule = {rl: _pair_entry(rows["A"], rows["B"], rl, rule, partition, single,
+                                   site_block + conv_block)
+                   for rl in PARTITION_RULES}
+        both = [abs(x[PARTITION_RULES[0]] - x[PARTITION_RULES[1]]) for s in "AB" for x in rows[s]
+                if None not in (x[PARTITION_RULES[0]], x[PARTITION_RULES[1]])]
+        sites.append(dict(
+            name=p["name"], partition=partition,
+            partition_descriptive=dict(
+                between_side_means=max((abs(means[(s, PARTITION_RULES[0])] - means[(s, PARTITION_RULES[1])])
+                                        for s in "AB" if None not in (means[(s, PARTITION_RULES[0])],
+                                                                      means[(s, PARTITION_RULES[1])])),
+                                       default=None),
+                max_member=max(both, default=None)),
+            evaluable=not missing, not_evaluable=missing,
+            by_rule=by_rule, members=rows))
+    glob = {}
+    for q in ("V_min_kcal_mol", "V_max_kcal_mol"):
+        rows = {s: [dict(conformer=c, folded=f, value=r["results"][q])
+                    for c, f, r in sides[s]["members"]] for s in "AB"}
+        glob[q] = dict(_pair_entry(rows["A"], rows["B"], "value", rule, None, single, conv_block),
+                       members=rows, partition="not applicable")
+    inputs = {}
+    for s, path in (("A", path_a), ("B", path_b)):
+        r, kind = sides[s]["rec"], sides[s]["kind"]
+        first = sides[s]["members"][0][2]
+        ex = r.get("excluded") or []
+        inputs[s] = dict(
+            kind=kind, path=str(path), sha256=sides[s]["sha"], analysis_key=r["analysis_key"],
+            espmap_version=vers[s], n_members=len(sides[s]["members"]),
+            member_records=[dict(record=m["record"], sha256=m["record_sha256"])
+                            for m in r.get("members", [])] if kind == "ensemble" else [],
+            excluded=len(ex), excluded_folded=[bool(e.get("folded")) for e in ex],
+            unbiased=(r.get("validity") or {}).get("unbiased") if kind == "ensemble" else None,
+            converged=(r.get("convergence") or {}).get("converged") if kind == "ensemble" else None,
+            smiles=(first["input"].get("computed_smiles") or first["input"].get("approved_smiles")))
+    return dict(
+        schema=COMPARE_SCHEMA,
+        subject_A=sides["A"]["rec"].get("subject"), subject_B=sides["B"]["rec"].get("subject"),
+        inputs=inputs, analysis_key=ka, flags=flags,
+        correspondence=dict(by=correspondence["by"], pairs=pairs),
+        rule=rule, uncertainty_included=UNCERTAINTY_INCLUDED,
+        uncertainty_not_included=UNCERTAINTY_NOT_INCLUDED,
+        sites=sites, global_extrema=glob)
+
+
+def compare_main(argv):
+    """espmap compare A.json B.json --sites correspondence.json --out cmp.json"""
+    import json
+    ap = argparse.ArgumentParser(prog="espmap compare",
+                                 description="compare two espmap records, single or ensemble "
+                                             "(docs/ensemble-spec.md section 6)")
+    ap.add_argument("A")
+    ap.add_argument("B")
+    ap.add_argument("--sites", required=True,
+                    help='JSON file: {"by": "map"|"smarts", "pairs": [{"name", "A", "B", '
+                         '"include_h"?}]}; by map a site is a list of maps, "n+H" adds n\'s '
+                         'hydrogens')
+    ap.add_argument("--out", default="compare.json")
+    a = ap.parse_args(argv)
+    corr = json.loads(Path(a.sites).read_text(encoding="utf-8"))
+    try:
+        rec = compare_records(a.A, a.B, corr)
+    except CompareRefused as e:
+        print_check(BLOCK, e.findings, f"{a.A} vs {a.B}")
+        return 1
+    Path(a.out).write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
+    for s in rec["sites"]:
+        nn = s["by_rule"][PARTITION_RULES[0]]
+        print(f"{s['name']}: delta {nn['delta_mean']:+.2f} kcal/mol ({PARTITION_RULES[0]}), "
+              f"U {nn['U']:.2f}, {'resolved' if nn['resolved'] else 'unresolved'} under "
+              f"{nn['resolved_under']}" if nn["delta_mean"] is not None else f"{s['name']}: no surface")
+    print(f"flags: {', '.join(rec['flags']) or 'none'}; wrote {a.out}")
+    return 0
+
+
 def estimate_cost(spec, basis, charge=0, spin=0):
     """nao without running an SCF. gto.M is cheap; the SCF is not.
 
@@ -4600,6 +5053,8 @@ def selftest(basis="def2-svp"):
 
 # ----------------------------------------------------------------------- main
 def main():
+    if sys.argv[1:2] == ["compare"]:
+        raise SystemExit(compare_main(sys.argv[2:]))
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt

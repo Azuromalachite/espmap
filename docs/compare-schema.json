@@ -1,0 +1,195 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "espmap.compare/1",
+ "title": "espmap.compare/1",
+ "description": "A comparison of two espmap records, each a single espmap.record/1 or an espmap.ensemble/1 (docs/ensemble-spec.md section 6). Release candidate with v0.3.0; the resolution rule is provisional and names itself. Validated in tests with jsonschema (review 7 R7-10).",
+ "type": "object",
+ "additionalProperties": false,
+ "required": ["schema", "subject_A", "subject_B", "inputs", "analysis_key", "flags",
+              "correspondence", "rule", "uncertainty_included", "uncertainty_not_included",
+              "sites", "global_extrema"],
+ "properties": {
+  "schema": {"const": "espmap.compare/1"},
+  "subject_A": {"type": ["string", "null"], "description": "the ensemble's opaque --subject, copied; null for a single record"},
+  "subject_B": {"type": ["string", "null"]},
+  "inputs": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["A", "B"],
+   "properties": {"A": {"$ref": "#/$defs/input"}, "B": {"$ref": "#/$defs/input"}}
+  },
+  "analysis_key": {"type": "string", "description": "shared by both sides; a comparison across keys is refused (COMPARE_ANALYSIS_DIFFERS)"},
+  "flags": {
+   "type": "array",
+   "uniqueItems": true,
+   "items": {"enum": ["CONFORMERS_NOT_SAMPLED", "VERSIONS_DIFFER", "NOT_CONVERGED", "SELECTION_BIASED"]}
+  },
+  "correspondence": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["by", "pairs"],
+   "properties": {
+    "by": {"enum": ["map", "smarts"]},
+    "pairs": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "A", "B", "include_h", "atoms_A", "atoms_B"],
+      "properties": {
+       "name": {"type": "string"},
+       "A": {}, "B": {},
+       "include_h": {"type": "boolean"},
+       "atoms_A": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+       "atoms_B": {"type": "array", "items": {"type": "integer", "minimum": 0}}
+      }
+     }
+    }
+   }
+  },
+  "rule": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["id", "formula", "k", "s_min", "sd", "partition_definition", "status", "source"],
+   "properties": {
+    "id": {"type": "string"}, "formula": {"type": "string"},
+    "k": {"type": "number"}, "s_min": {"type": "number"},
+    "sd": {"type": "string"}, "partition_definition": {"type": "string"},
+    "status": {"enum": ["provisional", "measured"]},
+    "source": {"type": ["string", "null"]}
+   }
+  },
+  "uncertainty_included": {"type": "array", "items": {"type": "string"}},
+  "uncertainty_not_included": {"type": "array", "items": {"type": "string"}},
+  "sites": {"type": "array", "items": {"$ref": "#/$defs/site"}},
+  "global_extrema": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["V_min_kcal_mol", "V_max_kcal_mol"],
+   "properties": {
+    "V_min_kcal_mol": {"$ref": "#/$defs/extremum"},
+    "V_max_kcal_mol": {"$ref": "#/$defs/extremum"}
+   }
+  }
+ },
+ "$defs": {
+  "input": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["kind", "path", "sha256", "analysis_key", "espmap_version", "n_members",
+                "member_records", "excluded", "excluded_folded", "unbiased", "converged", "smiles"],
+   "properties": {
+    "kind": {"enum": ["single", "ensemble"]},
+    "path": {"type": "string"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "analysis_key": {"type": "string"},
+    "espmap_version": {"type": ["string", "null"]},
+    "n_members": {"type": "integer", "minimum": 1},
+    "member_records": {
+     "type": "array",
+     "items": {
+      "type": "object", "additionalProperties": false, "required": ["record", "sha256"],
+      "properties": {"record": {"type": "string"}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+     }
+    },
+    "excluded": {"type": "integer", "minimum": 0},
+    "excluded_folded": {"type": "array", "items": {"type": "boolean"}},
+    "unbiased": {"type": ["boolean", "null"], "description": "the ensemble's validity.unbiased; null for a single record"},
+    "converged": {"type": ["boolean", "null"], "description": "the ensemble's convergence.converged: null when not judgeable, and for a single record"},
+    "smiles": {"type": ["string", "null"]}
+   }
+  },
+  "pair": {
+   "type": "object",
+   "required": ["mean_A", "mean_B", "delta_mean", "conformational", "sign_consistency", "U",
+                "resolved", "resolved_under"],
+   "properties": {
+    "mean_A": {"type": ["number", "null"]}, "mean_B": {"type": ["number", "null"]},
+    "delta_mean": {"type": ["number", "null"], "description": "mean_B - mean_A, kcal/mol"},
+    "conformational": {
+     "type": "object", "additionalProperties": false, "required": ["A", "B"],
+     "properties": {"A": {"$ref": "#/$defs/side_stats"}, "B": {"$ref": "#/$defs/side_stats"}}
+    },
+    "sign_consistency": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "U": {"type": ["number", "null"]},
+    "resolved": {"type": ["boolean", "null"], "description": "true only when both sides have >= 2 usable values, every ensemble side's convergence is true, the site has a value on every member under both rules, and the rule passes; null when a side has no value at all"},
+    "resolved_under": {"type": "string"},
+    "not_resolvable": {"type": "string", "description": "why resolved is false whatever the numbers say: conformers not sampled, site not evaluable on every member, ensemble convergence not established"}
+   },
+   "if": {"properties": {"resolved": {"const": true}}},
+   "then": {"not": {"required": ["not_resolvable"]}}
+  },
+  "side_stats": {
+   "type": "object",
+   "required": ["mean", "sd", "min", "max", "range", "n"],
+   "properties": {
+    "mean": {"type": ["number", "null"]}, "sd": {"type": ["number", "null"]},
+    "min": {"type": ["number", "null"]}, "max": {"type": ["number", "null"]},
+    "range": {"type": ["number", "null"]}, "n": {"type": "integer", "minimum": 0},
+    "measured": {"enum": ["members", "not_measured"], "description": "not_measured: fewer than 2 usable values on the side"}
+   },
+   "additionalProperties": false
+  },
+  "member_value": {
+   "type": "object",
+   "required": ["conformer", "folded"],
+   "properties": {
+    "conformer": {"type": "string"},
+    "folded": {"type": ["boolean", "null"]},
+    "value": {"type": ["number", "null"]},
+    "nearest_nucleus": {"type": ["number", "null"]},
+    "radius_scaled": {"type": ["number", "null"]}
+   },
+   "additionalProperties": false
+  },
+  "members": {
+   "type": "object", "additionalProperties": false, "required": ["A", "B"],
+   "properties": {
+    "A": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/member_value"}},
+    "B": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/member_value"}}
+   }
+  },
+  "site": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": ["name", "partition", "partition_descriptive", "evaluable", "not_evaluable",
+                "by_rule", "members"],
+   "properties": {
+    "name": {"type": "string"},
+    "partition": {"type": ["number", "null"], "description": "|delta_mean(nearest_nucleus) - delta_mean(radius_scaled)|, part of U"},
+    "partition_descriptive": {
+     "type": "object", "additionalProperties": false,
+     "required": ["between_side_means", "max_member"],
+     "properties": {"between_side_means": {"type": ["number", "null"]}, "max_member": {"type": ["number", "null"]}}
+    },
+    "evaluable": {"type": "boolean", "description": "review 7 R7-4: false when any member of either side has no value for the site under either rule; such a site is reported and never resolved"},
+    "not_evaluable": {
+     "type": "array",
+     "items": {
+      "type": "object", "additionalProperties": false, "required": ["side", "conformer", "rule"],
+      "properties": {"side": {"enum": ["A", "B"]}, "conformer": {"type": "string"},
+                     "rule": {"enum": ["nearest_nucleus", "radius_scaled"]}}
+     }
+    },
+    "by_rule": {
+     "type": "object", "additionalProperties": false,
+     "required": ["nearest_nucleus", "radius_scaled"],
+     "properties": {"nearest_nucleus": {"$ref": "#/$defs/pair"}, "radius_scaled": {"$ref": "#/$defs/pair"}}
+    },
+    "members": {"$ref": "#/$defs/members"}
+   },
+   "if": {"properties": {"evaluable": {"const": false}}},
+   "then": {"properties": {"by_rule": {"properties": {
+     "nearest_nucleus": {"properties": {"resolved": {"not": {"const": true}}}},
+     "radius_scaled": {"properties": {"resolved": {"not": {"const": true}}}}}}}}
+  },
+  "extremum": {
+   "allOf": [{"$ref": "#/$defs/pair"}],
+   "required": ["members", "partition"],
+   "properties": {
+    "members": {"$ref": "#/$defs/members"},
+    "partition": {"const": "not applicable"}
+   }
+  }
+ }
+}
