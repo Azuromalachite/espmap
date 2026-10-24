@@ -654,7 +654,7 @@
     },
     "unbiased": {
      "type": "boolean",
-     "description": "equal to no_folded_exclusion, and only that: no excluded member is folded. Not a claim that the sample is unbiased: selection, the force field and unsampled shapes can bias it without excluding anything (review 7 R7-9). Kept under this name because ensemble/1 is frozen"
+     "description": "equal to no_folded_exclusion, and only that: no excluded member is folded; it is not a claim that the sample is unbiased: selection, the force field and unsampled shapes can bias it without excluding anything (review 7 R7-9). Kept under this name because ensemble/1 is frozen"
     },
     "no_folded_exclusion": {
      "type": "boolean",
