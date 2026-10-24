@@ -186,6 +186,34 @@ python esp_map.py --file poses.sdf --ensemble supplied --ensemble-dir poses
 - `ensemble_key` names the molecule, the protocol and the ordered members:
   two different ensembles never share it.
 
+## Comparing records
+
+`espmap compare` sets two records side by side, site by site, and says whether
+each contrast is resolved under the uncertainty it states (`espmap.compare/1`,
+`docs/compare-schema.json`):
+
+```bash
+espmap compare c18/ensemble.json c16/ensemble.json --sites corr.json --out compare.json
+```
+
+```json
+{"by": "smarts", "pairs": [{"name": "OH", "A": "[OX2H]", "B": "[OX2H]", "include_h": true}]}
+```
+
+- **Inputs.** Either side is a single record or an ensemble.
+- **Sites** are matched by atom map (`"3+H"` adds atom 3's hydrogens) or by SMARTS, never by index. A pattern that matches two inequivalent atoms is refused.
+- **Refused:** two records with different `analysis_key`s (another method, basis, solvent, grid, margin or geometry source), and anything that isn't an unedited espmap record.
+- **The rule.** A contrast is `resolved` when |Δ| > U = k·√(sd_A² + sd_B²) + |partition| and the member pairs agree in sign. The rule is named in the record and is provisional.
+- **Never resolved, whatever the numbers,** when:
+  - a side has fewer than two members (`CONFORMERS_NOT_SAMPLED`);
+  - the site has no surface on some member;
+  - an ensemble's convergence is false or can't be judged.
+
+  The numbers are still reported.
+- **Not included in U.** Method, basis, solvent and geometry-source uncertainty are not in U, and the record says so (`uncertainty_not_included`).
+
+espmap measures; it never says which site reacts or what a difference means.
+
 ## Input
 
 ```bash
