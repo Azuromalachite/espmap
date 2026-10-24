@@ -31,7 +31,13 @@ NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "
                                        # the v0.3.0 acceptance run, on #76's final head
                                        "E1", "E2", "E3", "E4", "E5", "E6", "E7",
                                        "E10", "E11", "E19",
-                                       "C3", "C8", "C9"}
+                                       "C3", "C8", "C9",
+                                       # #78's slow comparison run, on aa87d66 (after
+                                       # review 7). C4, C5 and C11 stay: their numbers
+                                       # are injected, the slow runner does not wire
+                                       # injections, and tests/test_compare.py covers
+                                       # each on synthetic records with known numbers
+                                       "C1", "C2", "C6", "C7", "C10", "C12"}
 
 
 def _records(name):
