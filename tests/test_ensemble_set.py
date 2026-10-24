@@ -33,11 +33,14 @@ NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "
                                        "E10", "E11", "E19",
                                        "C3", "C8", "C9",
                                        # #78's slow comparison run, on aa87d66 (after
-                                       # review 7). C4, C5 and C11 stay: their numbers
-                                       # are injected, the slow runner does not wire
-                                       # injections, and tests/test_compare.py covers
-                                       # each on synthetic records with known numbers
-                                       "C1", "C2", "C6", "C7", "C10", "C12"}
+                                       # review 7)
+                                       "C1", "C2", "C6", "C7", "C10", "C12",
+                                       # injections wired, real DFT on a clean clone at
+                                       # 637dd4e (v0.3.1 work). Comparison cases need a
+                                       # checkout git can identify: under R7-7 a dev
+                                       # build with unknown code is refused. C11 stays:
+                                       # it needs two releases under one contract
+                                       "C4", "C5"}
 
 
 def _records(name):
