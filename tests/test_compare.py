@@ -512,3 +512,18 @@ def test_r7_7_k5_two_releases_under_one_contract_compare_with_a_flag(tmp_path, m
     a, b = _sides(tmp_path, dict(version="0.3.0", prov=dict(code="v0.3.0")),
                   dict(version="0.3.1", prov=dict(code="v0.3.1")))
     assert "VERSIONS_DIFFER" in em.compare_records(a, b, CORR)["flags"]
+
+
+@pytest.mark.xfail(strict=True, reason="R7-7: an unidentifiable build is reported as 'more than one build'")
+@pytest.mark.parametrize("code", ["unknown", "v0.3.0-3-gaaaaaaa-dirty", None])
+def test_r7_7_an_unidentifiable_dev_build_is_refused_and_says_why(tmp_path, code):
+    """Found by the C4/C5 real-DFT run (records computed where git could not
+    name the commit): a dev build whose code is unknown or dirty cannot be
+    shown to be one build, and declares no contract. Refused, saying so, not
+    'members come from more than one espmap build' (one record has one)."""
+    prov = {} if code is None else dict(code=code)
+    a, b = _sides(tmp_path, dict(version="0.3.1.dev0", prov=prov), dict(version="0.3.1.dev0", prov=prov))
+    with pytest.raises(em.CompareRefused) as e:
+        em.compare_records(a, b, CORR)
+    (_, c, msg, _), = e.value.findings
+    assert c == "COMPARE_CONTRACT_UNKNOWN" and "cannot be identified" in msg and "more than one" not in msg
