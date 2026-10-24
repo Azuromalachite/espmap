@@ -537,3 +537,15 @@ def test_r7_10_ensemble_records_validate_against_the_schema(case, tmp_path):
     rec = json.loads(json.dumps(em.run_ensemble(p, tmp_path, runner=runner, log=lambda s: None)))
     errors = sorted(jsonschema.Draft202012Validator(_SCHEMA).iter_errors(rec), key=lambda e: list(e.path))
     assert not errors, [f"{list(e.path)}: {e.message}" for e in errors]
+
+
+@pytest.mark.xfail(strict=True, reason="R7-7: the run manifest has no measurement contract")
+def test_r7_7_a_resume_under_another_contract_is_refused(plan, tmp_path, monkeypatch):
+    """Members computed under numeric/1, the rest after an upgrade that
+    changed the numerics: one ensemble would hold two programs' numbers."""
+    em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(fail={"conf_03"}),
+                    log=lambda s: None)
+    monkeypatch.setattr(em, "MEASUREMENT_CONTRACT", "espmap.numeric/2")
+    with pytest.raises(em.EnsembleRefused) as e:
+        em.run_ensemble(plan, tmp_path, ["--basis", "def2-svp"], runner=Stub(), log=lambda s: None)
+    assert e.value.findings[0][1] == "ENSEMBLE_RESUME_PROTOCOL_MISMATCH"
