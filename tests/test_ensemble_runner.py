@@ -550,7 +550,6 @@ def test_r7_7_a_resume_under_another_contract_is_refused(plan, tmp_path, monkeyp
     assert e.value.findings[0][1] == "ENSEMBLE_RESUME_PROTOCOL_MISMATCH"
 
 
-@pytest.mark.xfail(strict=True, reason="R7-9: only 'unbiased', which claims more than it checks")
 def test_r7_9_validity_names_what_it_checks(plan, tmp_path):
     """Review 7 R7-9: 'unbiased' reads as a claim about the sample, but it
     only says no folded member was excluded. The record also carries

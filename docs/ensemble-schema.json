@@ -654,7 +654,11 @@
     },
     "unbiased": {
      "type": "boolean",
-     "description": "false whenever any excluded member is folded (F9: the chi = 2 check once excluded exactly the folded C18 members). Was 'bias' in the spec draft; renamed so that true reads as fine, like every other validity flag. A folded start excluded as a duplicate minimum does not count: its minimum is kept"
+     "description": "equal to no_folded_exclusion, and only that: no excluded member is folded. Not a claim that the sample is unbiased: selection, the force field and unsampled shapes can bias it without excluding anything (review 7 R7-9). Kept under this name because ensemble/1 is frozen"
+    },
+    "no_folded_exclusion": {
+     "type": "boolean",
+     "description": "review 7 R7-9: false whenever any excluded member is folded (F9: the chi = 2 check once excluded exactly the folded C18 members). A start excluded as a duplicate minimum does not count"
     }
    }
   }

@@ -178,7 +178,8 @@ convergence: {...}                          # §5
 results: global V_min / V_max / surface stats per member, and over members
 sites: per site and per rule: per-member means, then over members:
        mean, sd, min, max, range, n; and the same over extended members
-validity: {members, convergence (true | false | null: not judgeable), unbiased}
+validity: {members, convergence (true | false | null: not judgeable), no_folded_exclusion,
+           unbiased (= no_folded_exclusion; kept for ensemble/1, R7-9)}
 ```
 
 - **Members are verifiable.** `member_id` is the sha1 of the member's

@@ -2838,6 +2838,9 @@ def assemble_ensemble(plan, outdir, done, failed, history=None):
                       # null when not judgeable (fewer than 3 usable values, or no
                       # site table): not measured is not failed
                       convergence=converged,
+                      # review 7 R7-9: what the check is, by name; 'unbiased'
+                      # stays (ensemble/1 is frozen) and means only this
+                      no_folded_exclusion=not any(e["folded"] for e in failures),
                       unbiased=not any(e["folded"] for e in failures)))
 
 
