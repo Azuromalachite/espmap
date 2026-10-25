@@ -5,7 +5,11 @@ Edit this file, not the .ipynb:  python notebooks/build_notebook.py notebooks/es
 import json
 import sys
 
-BRANCH = "master"
+# the notebook itself is opened from master; the code it installs is a release tag,
+# so its records carry a released version that `espmap compare` can identify
+# (a dev build compares only with records of its own commit, R7-7)
+NOTEBOOK_REF = "master"
+BRANCH = "v0.3.1"
 cells = []
 
 
@@ -22,7 +26,7 @@ def code(text):
 md(f"""
 # espmap · electrostatic potential maps
 
-<a href="https://colab.research.google.com/github/Azuromalachite/espmap/blob/{BRANCH}/notebooks/espmap_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+<a href="https://colab.research.google.com/github/Azuromalachite/espmap/blob/{NOTEBOOK_REF}/notebooks/espmap_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
 **Quick start:** type a SMILES in the first cell, then **Runtime → Run all**. You get a rotatable 3D surface, an image, and a zip of everything.
 
@@ -32,7 +36,7 @@ SMILES → structure check → DFT (PySCF) → electrostatic potential on the ρ
 
 **Runtime:** CPU is fine for small molecules. Decanoic acid took about a minute at `preview` on a 16-thread laptop; Colab's free CPU runtime has 2 vCPUs, so expect several times that. For C12–C20 molecules or the publication setting, use a GPU: *Runtime → Change runtime type → L4*. On an L4 the SCF ran 4.3× faster than a 16-thread laptop and matched the CPU to < 0.001 kcal/mol.
 
-Research code from [github.com/Azuromalachite/espmap](https://github.com/Azuromalachite/espmap) (branch `{BRANCH}`). Limits, error budget and citations are at the bottom.
+Research code from [github.com/Azuromalachite/espmap](https://github.com/Azuromalachite/espmap), installed at release `{BRANCH}` (cell 3 can take another tag or branch). Optional cells below compute a **conformer ensemble** for each of two molecules and **compare** them site by site. Limits, error budget and citations are at the bottom.
 """)
 
 code("""
@@ -60,7 +64,7 @@ SOLVENT = "vacuum"  #@param ["vacuum", "water", "hexane", "chloroform", "toluene
 FUNCTIONAL = "b3lyp"  #@param ["b3lyp", "pbe0", "m06-2x"]
 #@markdown **Colour range.** `auto` fits this molecule only. For panels you want to compare, set the same number (kcal/mol, symmetric ±) for every molecule.
 COLOUR_RANGE = "auto"  #@param {type:"string"}
-#@markdown **Speed.** Density fitting changed V by ≤ 0.02 kcal/mol in our benchmark; it halves the SCF time at def2-TZVP and saves 20–28 % at def2-SVP. GPU `auto` uses one if the runtime has it.
+#@markdown **Speed.** Density fitting changed V by ≤ 0.02 kcal/mol in our benchmark; it halves the SCF time at def2-TZVP up to ~600 basis functions and saves 20–28 % at def2-SVP (at 898 functions it was slower). GPU `auto` uses one if the runtime has it.
 DENSITY_FIT = True  #@param {type:"boolean"}
 GPU = "auto"  #@param ["auto", "on", "off"]
 #@markdown Conformers tried by the force field (the lowest-energy one is computed) and the random seed.
@@ -76,6 +80,7 @@ print(f"{FUNCTIONAL}/{BASIS}, {SOLVENT}, density fitting {'on' if DENSITY_FIT el
 code(f"""
 #@title 3 · Install (once per runtime: ~1 min, +3 min for the GPU part)
 import os, subprocess, sys, time
+#@markdown A release tag (default) or a branch. Records from an unreleased branch compare only with records of the same commit.
 BRANCH = "{BRANCH}"  #@param {{type:"string"}}
 WORK = "/content"
 REPO = os.path.join(WORK, "espmap")
@@ -261,7 +266,9 @@ open(os.path.join(JOB, "README.txt"), "w").write(
     "results.json   settings, energies, V range, versions, error-budget caveat\\n"
     "settings.json  the notebook form values; log.txt the full run log\\n\\n"
     "Measured error budget (chlorobenzene sigma-hole): basis def2-SVP -> def2-TZVPP "
-    "+3.54 kcal/mol; solvent gas -> water -3.60. Quote numbers only against these margins.\\n")
+    "+3.54 kcal/mol; solvent gas -> PCM water -3.60 for the polarised solute alone "
+    "(espmap's default map; +0.05 with the reaction field included). Quote numbers only "
+    "against these margins.\\n")
 zip_path = shutil.make_archive(JOB, "zip", JOB)
 print(f"packed {zip_path}")
 try:
@@ -349,6 +356,72 @@ else:
 """)
 
 md("""
+## Optional · Conformer ensembles, compared site by site
+
+A flexible molecule is not one geometry: on the C18 acetate the median site mean moved 5.1 kcal/mol across conformers, more than the basis-set row of the error budget. This cell computes a small **conformer ensemble** (`--ensemble K`) for each of two molecules, then runs **`espmap compare`** on one site they share.
+
+- **Ensemble** (`espmap.ensemble/1`): ETKDG + MMFF94s conformers, deduplicated, K spread across the radius of gyration. Each member is an ordinary record. The ensemble states each member's shape and whether it is **folded**, and judges convergence (`null` with fewer than 3 usable members). Statistics are unweighted.
+- **Compare** (`espmap.compare/1`): a site is matched by SMARTS, never by atom index. A contrast is `resolved` when |Δ| exceeds U = k·√(sd_A² + sd_B²) + |partition| and the member pairs agree in sign; never with fewer than 2 members per side or an unconverged ensemble. Records with different `analysis_key`s are refused.
+
+Uses the method from cell 2. Small K is for teaching; K = 4 at `preview` takes a few minutes per molecule on a CPU runtime.
+
+**Expect "unresolved" with the defaults, and read why.** In a local run (v0.3.1, B3LYP/def2-SVP, gas), 2-methyl-1-propanol gave only 2 distinct conformers, so its convergence could not be judged, and 1-butanol's 4 did not converge: the OH contrast was Δ +1.21 kcal/mol against U 5.90, flagged `NOT_CONVERGED`. That is the comparison working: it reports the numbers and declines to call a difference it cannot support. Fewer members than K is reported, never padded.
+""")
+
+code("""
+#@title Ensembles and comparison (skipped unless RUN_ENSEMBLES is ticked)
+RUN_ENSEMBLES = False  #@param {type:"boolean"}
+MOLECULE_A = "1-butanol: CCCCO"  #@param {type:"string"}
+MOLECULE_B = "2-methyl-1-propanol: CC(C)CO"  #@param {type:"string"}
+#@markdown The site both share, as SMARTS on each molecule (hydrogens on the matched atom are included).
+SITE_NAME = "OH"  #@param {type:"string"}
+SITE_SMARTS_A = "[OX2H]"  #@param {type:"string"}
+SITE_SMARTS_B = "[OX2H]"  #@param {type:"string"}
+K = 4  #@param {type:"integer"}
+
+
+def run_ensemble(label, smi):
+    out = os.path.join(WORK, "ensembles", re.sub(r"\\W+", "_", label))
+    cmd = [sys.executable, "esp_map.py", "--smiles", smi, "--ensemble", str(K), "--ensemble-dir", out,
+           "--subject", label, "--basis", BASIS, "--xc", FUNCTIONAL, "--solvent", SOLVENT,
+           "--seed", SEED, "--yes"]
+    cmd += ["--density-fit"] if DENSITY_FIT else []
+    cmd += ["--gpu"] if USE_GPU else []
+    t0 = time.time()
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    if p.returncode:
+        raise RuntimeError(f"{label}: the ensemble stopped\\n{p.stdout[-1500:]}{p.stderr[-800:]}")
+    ens = json.load(open(os.path.join(out, "ensemble.json")))
+    folded = [m["conformer"] for m in ens["members"] if m["folded"]]
+    print(f"{label}: {ens['k_obtained']} of {ens['k_requested']} members in {time.time() - t0:.0f} s; "
+          f"folded: {', '.join(folded) or 'none'}; validity {ens['validity']}")
+    for m in ens["members"]:
+        print(f"   {m['conformer']}  Rg {m['rg_angstrom']:.2f} Å  {'folded' if m['folded'] else 'extended'}")
+    return os.path.join(out, "ensemble.json")
+
+
+if RUN_ENSEMBLES:
+    (la, sa), (lb, sb) = [[x.strip() for x in s.split(":", 1)] for s in (MOLECULE_A, MOLECULE_B)]
+    ea, eb = run_ensemble(la, "".join(sa.split())), run_ensemble(lb, "".join(sb.split()))
+    corr = {"by": "smarts", "pairs": [{"name": SITE_NAME, "A": SITE_SMARTS_A, "B": SITE_SMARTS_B, "include_h": True}]}
+    cpath = os.path.join(WORK, "ensembles", "sites.json")
+    json.dump(corr, open(cpath, "w"))
+    out = os.path.join(WORK, "ensembles", "compare.json")
+    p = subprocess.run([sys.executable, "esp_map.py", "compare", ea, eb, "--sites", cpath, "--out", out],
+                       capture_output=True, text=True)
+    print(f"\\nespmap compare {la} vs {lb}:")
+    print(p.stdout.strip() or p.stderr.strip()[-1500:])
+    if p.returncode:
+        print("refused: the messages above say why; nothing was compared")
+    else:
+        rec = json.load(open(out))
+        print("not included in U:", ", ".join(rec.get("uncertainty_not_included", [])) or "none stated")
+        print("folders:", os.path.join(WORK, "ensembles"))
+else:
+    print("skipped (tick RUN_ENSEMBLES to compute two ensembles and compare them)")
+""")
+
+md("""
 ## Optional · Check the GPU against the CPU reference
 
 Re-runs one row of the CPU benchmark (`bench/timing.py`: decanoic acid, B3LYP/def2-TZVP, density-fitted) through espmap's `--gpu` path and compares. Pass: energy within 1×10⁻⁵ Ha, V_min/V_max within 0.05 kcal/mol, same geometry hash. Recorded result: `bench/gpu_l4.json` (L4: PASS, 4.3×).
@@ -402,14 +475,18 @@ md(f"""
 | change | effect on V_max (kcal/mol) |
 | --- | --- |
 | basis def2-SVP → def2-TZVPP | +3.54 |
-| solvent gas → water (PCM) | −3.60 |
+| solvent gas → water (PCM, polarised solute only: espmap's default map) | −3.60 |
+| the same, with the PCM reaction field included (`--include-reaction-field`) | +0.05 |
 | functional B3LYP / PBE0 / M06-2X / HF | 0.69 spread |
+| conformer, extended shapes only | ~1 |
+| conformer, folded shapes included (C18 acetate, V_min) | 5.2 |
 | density fitting (this notebook's default) | ≤ 0.02 |
 
-The basis error is molecule-specific (bromobenzene: −0.76). Validating on one molecule licenses nothing about another.
+The basis error is molecule-specific (bromobenzene: −0.76). Validating on one molecule licenses nothing about another. The solvent row is a convention, not a fact about the molecule: never compare records computed under different solvent conventions.
 
 **Limits.**
-- **One conformer:** the lowest-energy force-field one. Across extended conformers of a C18 acetate the extrema moved ~1 kcal/mol, but folded conformers moved V_min by 5.2 kcal/mol, and the *shape* of the surface changes either way. For a flexible molecule, sample folded shapes before quoting a number.
+- **Cells 4–6 compute one conformer:** the lowest-energy force-field one. Across extended conformers of a C18 acetate the extrema moved ~1 kcal/mol, but folded conformers moved V_min by 5.2 kcal/mol, and the *shape* of the surface changes either way. For a flexible molecule, use the ensemble cell, which samples folded shapes and says which members are folded.
+- **Comparisons are refused, not guessed,** when the records differ in method, solvent, grid, box margin or geometry source (`analysis_key`), or come from espmap builds without one measurement contract. A contrast is `resolved` only with at least two members per side and a converged ensemble; the uncertainty U leaves out method, basis, solvent and geometry source, and the record says so.
 - **Protonation is your choice:** a carboxylic acid at pH 7 is mostly carboxylate (`[O-]`), and its ESP is completely different. Draw the state you mean.
 - **Out of scope:** transition metals, excited states, periodic systems; ωB97X-D is untested.
 - **Fluorine shows no σ-hole**, because it does not form one.
@@ -424,7 +501,7 @@ The basis error is molecule-specific (bromobenzene: −0.76). Validating on one 
 
 **Cite** PySCF (Sun et al., *J. Chem. Phys.* 153, 024109, 2020), RDKit, GPU4PySCF if used, and, for the colour maps, Crameri et al. (*Nat. Commun.* 11, 5444, 2020). The zip includes `citation.bib`.
 
-*Notebook layout follows [ColabFold](https://github.com/sokrypton/ColabFold)'s conventions. Branch `{BRANCH}`.*
+*Notebook layout follows [ColabFold](https://github.com/sokrypton/ColabFold)'s conventions. espmap `{BRANCH}`.*
 """)
 
 nb = {"nbformat": 4, "nbformat_minor": 0,
