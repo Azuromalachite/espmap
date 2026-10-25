@@ -38,9 +38,12 @@ NOT_YET = {c["id"] for c in _CASES} - {"E8", "E9", "E12", "E13", "E14", "E15", "
                                        # injections wired, real DFT on a clean clone at
                                        # 637dd4e (v0.3.1 work). Comparison cases need a
                                        # checkout git can identify: under R7-7 a dev
-                                       # build with unknown code is refused. C11 stays:
-                                       # it needs two releases under one contract
-                                       "C4", "C5"}
+                                       # build with unknown code is refused
+                                       "C4", "C5",
+                                       # needs two releases under one contract: real DFT
+                                       # on a clean clone at 11d9319, once 0.3.1 joined
+                                       # espmap.numeric/1
+                                       "C11"}
 
 
 def _records(name):
