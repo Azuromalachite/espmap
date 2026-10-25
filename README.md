@@ -78,8 +78,9 @@ time only (`bench/`):
   time it on your machine before relying on it.
 - **`--gpu`** runs the SCF on an NVIDIA GPU via
   [GPU4PySCF](https://github.com/pyscf/gpu4pyscf). On a Colab L4 it matched the
-  CPU to < 0.001 kcal/mol and was 4.3× faster than the laptop above
-  (`bench/gpu_l4.json`, commits 2313965 and 183ccd7). Validated for
+  CPU to < 0.001 kcal/mol and was 4.3× faster than the laptop above on a
+  first call, 9.6× once the GPU had been used in the session
+  (`bench/gpu_l4.json`: commits 2313965 and 183ccd7, and v0.3.1). Validated for
   closed-shell, gas-phase, density-fitted runs only; any other combination
   prints a warning naming what is untested, and the JSON records
   `settings.gpu_validated`. With `--optimize`, the gradients run on the CPU.

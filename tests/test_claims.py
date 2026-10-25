@@ -128,6 +128,19 @@ def test_gpu_agreement_matches_the_record():
         assert "< 0.001" in TEXT[name]
 
 
+def test_gpu_speedups_match_the_record():
+    """The L4 speed-up is two numbers: cold (first-call GPU setup in t_scf) and
+    warm (the GPU already used in the session). A Colab run at v0.3.1 measured
+    9.6x warm against the 4.3x that the text quoted alone."""
+    g = json.loads((BENCH / "gpu_l4.json").read_text())
+    cpu = g["cpu_reference"]["t_scf_s"]
+    cold = f"{cpu / g['gpu']['t_scf_s']:.1f}"
+    warm = f"{cpu / g['rerun_warm']['t_scf_s']:.1f}"
+    assert (cold, warm) == ("4.3", "9.6")
+    for text in (TEXT["README.md"], (ROOT / "notebooks" / "build_notebook.py").read_text(encoding="utf-8")):
+        assert f"{cold}×" in text and f"{warm}×" in text
+
+
 # --------------------------- the chlorobenzene budget, recomputed from bench/
 # Review 3 H8: seven of the eleven rows had no data in the repository, and two
 # of them (stereo, geometry) did not reproduce when measured. Every row is now
