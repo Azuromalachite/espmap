@@ -161,7 +161,7 @@ import numpy as np
 
 # the one place the version is written: pyproject.toml reads it from here
 # (review 5 R18), and provenance.espmap_version is this module's own
-__version__ = "0.3.1.dev0"
+__version__ = "0.3.1"
 
 BOHR = 0.52917721092
 HA2KCAL = 627.5095
@@ -4348,7 +4348,7 @@ MEASUREMENT_CONTRACTS = {
 }
 # Every release and the contract its numbers keep. v0.2.x declares none:
 # its records do not compare with any other build's.
-CONTRACT_BY_RELEASE = {"0.3.0": "espmap.numeric/1"}
+CONTRACT_BY_RELEASE = {"0.3.0": "espmap.numeric/1", "0.3.1": "espmap.numeric/1"}
 
 
 def record_contract(rec):

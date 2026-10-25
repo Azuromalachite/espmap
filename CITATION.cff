@@ -15,8 +15,8 @@ authors:
   - family-names: Wongsatit
     given-names: Thanakrit
     alias: Austin
-version: 0.3.1.dev0
-date-released: 2026-10-24
+version: 0.3.1
+date-released: 2026-10-25
 license: MIT
 repository-code: "https://github.com/Azuromalachite/espmap"
 keywords:
