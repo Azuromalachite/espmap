@@ -1997,6 +1997,31 @@ def test_an_all_ion_series_gets_a_shared_sequential_scale():
         plan([acetate, np.linspace(-30, 20, 50)], 60)    # mixed: still refused
 
 
+def test_notebook_camera_is_side_on_and_never_a_mirror_image():
+    """The fixed camera (elev 20, azim 172) looked down decanoic acid's chain on
+    Colab. The image now uses the molecule's principal frame: longest axis along
+    x, thinnest along z (the camera's line of sight). It must be a rotation: a
+    reflected frame would draw a chiral molecule as its enantiomer."""
+    frame = _nb_function("principal_frame", np=np)
+    rng = np.random.default_rng(7)
+    rot = np.linalg.qr(rng.normal(size=(3, 3)))[0]
+    # a chain along one random direction, with four atoms carrying a handedness
+    coords = np.array([[x, 0.3 * (-1) ** i, 0.1 * i % 0.25] for i, x in enumerate(np.linspace(-8, 8, 12))])
+    coords[:4] += np.array([[0, 0, 0], [1.0, 0, 0], [0, 1.2, 0], [0, 0, 0.9]])
+    coords = coords @ rot.T + 3.0
+    verts = coords + rng.normal(scale=0.5, size=coords.shape)
+
+    def volume(p):
+        return np.linalg.det(np.stack([p[1] - p[0], p[2] - p[0], p[3] - p[0]]))
+    for flip in (False, True):                    # the eigenvectors' sign is arbitrary
+        c = coords * np.array([1, 1, -1]) if flip else coords    # and so is the input's
+        out = frame(verts if not flip else verts * np.array([1, 1, -1]), c)
+        spread = np.ptp(out, axis=0)
+        assert spread[0] > spread[1] >= spread[2] * 0.8
+        moved = frame(c, c)
+        assert np.sign(volume(moved[:4])) == np.sign(volume(c[:4]))
+
+
 @pytest.mark.parametrize("phrase", [
     "ESP extrema move little with conformation",   # 5.2 kcal/mol once folded
     "about ±3.5 kcal/mol in absolute values",      # one signed, molecule-specific shift

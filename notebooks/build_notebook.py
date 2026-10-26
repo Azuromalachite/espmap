@@ -34,7 +34,7 @@ SMILES → structure check → DFT (PySCF) → electrostatic potential on the ρ
 
 **Reading the colours:** warm/red = **negative** = electron-rich; cool/blue = **positive** = electron-poor (the chemistry convention).
 
-**Runtime:** CPU is fine for small molecules. Decanoic acid took about a minute at `preview` on a 16-thread laptop; Colab's free CPU runtime has 2 vCPUs, so expect several times that. For C12–C20 molecules or the publication setting, use a GPU: *Runtime → Change runtime type → L4*. On an L4 the SCF ran 4.3× faster than a 16-thread laptop and matched the CPU to < 0.001 kcal/mol.
+**Runtime:** CPU is fine for small molecules. Decanoic acid took about a minute at `preview` on a 16-thread laptop; Colab's free CPU runtime has 2 vCPUs, so expect several times that. For C12–C20 molecules or the publication setting, use a GPU: *Runtime → Change runtime type → L4*. On an L4 the SCF ran 4.3× faster than a 16-thread laptop on its first GPU call and 9.6× once the GPU had been used in the session, and matched the CPU to < 0.001 kcal/mol.
 
 Research code from [github.com/Azuromalachite/espmap](https://github.com/Azuromalachite/espmap), installed at release `{BRANCH}` (cell 3 can take another tag or branch). Optional cells below compute a **conformer ensemble** for each of two molecules and **compare** them site by site. Limits, error budget and citations are at the bottom.
 """)
@@ -138,6 +138,13 @@ if USE_GPU and not os.path.isfile(os.path.join(WORK, "ESPMAP_GPU_READY")):
     _sh("pip install -q gpu4pyscf-cuda12x cutensor-cu12")
     open(os.path.join(WORK, "ESPMAP_GPU_READY"), "w").close()
     print("GPU4PySCF installed")
+# GPU4PySCF announces its tensor engine as a UserWarning on every run; it is not a
+# problem, and printed among espmap's warnings it reads like one. Only that exact
+# message is hidden, here and in the espmap runs the cells below start.
+import warnings
+CUPY_NOTE = "using cupy as the tensor contraction engine"
+warnings.filterwarnings("ignore", message=CUPY_NOTE, category=UserWarning)
+os.environ["PYTHONWARNINGS"] = f"ignore:{{CUPY_NOTE}}:UserWarning"
 sys.path.insert(0, REPO)
 os.chdir(REPO)
 import esp_map as em, pyscf, rdkit
@@ -219,11 +226,33 @@ VIEW = "3D interactive"  #@param ["3D interactive", "image", "both"]
 #@markdown Colour range for display: `auto`, or ± a number in kcal/mol (use the same number across molecules you compare).
 DISPLAY_RANGE = "auto"  #@param {type:"string"}
 DISPLAY_CMAP = "auto"  #@param ["auto", "vik", "RdBu", "PuOr", "broc", "cork", "lajolla", "batlow", "viridis"]
+#@markdown **Camera for the image.** `auto` looks along the molecule's thinnest axis with its longest axis across the picture; `manual` uses the two sliders (espmap's own default is elevation 20, azimuth 172).
+CAMERA = "auto (molecule's shape)"  #@param ["auto (molecule's shape)", "manual (sliders)"]
 ELEVATION = 20  #@param {type:"slider", min:-90, max:90, step:5}
 AZIMUTH = 172  #@param {type:"slider", min:0, max:360, step:4}
 import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import display
+
+
+def principal_frame(verts, coords):
+    # the surface in the molecule's own axes: x longest, z thinnest, so a camera
+    # looking down z sees it side-on. A proper rotation (det +1), never a
+    # reflection: eigenvectors can come out left-handed, and a reflected frame
+    # draws a chiral molecule's mirror image
+    c = coords.mean(0)
+    X = coords - c
+    R = np.linalg.eigh(X.T @ X)[1][:, ::-1].copy()
+    if np.linalg.det(R) < 0:
+        R[:, 2] *= -1
+    return (verts - c) @ R
+
+
+def camera(verts, coords, manual=False):
+    # (vertices, elevation, azimuth) for em.render
+    if manual:
+        return verts, ELEVATION, AZIMUTH
+    return principal_frame(verts, coords), 90, 0
 
 z = np.load(os.path.join(JOB, "surface.npz"))
 V = z["V"]
@@ -242,8 +271,8 @@ if VIEW in ("3D interactive", "both"):
     fig.update_layout(height=560)
     fig.show()
 if VIEW in ("image", "both"):
-    img = em.render(z["verts"], z["faces"], V, cmap, vlim, size=560,
-                    elev=ELEVATION, azim=AZIMUTH)
+    vv, el, az = camera(z["verts"], z["coords"], manual=CAMERA.startswith("manual"))
+    img = em.render(vv, z["faces"], V, cmap, vlim, size=560, elev=el, azim=az)
     plt.figure(figsize=(5.6, 5.6)); plt.imshow(img); plt.axis("off")
     plt.title(f"{NAME}   ({vlim[0]:+.0f} … {vlim[1]:+.0f} kcal/mol, {em.scale_caption(kind)})", fontsize=9)
     plt.show()
@@ -343,7 +372,8 @@ if RUN_SERIES:
     cm = em.build_maps()[em.resolve_cmap(kind)]
     fig, axes = plt.subplots(1, len(surfs), figsize=(4 * len(surfs), 4.6), squeeze=False)
     for ax, (name, zz) in zip(axes[0], surfs):
-        ax.imshow(em.render(zz["verts"], zz["faces"], zz["V"], cm, vl, size=420))
+        vv, el, az = camera(zz["verts"], zz["coords"], manual=CAMERA.startswith("manual"))
+        ax.imshow(em.render(vv, zz["faces"], zz["V"], cm, vl, size=420, elev=el, azim=az))
         ax.set_title(name); ax.axis("off")
     sm = plt.cm.ScalarMappable(cmap=cm, norm=plt.Normalize(*vl))
     fig.colorbar(sm, ax=axes[0].tolist(), shrink=0.7,
@@ -424,7 +454,7 @@ else:
 md("""
 ## Optional · Check the GPU against the CPU reference
 
-Re-runs one row of the CPU benchmark (`bench/timing.py`: decanoic acid, B3LYP/def2-TZVP, density-fitted) through espmap's `--gpu` path and compares. Pass: energy within 1×10⁻⁵ Ha, V_min/V_max within 0.05 kcal/mol, same geometry hash. Recorded result: `bench/gpu_l4.json` (L4: PASS, 4.3×).
+Re-runs one row of the CPU benchmark (`bench/timing.py`: decanoic acid, B3LYP/def2-TZVP, density-fitted) through espmap's `--gpu` path and compares. Pass: energy within 1×10⁻⁵ Ha, V_min/V_max within 0.05 kcal/mol, same geometry hash. Recorded result: `bench/gpu_l4.json` (L4: PASS; 4.3× when this is the runtime's first GPU call, 9.6× after the cells above have used the GPU).
 """)
 
 code("""
