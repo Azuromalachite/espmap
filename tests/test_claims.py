@@ -524,12 +524,25 @@ SCANNED = {
 }
 
 
+def says(text, phrase):
+    """Whether text quotes phrase."""
+    return phrase in text
+
+
 @pytest.mark.parametrize("phrase, why", STALE, ids=[p for p, _ in STALE])
 def test_stale_figures_do_not_come_back(phrase, why):
     """Review 4 N10: retracted or superseded figures survived in the notebook,
     colormaps.md and the roadmap review after the tables were fixed."""
-    hits = [name for name, text in SCANNED.items() if phrase in text]
+    hits = [name for name, text in SCANNED.items() if says(text, phrase)]
     assert not hits, f"{phrase!r} ({why}) is still quoted in {hits}"
+
+
+@pytest.mark.xfail(strict=True, reason="on 1d02efa; the 2026-11-07 sweep of the other repos")
+@pytest.mark.parametrize("text", ["... about 2.7\nkcal/mol ...", "about  2.7 kcal/mol", "about 2.7\r\n  kcal/mol"])
+def test_a_stale_phrase_wrapped_across_lines_is_still_caught(text):
+    """The plasmid repo's OF-5: a check that matched line by line undercounted
+    a clause that wrapped. A reflowed paragraph must not hide a stale figure."""
+    assert says(text, "about 2.7 kcal/mol")
 
 
 def test_prior_art_does_not_call_merged_work_planned():
