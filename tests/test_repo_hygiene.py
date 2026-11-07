@@ -41,7 +41,6 @@ def test_every_review_file_a_doc_cites_is_tracked():
     assert not (set(NOT_KEPT) & tracked), "a file listed as not kept is tracked: remove it from NOT_KEPT"
 
 
-@pytest.mark.xfail(strict=True, reason="on 1d02efa; the 2026-11-07 sweep of the other repos")
 def test_text_files_are_lf_in_git_and_in_every_checkout():
     attrs = ROOT / ".gitattributes"
     assert attrs.exists(), "no .gitattributes: core.autocrlf decides line endings per machine"
