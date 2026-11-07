@@ -100,7 +100,7 @@ wrote acetate.png  (sequential scale -171.8 to -79.9 kcal/mol, cmap vik)
 | −125 | 0.50 | **white, the map's neutral** |
 | −80 | 1.00 | **dark blue** |
 
-The rendered PNG (`review-3/out/acetate.png`) shows the methyl end dark blue. The README, the notebook header and the HTML colourbar title (`"V (kcal/mol)<br>warm = negative"`, esp_map.py:1008) all tell the reader that blue means positive. The surface is −80 kcal/mol everywhere in that region. The PNG has no colourbar to correct the impression.
+The rendered PNG (`review-3/out/acetate.png`; a run output, not kept in the repository: rerun the command above at the review's commit to see it) shows the methyl end dark blue. The README, the notebook header and the HTML colourbar title (`"V (kcal/mol)<br>warm = negative"`, esp_map.py:1008) all tell the reader that blue means positive. The surface is −80 kcal/mol everywhere in that region. The PNG has no colourbar to correct the impression.
 
 The sequential branch was added so that an ion would not be shown with a misleading zero (invariant 7). The default flags bring the misleading zero back, at −125 kcal/mol instead of at 0. The notebook's display cell switches to `lajolla` (build_notebook.py:200). The `esp.png` and `esp_3d.html` it zips for download come from the CLI with the default `vik`, because the command in cell 4 never passes `--cmap`.
 

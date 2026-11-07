@@ -1,0 +1,8 @@
+# Text is LF in git and in every checkout, whatever core.autocrlf says: otherwise
+# Windows git and WSL git disagree on whether the tree is dirty, and code_identity
+# (git describe --dirty) feeds compare's dirty-build refusal and bench/acceptance.py.
+* text=auto eol=lf
+*.npz binary
+*.png binary
+*.pdf binary
+*.gz binary
