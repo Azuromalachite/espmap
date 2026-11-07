@@ -10,3 +10,4 @@ venv/
 !docs/*.png
 *.cube
 bench/ensemble_dft_work/
+bench/suite_*.log

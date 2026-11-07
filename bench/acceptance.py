@@ -46,20 +46,51 @@ def member_codes(case_dir):
     return out
 
 
-def run_suite(code):
+SUITE = ["-m", "pytest", "-p", "no:cacheprovider", "--runslow", "-v", "--durations=30"]
+
+
+def run_suite(code, cmd=None, log=None, heartbeat_s=300):
     """The full suite, slow tests included, on this checkout: counts as
-    pytest reports them (review 7 R7-14: a tag needs it on exactly its code)."""
+    pytest reports them (review 7 R7-14: a tag needs it on exactly its code).
+
+    A run of hours shows its progress while it runs: each line goes to log as
+    it arrives (one per test, -v), with a timestamped heartbeat every
+    heartbeat_s seconds, so a silent hang can be told from a slow test. The
+    v0.3.1 release run printed nothing for hours."""
+    import datetime
+    import os
     import re
     import subprocess
-    cmd = [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "--runslow", "-q"]
+    import threading
+    cmd = cmd or [sys.executable, *SUITE]
+    log = Path(log or HERE / f"suite_{code}.log")
     t0 = time.time()
-    r = subprocess.run(cmd, cwd=HERE.parent, capture_output=True, text=True)
-    last = next((line for line in reversed(r.stdout.splitlines()) if " in " in line), "")
+    lines, done = [], threading.Event()
+    with open(log, "a", encoding="utf-8", buffering=1) as f:
+        def write(s):
+            f.write(s + "\n")
+
+        def beat():
+            while not done.wait(heartbeat_s):
+                write(f"heartbeat {datetime.datetime.now().isoformat(timespec='seconds')} "
+                      f"{time.time() - t0:.0f} s, {len(lines)} lines")
+        write(f"start {datetime.datetime.now().isoformat(timespec='seconds')} code {code}: {' '.join(cmd)}")
+        threading.Thread(target=beat, daemon=True).start()
+        p = subprocess.Popen(cmd, cwd=HERE.parent, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                             env={**os.environ, "PYTHONUNBUFFERED": "1"})
+        for line in p.stdout:
+            line = line.rstrip("\n")
+            lines.append(line)
+            write(line)
+        returncode = p.wait()
+        done.set()
+        write(f"end {datetime.datetime.now().isoformat(timespec='seconds')} returncode {returncode}")
+    last = next((line for line in reversed(lines) if " in " in line), "")
     n = {k: int(m[1]) if (m := re.search(rf"(\d+) {k}", last)) else 0
          for k in ("passed", "failed", "errors", "skipped", "xfailed", "xpassed")}
     n["errors"] += int(m[1]) if (m := re.search(r"(\d+) error\b", last)) else 0
-    return dict(code=code, command="pytest -p no:cacheprovider --runslow -q", returncode=r.returncode,
-                wall_s=round(time.time() - t0, 1), summary=last.strip("= "), **n)
+    return dict(code=code, command=" ".join(["pytest", *SUITE[2:]]), returncode=returncode,
+                wall_s=round(time.time() - t0, 1), summary=last.strip("= "), log=log.name, **n)
 
 
 def main(argv=None):
@@ -82,7 +113,7 @@ def main(argv=None):
         raise SystemExit(f"{out} exists; acceptance files are not overwritten (pass --out)")
     suite = None
     if a.suite:
-        print("full suite (--runslow) ...", flush=True)
+        print(f"full suite (--runslow), progress in bench/suite_{code}.log ...", flush=True)
         suite = run_suite(code)
         print(suite["summary"], flush=True)
     cases = {}

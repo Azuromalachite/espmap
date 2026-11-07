@@ -51,7 +51,6 @@ def test_text_files_are_lf_in_git_and_in_every_checkout():
     assert not [line for line in eol.stdout.splitlines() if line.startswith("i/crlf")], "CRLF in the index"
 
 
-@pytest.mark.xfail(strict=True, reason="on 1d02efa; the 2026-11-07 sweep of the other repos")
 def test_the_suite_run_streams_its_progress(tmp_path):
     """bench/acceptance.run_suite writes each line of the run to its log as it
     arrives, with a timestamped heartbeat, and still parses pytest's summary."""
