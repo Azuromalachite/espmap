@@ -239,7 +239,6 @@ def test_member_runs_get_the_users_settings_and_not_the_ensemble_flags():
 # A member runs with cwd = the ensemble directory, so a path relative to the caller
 # does not resolve there: every member failed in a second, logged as deterministic,
 # and the failed directory refused a corrected rerun.
-_PATHS = "found by use of v0.3.1: relative ensemble paths (2026-11-07)"
 
 
 class ResolvingStub(Stub):
@@ -254,14 +253,12 @@ class ResolvingStub(Stub):
         return super().__call__(argv, cwd, env, timeout)
 
 
-@pytest.mark.xfail(strict=True, reason=_PATHS)
 def test_a_relative_ensemble_dir_gives_members_inputs_they_can_read(plan, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     rec = em.run_ensemble(plan, "ens", runner=ResolvingStub(), log=lambda s: None)
     assert rec["k_obtained"] == len(plan["members"]) and rec["excluded"] == []
 
 
-@pytest.mark.xfail(strict=True, reason=_PATHS)
 def test_a_relative_sites_file_reaches_members_as_an_absolute_path(tmp_path):
     (tmp_path / "s.json").write_text("{}", encoding="utf-8")
     argv = ["--smiles", "CCO", "--ensemble", "2", "--basis", "def2-svp", "--sites", "s.json"]
@@ -269,14 +266,12 @@ def test_a_relative_sites_file_reaches_members_as_an_absolute_path(tmp_path):
                                                  "--sites", str(tmp_path / "s.json")]
 
 
-@pytest.mark.xfail(strict=True, reason=_PATHS)
 def test_a_missing_sites_file_is_refused_before_any_member_runs(tmp_path):
     rc, out = _cli("--smiles", "CCO", "--ensemble", "2", "--sites", "missing.json", cwd=tmp_path)
     assert rc != 0 and "--sites" in out and "missing.json" in out
     assert not (tmp_path / "ensemble").exists()
 
 
-@pytest.mark.xfail(strict=True, reason=_PATHS)
 def test_the_run_log_keeps_an_error_printed_to_stdout(tmp_path):
     """The gate prints a READ_ERROR to stdout; the runner kept stderr only, so the
     log said nothing about why the member failed."""
@@ -285,7 +280,6 @@ def test_the_run_log_keeps_an_error_printed_to_stdout(tmp_path):
     assert rc != 0 and "READ_ERROR" in tail
 
 
-@pytest.mark.xfail(strict=True, reason=_PATHS)
 def test_an_ensemble_with_no_member_computed_exits_nonzero(tmp_path, monkeypatch):
     """0 computed, 2 excluded exited 0: a pipeline read it as success."""
     monkeypatch.chdir(tmp_path)
