@@ -525,8 +525,9 @@ SCANNED = {
 
 
 def says(text, phrase):
-    """Whether text quotes phrase."""
-    return phrase in text
+    """Whether text quotes phrase, however the text is wrapped: runs of
+    whitespace, line breaks included, compare as one space."""
+    return " ".join(phrase.split()) in " ".join(text.split())
 
 
 @pytest.mark.parametrize("phrase, why", STALE, ids=[p for p, _ in STALE])
@@ -537,7 +538,6 @@ def test_stale_figures_do_not_come_back(phrase, why):
     assert not hits, f"{phrase!r} ({why}) is still quoted in {hits}"
 
 
-@pytest.mark.xfail(strict=True, reason="on 1d02efa; the 2026-11-07 sweep of the other repos")
 @pytest.mark.parametrize("text", ["... about 2.7\nkcal/mol ...", "about  2.7 kcal/mol", "about 2.7\r\n  kcal/mol"])
 def test_a_stale_phrase_wrapped_across_lines_is_still_caught(text):
     """The plasmid repo's OF-5: a check that matched line by line undercounted

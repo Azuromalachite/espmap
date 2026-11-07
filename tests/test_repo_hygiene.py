@@ -19,7 +19,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # a cited review file that was never kept in the repository, and why: a review's
 # outputs were often run artefacts, and the review text names them as they were
-NOT_KEPT = {}
+NOT_KEPT = {
+    "docs/review-3/out/acetate.png": "review 3's render of its acetate command; *.png is ignored outside docs/ "
+                                     "and the run's out/ was never committed (the review text says so)",
+}
 
 
 def _tracked():
@@ -27,7 +30,6 @@ def _tracked():
     return set(out.stdout.split())
 
 
-@pytest.mark.xfail(strict=True, reason="on 1d02efa; the 2026-11-07 sweep of the other repos")
 def test_every_review_file_a_doc_cites_is_tracked():
     tracked = _tracked()
     cited = set()
