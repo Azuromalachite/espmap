@@ -2427,6 +2427,11 @@ def _run_member_process(argv, cwd, env, timeout):
         r = subprocess.run([sys.executable, str(Path(__file__).resolve())] + argv, cwd=cwd,
                            env=env, capture_output=True, text=True, timeout=timeout)
         rc, err = r.returncode, r.stderr
+        if rc != 0 and r.stdout.strip():
+            # the gate prints its refusal (READ_ERROR, a BLOCK) to stdout: without
+            # it the run log said nothing about why the member failed (v0.3.1,
+            # found by use)
+            err = (err or "").rstrip() + "\n" + "\n".join(r.stdout.strip().splitlines()[-5:])
     except subprocess.TimeoutExpired as e:
         rc, err = -9, f"timeout after {timeout} s\n{e.stderr or ''}"
     return rc, time.time() - t0, err
@@ -2456,7 +2461,9 @@ def run_ensemble(plan, outdir, member_args=(), runner=None, timeout=None, log=pr
     if subject is not None:
         plan = dict(plan, subject=subject)
     runner = runner or _run_member_process
-    out = Path(outdir)
+    # absolute: each member runs with cwd = out, where a path relative to the
+    # caller does not resolve (v0.3.1: every member failed in a second)
+    out = Path(outdir).resolve()
     conf_dir = out / "conformers"
     conf_dir.mkdir(parents=True, exist_ok=True)
     log_path = out / "run_log.jsonl"
@@ -2852,18 +2859,37 @@ _ENSEMBLE_OWN = {"--smiles": 1, "--file": 1, "--record": 1, "--json": 1, "--npz"
                  "--nconfs": 1, "--geometry-origin": 1, "--check": 0}
 
 
-def member_argv(argv):
+# flags passed through to members whose value is a file: a member runs in the
+# ensemble directory, so they are made absolute against the caller's directory
+_ENSEMBLE_PATHS = {"--sites"}
+
+
+def member_argv(argv, cwd=None):
     """The command line every member run gets: everything the user gave
     (--xc, --basis, --solvent, --density-fit, --sites, --optimize ...)
-    except the flags the ensemble command sets per member."""
-    out, skip = [], 0
+    except the flags the ensemble command sets per member. With cwd, a
+    relative file argument is resolved against it."""
+    def where(p):
+        return str((Path(cwd) / p).resolve()) if cwd is not None else p
+    out, skip, path_next = [], 0, False
     for x in argv:
         if skip:
             skip -= 1
             continue
+        if path_next:
+            out.append(where(x))
+            path_next = False
+            continue
         flag = x.split("=", 1)[0]
         if flag in _ENSEMBLE_OWN:
             skip = _ENSEMBLE_OWN[flag] if "=" not in x else 0
+            continue
+        if flag in _ENSEMBLE_PATHS:
+            if "=" in x:
+                out += [flag, where(x.split("=", 1)[1])]
+            else:
+                out.append(flag)
+                path_next = True
             continue
         out.append(x)
     return out
@@ -2883,6 +2909,11 @@ def ensemble_main(a, argv):
     if a.geometry_origin is not None and a.ensemble != "supplied":
         raise SystemExit("--geometry-origin describes supplied coordinates; a "
                          "generated ensemble labels its own (etkdg_mmff94s)")
+    # every member reads --sites; a missing file failed each one after it started
+    # (v0.3.1), so it is refused here, before planning or any SCF
+    if a.sites and not (Path.cwd() / a.sites).is_file():
+        raise SystemExit(f"--sites {a.sites}: no such file (looked in {Path.cwd()}); "
+                         "give the path to the sites JSON")
     try:
         k = a.ensemble if a.ensemble == "supplied" else int(a.ensemble)
     except ValueError:
@@ -2907,9 +2938,15 @@ def ensemble_main(a, argv):
           f"apart, Bondi + {CONTACT_SLACK} A; measured, ensemble-spec 8.2)")
     if a.check:
         return 0
-    rec = run_ensemble(plan, a.ensemble_dir, member_argv(argv), subject=a.subject)
+    rec = run_ensemble(plan, a.ensemble_dir, member_argv(argv, cwd=Path.cwd()), subject=a.subject)
     print(f"wrote {Path(a.ensemble_dir) / 'ensemble.json'}: {rec['k_obtained']} computed, "
           f"{len(rec['excluded'])} excluded; validity {rec['validity']}")
+    if rec["k_obtained"] == 0:
+        # the record is written (it says why each member failed), but an ensemble
+        # with no member is not a result: v0.3.1 exited 0 here
+        print("no member was computed: see run_log.jsonl and each exclusion's reason",
+              file=sys.stderr)
+        return 1
     return 0
 
 
